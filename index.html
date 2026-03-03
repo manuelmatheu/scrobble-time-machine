@@ -258,13 +258,19 @@ function populateYears(startYear) {
 
 async function fetchEarliestYear(user) {
   try {
-    const { totalPages } = await getLastFmTotalPages(user);
-    if (!totalPages) return null;
-    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(totalPages) }));
-    if (!r.ok) return null;
-    const d = await r.json();
-    const tracks = d.recenttracks.track;
-    if (!tracks || !tracks.length) return null;
+    // Fetch with limit=1 to get total count, then grab the very last entry
+    const r1 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:"1" }));
+    if (!r1.ok) return null;
+    const d1 = await r1.json();
+    if (d1.error) return null;
+    const total = parseInt(d1.recenttracks["@attr"].total);
+    if (!total) return null;
+    // Fetch the very last scrobble (page = total when limit=1)
+    const r2 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(total) }));
+    if (!r2.ok) return null;
+    const d2 = await r2.json();
+    const tracks = d2.recenttracks.track;
+    if (!tracks) return null;
     const t = Array.isArray(tracks) ? tracks[tracks.length - 1] : tracks;
     if (t && t.date && t.date.uts) return new Date(parseInt(t.date.uts) * 1000).getFullYear();
   } catch {}
@@ -323,6 +329,7 @@ function setMode(mode) {
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
   $("modeInputMood").style.display = mode === "mood" ? "" : "none";
+  if (mode === "date") { lastRefreshedUser = ""; refreshYearsForUser(); }
   updateGoButton();
   if (mode === "artist") $("artistInput").focus();
 }
