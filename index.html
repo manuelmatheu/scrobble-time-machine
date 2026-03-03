@@ -224,6 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
   else getSpotifyToken().then(t => { if (t) { spotifyToken = t; updateSpotifyUI(true); } });
   $("usernameInput").addEventListener("input", updateGoButton);
   $("usernameInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("goBtn").disabled) handleGo(); });
+  $("usernameInput").addEventListener("change", refreshYearsForUser);
   $("artistInput").addEventListener("input", updateGoButton);
   $("artistInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("goBtn").disabled) handleGo(); });
   $("dateMonth").addEventListener("change", populateDays);
@@ -232,10 +233,26 @@ document.addEventListener("DOMContentLoaded", () => {
   updateGoButton();
 });
 
-function populateYears() {
+function populateYears(startYear) {
   const sel = $("dateYear"), now = new Date().getFullYear();
+  const floor = startYear || 2002;
   sel.innerHTML = '<option value="">Year</option>';
-  for (let y = now; y >= 2002; y--) sel.innerHTML += '<option value="'+y+'">'+y+'</option>';
+  for (let y = now; y >= floor; y--) sel.innerHTML += '<option value="'+y+'">'+y+'</option>';
+}
+
+async function fetchEarliestYear(user) {
+  try {
+    const { totalPages } = await getLastFmTotalPages(user);
+    if (!totalPages) return null;
+    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(totalPages) }));
+    if (!r.ok) return null;
+    const d = await r.json();
+    const tracks = d.recenttracks.track;
+    if (!tracks || !tracks.length) return null;
+    const t = Array.isArray(tracks) ? tracks[tracks.length - 1] : tracks;
+    if (t && t.date && t.date.uts) return new Date(parseInt(t.date.uts) * 1000).getFullYear();
+  } catch {}
+  return null;
 }
 function populateDays() {
   const sel = $("dateDay"), y = parseInt($("dateYear").value), m = parseInt($("dateMonth").value);
@@ -243,6 +260,15 @@ function populateDays() {
   if (!y || !m) return;
   const days = new Date(y, m, 0).getDate();
   for (let d = 1; d <= days; d++) sel.innerHTML += '<option value="'+d+'">'+d+'</option>';
+}
+
+let lastRefreshedUser = "";
+async function refreshYearsForUser() {
+  const user = $("usernameInput").value.trim();
+  if (!user || user === lastRefreshedUser) return;
+  lastRefreshedUser = user;
+  const year = await fetchEarliestYear(user);
+  if (year) populateYears(year);
 }
 
 function setMode(mode) {
@@ -287,7 +313,7 @@ async function exchangeCodeForToken(code) {
   sessionStorage.setItem("spotify_access_token", d.access_token);
   sessionStorage.setItem("spotify_refresh_token", d.refresh_token);
   sessionStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
-  const u = sessionStorage.getItem("lastfm_username"); if (u) $("usernameInput").value = u;
+  const u = sessionStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshYearsForUser(); }
   window.history.replaceState({}, document.title, SPOTIFY_REDIRECT_URI);
   return d.access_token;
 }
