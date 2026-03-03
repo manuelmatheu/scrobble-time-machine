@@ -60,7 +60,6 @@ function populateDays() {
   for (let d = 1; d <= days; d++) sel.innerHTML += '<option value="'+d+'">'+d+'</option>';
 }
 
-let lastRefreshedUser = "";
 async function refreshYearsForUser() {
   const user = $("usernameInput").value.trim();
   if (!user || user === lastRefreshedUser) return;
@@ -69,15 +68,6 @@ async function refreshYearsForUser() {
   if (year) populateYears(year);
 }
 
-const MOOD_TAGS = {
-  chill: ["chillout", "ambient", "mellow"],
-  melancholy: ["sad", "melancholy", "dark"],
-  energetic: ["electronic", "dance", "edm"],
-  raw: ["rock", "punk", "metal"],
-  dreamy: ["dreamy", "shoegaze", "dream pop"],
-  soul: ["soul", "jazz", "rnb"],
-  indie: ["indie", "alternative", "indie rock"]
-};
 
 function selectMood(btn) {
   document.querySelectorAll(".mood-btn").forEach(b => b.classList.remove("active"));

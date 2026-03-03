@@ -31,3 +31,13 @@ let playlistLabel = "";
 let selectedMood = "chill";  // "random" | "date" | "artist"
 
 const $ = id => document.getElementById(id);
+const MOOD_TAGS = {
+  chill: ["chillout", "ambient", "mellow"],
+  melancholy: ["sad", "melancholy", "dark"],
+  energetic: ["electronic", "dance", "edm"],
+  raw: ["rock", "punk", "metal"],
+  dreamy: ["dreamy", "shoegaze", "dream pop"],
+  soul: ["soul", "jazz", "rnb"],
+  indie: ["indie", "alternative", "indie rock"]
+};
+let lastRefreshedUser = "";
