@@ -119,6 +119,10 @@
     .mode-pill:hover { border-color:var(--text-muted); color:var(--text-secondary); }
     .mode-pill.active { border-color:var(--lastfm-red); background:var(--lastfm-red-subtle); color:var(--lastfm-red); font-weight:600; }
     .mode-inputs { display:flex; gap:8px; margin-bottom:20px; justify-content:center; flex-wrap:wrap; }
+    .mood-grid { max-width:500px; margin-left:auto; margin-right:auto; }
+    .mood-btn { padding:8px 14px; border:1px solid var(--border); border-radius:8px; background:var(--bg-secondary); color:var(--text-secondary); font-size:13px; font-family:inherit; cursor:pointer; transition:all 0.15s; }
+    .mood-btn:hover { border-color:var(--text-tertiary); color:var(--text-primary); }
+    .mood-btn.active { border-color:var(--lastfm-red); color:var(--lastfm-red); background:var(--lastfm-red-subtle); }
     .mode-input-field { padding:9px 14px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); font-size:13px; font-family:inherit; transition:border-color 0.2s; }
     .mode-input-field:focus { outline:none; border-color:var(--lastfm-red); box-shadow:0 0 0 3px var(--lastfm-red-glow); }
     select.mode-input-field { cursor:pointer; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23606068' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:30px; }
@@ -155,6 +159,7 @@
     <button class="mode-pill active" data-mode="random" onclick="setMode('random')">🎲 Random</button>
     <button class="mode-pill" data-mode="date" onclick="setMode('date')">📅 Date</button>
     <button class="mode-pill" data-mode="artist" onclick="setMode('artist')">🎤 Artist</button>
+    <button class="mode-pill" data-mode="mood" onclick="setMode('mood')">🎭 Mood</button>
   </div>
   <div class="mode-inputs" id="modeInputDate" style="display:none">
     <select id="dateYear" class="mode-input-field"></select>
@@ -163,6 +168,15 @@
   </div>
   <div class="mode-inputs" id="modeInputArtist" style="display:none">
     <input type="text" class="mode-input-field artist-input" id="artistInput" placeholder="Artist name" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="mode-inputs mood-grid" id="modeInputMood" style="display:none">
+    <button class="mood-btn active" data-mood="chill" onclick="selectMood(this)">😌 Chill</button>
+    <button class="mood-btn" data-mood="melancholy" onclick="selectMood(this)">😢 Melancholy</button>
+    <button class="mood-btn" data-mood="energetic" onclick="selectMood(this)">⚡ Energetic</button>
+    <button class="mood-btn" data-mood="raw" onclick="selectMood(this)">🎸 Raw</button>
+    <button class="mood-btn" data-mood="dreamy" onclick="selectMood(this)">🌙 Dreamy</button>
+    <button class="mood-btn" data-mood="soul" onclick="selectMood(this)">💜 Soul</button>
+    <button class="mood-btn" data-mood="indie" onclick="selectMood(this)">🎉 Indie</button>
   </div>
   <div class="page-picker" id="pagePicker" style="display:none"><div class="page-picker-card">
     <span class="page-picker-label">Page</span><span class="page-picker-number" id="pageNumber">—</span>
@@ -209,7 +223,8 @@ let totalMatched = 0;       // running total of matched tracks
 let searchMode = "random";
 let sessionQueue = new Set();
 let sessionPaused = false;
-let playlistLabel = "";  // "random" | "date" | "artist"
+let playlistLabel = "";
+let selectedMood = "chill";  // "random" | "date" | "artist"
 
 const $ = id => document.getElementById(id);
 
@@ -271,11 +286,42 @@ async function refreshYearsForUser() {
   if (year) populateYears(year);
 }
 
+const MOOD_TAGS = {
+  chill: ["chillout", "ambient", "mellow"],
+  melancholy: ["sad", "melancholy", "dark"],
+  energetic: ["electronic", "dance", "edm"],
+  raw: ["rock", "punk", "metal"],
+  dreamy: ["dreamy", "shoegaze", "dream pop"],
+  soul: ["soul", "jazz", "rnb"],
+  indie: ["indie", "alternative", "indie rock"]
+};
+
+function selectMood(btn) {
+  document.querySelectorAll(".mood-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  selectedMood = btn.dataset.mood;
+  updateGoButton();
+}
+
+async function getMoodArtists(mood) {
+  const tags = MOOD_TAGS[mood] || [mood];
+  const artists = new Set();
+  for (const tag of tags) {
+    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"tag.gettopartists", tag, api_key:LASTFM_API_KEY, format:"json", limit:"20" }));
+    if (!r.ok) continue;
+    const d = await r.json();
+    const list = d.topartists && d.topartists.artist || [];
+    list.forEach(a => artists.add(a.name.toLowerCase()));
+  }
+  return artists;
+}
+
 function setMode(mode) {
   searchMode = mode;
   document.querySelectorAll(".mode-pill").forEach(p => p.classList.toggle("active", p.dataset.mode === mode));
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
+  $("modeInputMood").style.display = mode === "mood" ? "" : "none";
   updateGoButton();
   if (mode === "artist") $("artistInput").focus();
 }
@@ -288,7 +334,7 @@ function updateGoButton() {
   if (searchMode === "date") ok = base && $("dateYear").value;
   else if (searchMode === "artist") ok = base && $("artistInput").value.trim();
   $("goBtn").disabled = !ok; $("goBtn").className = "btn btn-primary" + (ok ? " ready" : "");
-  const labels = { random: currentPhase==="done" ? "↻ Again" : "Time Travel", date: "Go to Date", artist: "Find Artist" };
+  const labels = { random: currentPhase==="done" ? "↻ Again" : "Time Travel", date: "Go to Date", artist: "Find Artist", mood: "Find Mood" };
   $("goBtn").textContent = labels[searchMode] || "Time Travel";
 }
 
@@ -780,6 +826,7 @@ async function matchAndPlay(tracks, page, tp, label) {
 async function handleGo() {
   if (searchMode === "date") return handleGoDate();
   if (searchMode === "artist") return handleGoArtist();
+  if (searchMode === "mood") return handleGoMood();
   return handleGoRandom();
 }
 
@@ -900,6 +947,61 @@ async function handleGoArtist() {
     renderEraPanelFromTracks(tracks, label, totalPages);
     showStatus("Found " + artist + " on page " + result.page.toLocaleString() + " (attempt " + result.attempt + ")");
     await fetchAndPlayDirect(tracks, label);
+  } catch(err) {
+    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    endSessionUI();
+  }
+}
+
+// ── MOOD MODE ────────────────────────────────────────────────────────────
+async function handleGoMood() {
+  const user = $("usernameInput").value.trim(); if (!user || !spotifyToken) return;
+  const mood = selectedMood;
+  const moodLabel = document.querySelector('.mood-btn[data-mood="'+mood+'"]').textContent.trim();
+
+  beginSession();
+  try {
+    showStatus("Finding " + moodLabel + " artists…");
+    const moodArtists = await getMoodArtists(mood);
+    if (!moodArtists.size) throw new Error("No artists found for this mood");
+
+    showStatus("Reading your Last.fm library…");
+    const { totalPages, totalScrobbles } = await getLastFmTotalPages(user);
+    cachedTotalPages = totalPages;
+    if (!totalPages) throw new Error("No scrobbles found");
+
+    showStatus("Searching for " + moodLabel + " tracks in your history…");
+    const maxAttempts = 15;
+    let bestPage = null, bestCount = 0, bestTracks = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (abortController.signal.aborted) return;
+      const page = Math.floor(Math.random() * totalPages) + 1;
+      const raw = await getLastFmPage(user, page);
+      const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+      // Count how many tracks on this page match mood artists
+      let count = 0;
+      for (const t of tracks) {
+        const a = ((t.artist && (t.artist["#text"] || t.artist.name)) || "").toLowerCase();
+        if (moodArtists.has(a)) count++;
+      }
+      showStatus("Searching for " + moodLabel + " tracks… (attempt " + (attempt+1) + ", best: " + bestCount + " matches)");
+      if (count > bestCount) {
+        bestCount = count; bestPage = page; bestTracks = tracks;
+      }
+      // If we found a good page (3+ matches), stop early
+      if (bestCount >= 3) break;
+    }
+
+    if (!bestTracks || bestCount === 0) throw new Error("Couldn't find " + moodLabel + " tracks in your history after " + maxAttempts + " pages. Try again!");
+
+    const oldest = bestTracks[bestTracks.length - 1];
+    const dateStr = oldest && oldest.date ? new Date(parseInt(oldest.date.uts) * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long" }) : "";
+    const label = moodLabel + (dateStr ? " · " + dateStr : "");
+
+    renderEraPanelFromTracks(bestTracks, label, totalPages);
+    showStatus("Found " + bestCount + " " + moodLabel + " tracks on page " + bestPage.toLocaleString());
+    await fetchAndPlayDirect(bestTracks, label);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
     endSessionUI();
