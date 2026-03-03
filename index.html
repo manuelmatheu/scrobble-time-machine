@@ -929,8 +929,8 @@ async function getSpotifyUserId(token) {
   return (await r.json()).id;
 }
 
-async function createSpotifyPlaylist(token, userId, name, desc) {
-  const r = await fetch("https://api.spotify.com/v1/users/" + encodeURIComponent(userId) + "/playlists", {
+async function createSpotifyPlaylist(token, name, desc) {
+  const r = await fetch("https://api.spotify.com/v1/me/playlists", {
     method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ name, description: desc, public: false })
   });
@@ -957,15 +957,13 @@ async function saveAsPlaylist() {
   try {
     const token = await getSpotifyToken();
     if (!token) throw new Error("Spotify expired. Reconnect.");
-    const userId = await getSpotifyUserId(token);
-    if (!userId) throw new Error("Could not get Spotify user ID");
     const uris = [];
     for (let i = 0; i < allTrackCount; i++) if (matchedUris[i]) uris.push(matchedUris[i]);
     if (!uris.length) throw new Error("No matched tracks to save");
     const name = "Time Machine: " + (playlistLabel || "Random");
     const now = new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     const desc = "Created by Scrobble Time Machine on " + now + " - " + uris.length + " tracks";
-    const playlist = await createSpotifyPlaylist(token, userId, name, desc);
+    const playlist = await createSpotifyPlaylist(token, name, desc);
     if (!playlist) throw new Error("Could not create playlist. You may need to reconnect Spotify with updated permissions.");
     const ok = await addTracksToPlaylist(token, playlist.id, uris);
     if (!ok) throw new Error("Playlist created but failed to add tracks");
