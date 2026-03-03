@@ -941,11 +941,13 @@ async function createSpotifyPlaylist(token, name, desc) {
 async function addTracksToPlaylist(token, playlistId, uris) {
   for (let i = 0; i < uris.length; i += 100) {
     const batch = uris.slice(i, i + 100);
-    const r = await fetch("https://api.spotify.com/v1/playlists/" + playlistId + "/tracks", {
-      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ uris: batch })
-    });
-    if (!r.ok) return false;
+    try {
+      const r = await fetch("https://api.spotify.com/v1/playlists/" + playlistId + "/tracks", {
+        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ uris: batch })
+      });
+      if (!r.ok) return false;
+    } catch { return false; }
   }
   return true;
 }
@@ -965,12 +967,23 @@ async function saveAsPlaylist() {
     const desc = "Created by Scrobble Time Machine on " + now + " - " + uris.length + " tracks";
     const playlist = await createSpotifyPlaylist(token, name, desc);
     if (!playlist) throw new Error("Could not create playlist. You may need to reconnect Spotify with updated permissions.");
-    const ok = await addTracksToPlaylist(token, playlist.id, uris);
-    if (!ok) throw new Error("Playlist created but failed to add tracks");
-    btn.textContent = "Saved!";
-    btn.className = "btn-save-playlist saved";
-    if (playlist.external_urls && playlist.external_urls.spotify) {
-      window.open(playlist.external_urls.spotify, "_blank");
+    // Try adding tracks directly
+    const addOk = await addTracksToPlaylist(token, playlist.id, uris);
+    if (addOk) {
+      btn.textContent = "Saved!";
+      btn.className = "btn-save-playlist saved";
+      if (playlist.external_urls && playlist.external_urls.spotify) {
+        window.open(playlist.external_urls.spotify, "_blank");
+      }
+    } else {
+      // Dev mode fallback: copy URIs to clipboard, open empty playlist
+      await navigator.clipboard.writeText(uris.join("\n"));
+      btn.textContent = "Playlist created - URIs copied!";
+      btn.className = "btn-save-playlist saved";
+      showStatus("Playlist created but tracks must be added manually (dev mode limit). " + uris.length + " track URIs copied to clipboard - paste into Spotify search.", "success");
+      if (playlist.external_urls && playlist.external_urls.spotify) {
+        window.open(playlist.external_urls.spotify, "_blank");
+      }
     }
   } catch (err) {
     btn.textContent = "Save as Playlist";
