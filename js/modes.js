@@ -114,9 +114,9 @@ async function handleGoArtist() {
     cachedTotalPages = totalPages;
     if (!totalPages) throw new Error("No scrobbles found");
 
-    showStatus("Searching for " + artist + " in your history… (sampling random pages)");
+    showStatus("Searching for " + artist + " in your history…");
     const result = await findArtistPage(user, artist, totalPages);
-    if (!result) throw new Error("Couldn't find " + artist + " after 10 random pages. Try again — or check the spelling.");
+    if (!result) throw new Error("Couldn't find " + artist + " in your history. Check the spelling or try again — each search samples different time periods.");
 
     const tracks = result.tracks;
     const oldest = tracks[tracks.length - 1];
@@ -199,3 +199,4 @@ function beginSession() {
 function endSessionUI() {
   $("goBtn").style.display = ""; $("cancelBtn").style.display = "none"; $("usernameInput").disabled = false; updateGoButton();
 }
+
