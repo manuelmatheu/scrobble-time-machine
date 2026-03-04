@@ -39,6 +39,7 @@ async function playFromTrack(i) {
     highlightNowPlaying(i);
     showStatus("▶ Playing from track " + (i+1) + " (" + uris.length + " queued)", "success");
     startPolling();
+    $("savePlaylistBtn").style.display = ""; $("savePlaylistBtn").disabled = false;
   } else { showStatus("Playback failed. Is Spotify active?", "error"); }
 }
 
