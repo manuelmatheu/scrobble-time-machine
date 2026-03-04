@@ -45,7 +45,9 @@ async function findArtistPage(user, artist, totalPages) {
   // Sample random time windows, fetching 200 tracks per call
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const randomUts = oldestUts + Math.floor(Math.random() * (newestUts - oldestUts));
-    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(randomUts) }));
+    // Use a bounded window: from randomUts to randomUts + 30 days
+    const windowEnd = Math.min(randomUts + 86400 * 30, newestUts);
+    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(randomUts), to:String(windowEnd) }));
     if (!r.ok) continue;
     const d = await r.json();
     if (d.error) continue;
