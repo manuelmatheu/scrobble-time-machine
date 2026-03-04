@@ -1,18 +1,19 @@
 # Scrobble Time Machine
 
-Pick a random page from your Last.fm listening history. Play it on Spotify. Travel back in time through your music.
+Your Last.fm history meets Spotify playback. Time travel through your music.
 
 **Live:** [manuelmatheu.github.io/scrobble-time-machine](https://manuelmatheu.github.io/scrobble-time-machine/)
 
 ## What it does
 
-Scrobble Time Machine randomly selects a page from your Last.fm scrobble history, matches the tracks on Spotify, and plays them back instantly. It's like opening a time capsule of what you were listening to months or years ago.
+Scrobble Time Machine connects your Last.fm scrobble history with Spotify playback. Search by date, artist, mood, or let fate pick a random page — then listen to exactly what you were playing months or years ago.
 
 ## Features
 
 - **Random time travel** - spins through your history and lands on a random page of 50 scrobbles
 - **Date search** - jump to a specific year, month, or day
 - **Artist search** - find a random page where a specific artist appears
+- **Mood search** - pick a vibe (Chill, Melancholy, Energetic, Raw, Dreamy, Soul, Indie) and find matching tracks from your history using Last.fm tags
 - **Interactive timeline** - drag the slider to scrub through your entire listening history
 - **Era context panel** - see when you listened, your top artist on that page, and your listening pace
 - **Smart matching** - deduplicates searches, caches results, respects Spotify rate limits (15 searches per batch with 500ms delays)
@@ -82,3 +83,4 @@ Built with [Claude](https://claude.ai) by Anthropic.
 ## License
 
 [MIT](LICENSE)
+
