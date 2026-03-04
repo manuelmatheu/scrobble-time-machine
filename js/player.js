@@ -30,6 +30,8 @@ async function pollNowPlaying() {
   }
   if (sessionPaused) {
     sessionPaused = false;
+    showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched", "success");
+    $("savePlaylistBtn").style.display = ""; $("savePlaylistBtn").disabled = false;
   }
 
   // Update now-playing highlight using reverse map
