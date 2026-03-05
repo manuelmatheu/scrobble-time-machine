@@ -292,3 +292,17 @@ function handleArtistKeydown(e) {
   }
   return false;
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CHANGELOG OVERLAY
+// ═════════════════════════════════════════════════════════════════════════════
+function openChangelog() {
+  $("changelogOverlay").style.display = "";
+  $("changelogFrame").src = "changelog.html";
+  document.body.style.overflow = "hidden";
+}
+function closeChangelog() {
+  $("changelogOverlay").style.display = "none";
+  $("changelogFrame").src = "about:blank";
+  document.body.style.overflow = "";
+}
