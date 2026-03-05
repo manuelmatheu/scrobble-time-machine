@@ -34,7 +34,8 @@
   </div>
 
   <div class="changelog">
-    <a href="./" class="back-link">← Back to app</a>
+    <a href="./" class="back-link" id="backLink">← Back to app</a>
+    <script>if (window.self !== window.top) document.getElementById("backLink").style.display = "none";</script>
 
     <div class="changelog-entry">
       <div class="changelog-version">
