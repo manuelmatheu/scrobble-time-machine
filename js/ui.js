@@ -297,7 +297,7 @@ function handleArtistKeydown(e) {
 // CHANGELOG OVERLAY
 // ═════════════════════════════════════════════════════════════════════════════
 function openChangelog() {
-  $("changelogOverlay").style.display = "";
+  $("changelogOverlay").style.display = "flex";
   $("changelogFrame").src = "changelog.html";
   document.body.style.overflow = "hidden";
 }
