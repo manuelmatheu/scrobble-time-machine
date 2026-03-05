@@ -124,3 +124,12 @@
     .autocomplete-item:hover, .autocomplete-item.ac-active { background:var(--bg-secondary); }
     .ac-name { color:var(--text-primary); font-size:14px; }
     .ac-count { color:var(--text-tertiary); font-size:12px; font-family:'JetBrains Mono',monospace; }
+
+    /* Changelog overlay */
+    .overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-primary); z-index:1000; display:flex; flex-direction:column; animation:overlayIn 0.2s ease; }
+    @keyframes overlayIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    .overlay-header { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .overlay-title { font-size:16px; font-weight:700; color:var(--text-primary); }
+    .overlay-close { background:none; border:none; font-size:20px; color:var(--text-tertiary); cursor:pointer; padding:4px 8px; border-radius:6px; transition:all 0.15s; }
+    .overlay-close:hover { background:var(--bg-secondary); color:var(--text-primary); }
+    .overlay-frame { flex:1; border:none; width:100%; }
