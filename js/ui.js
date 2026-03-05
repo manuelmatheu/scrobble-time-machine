@@ -83,7 +83,7 @@ function setMode(mode) {
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
   $("modeInputMood").style.display = mode === "mood" ? "" : "none";
-  if (mode === "date") { lastRefreshedUser = ""; refreshYearsForUser(); }
+  if (mode === "date") { lastRefreshedUser = ""; refreshYearsForUser().then(() => updateGoButton()); }
   updateGoButton();
   if (mode === "artist") $("artistInput").focus();
 }
