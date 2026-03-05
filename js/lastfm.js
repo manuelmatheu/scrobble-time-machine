@@ -43,6 +43,9 @@ async function findArtistPage(user, artist, totalPages) {
   const oldestUts = oldest && oldest.date ? parseInt(oldest.date.uts) : newestUts - 86400 * 365;
 
   // Sample random time windows, fetching 200 tracks per call
+  const MIN_TRACKS = 5;
+  let bestResult = null, bestCount = 0;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const randomUts = oldestUts + Math.floor(Math.random() * (newestUts - oldestUts));
     // Use a bounded window: from randomUts to randomUts + 30 days
@@ -52,22 +55,35 @@ async function findArtistPage(user, artist, totalPages) {
     const d = await r.json();
     if (d.error) continue;
     const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
-    const hasArtist = tracks.some(t => {
+
+    // Count artist matches
+    let count = 0;
+    for (const t of tracks) {
       const a = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
-      return a.toLowerCase() === artistLower;
-    });
-    if (hasArtist) {
-      // Narrow down to a 50-track window centered on the artist for a tighter page feel
-      const idx = tracks.findIndex(t => {
-        const a = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
-        return a.toLowerCase() === artistLower;
-      });
-      const start = Math.max(0, idx - 25);
-      const slice = tracks.slice(start, start + 50);
-      return { tracks: slice, page: Math.floor(randomUts / 86400), attempt: attempt + 1 };
+      if (a.toLowerCase() === artistLower) count++;
     }
+
+    if (count > bestCount) {
+      bestCount = count;
+      // Find the densest cluster of this artist within the 200 tracks
+      // Slide a 50-track window and pick the one with the most matches
+      let bestSliceStart = 0, bestSliceCount = 0;
+      for (let s = 0; s <= Math.max(0, tracks.length - 50); s++) {
+        let sc = 0;
+        for (let j = s; j < Math.min(s + 50, tracks.length); j++) {
+          const a = (tracks[j].artist && (tracks[j].artist["#text"] || tracks[j].artist.name)) || "";
+          if (a.toLowerCase() === artistLower) sc++;
+        }
+        if (sc > bestSliceCount) { bestSliceCount = sc; bestSliceStart = s; }
+      }
+      const slice = tracks.slice(bestSliceStart, bestSliceStart + 50);
+      bestResult = { tracks: slice, page: Math.floor(randomUts / 86400), attempt: attempt + 1, matchCount: bestSliceCount };
+    }
+
+    // Stop early if we found a dense page
+    if (bestCount >= MIN_TRACKS) break;
   }
-  return null;
+  return bestResult;
 }
 
 async function fetchEarliestYear(user) {
