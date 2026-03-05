@@ -116,3 +116,11 @@
       .track-date { display:none; } .era-headline .date { font-size:18px; }
       .era-stats { flex-direction:column; gap:8px; } .era-stat { flex-basis:auto; }
     }
+
+    /* Autocomplete */
+    .mode-inputs { position: relative; }
+    .autocomplete-box { position:absolute; top:100%; left:50%; transform:translateX(-50%); min-width:280px; max-width:400px; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.15); z-index:100; overflow:hidden; margin-top:4px; }
+    .autocomplete-item { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; cursor:pointer; transition:background 0.1s; }
+    .autocomplete-item:hover, .autocomplete-item.ac-active { background:var(--bg-secondary); }
+    .ac-name { color:var(--text-primary); font-size:14px; }
+    .ac-count { color:var(--text-tertiary); font-size:12px; font-family:'JetBrains Mono',monospace; }
