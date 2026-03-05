@@ -14,6 +14,8 @@ Scrobble Time Machine connects your Last.fm scrobble history with Spotify playba
 - **Date search** - jump to a specific year, month, or day
 - **Artist search** - find a random page where a specific artist appears
 - **Mood search** - pick a vibe (Chill, Melancholy, Energetic, Raw, Dreamy, Soul, Indie) and find matching tracks from your history using Last.fm tags
+- **On This Day** - one click to hear what you were listening to on today's date in a random past year
+- **Artist autocomplete** - suggestions from your top 500 artists as you type, with play counts
 - **Interactive timeline** - drag the slider to scrub through your entire listening history
 - **Era context panel** - see when you listened, your top artist on that page, and your listening pace
 - **Smart matching** - deduplicates searches, caches results, respects Spotify rate limits (15 searches per batch with 500ms delays)
