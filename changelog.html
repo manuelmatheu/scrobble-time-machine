@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23d51007'/><text x='16' y='22' text-anchor='middle' font-size='18'>⏪</text></svg>">
+  <title>Changelog - Scrobble Time Machine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .changelog { max-width:680px; margin:0 auto; padding:0 20px; }
+    .changelog-entry { margin-bottom:32px; }
+    .changelog-version { display:flex; align-items:baseline; gap:12px; margin-bottom:8px; }
+    .changelog-version h2 { font-size:20px; font-weight:700; color:var(--text-primary); margin:0; }
+    .changelog-version .date { font-size:13px; color:var(--text-tertiary); font-family:'JetBrains Mono',monospace; }
+    .changelog-version .tag { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; }
+    .tag-major { background:var(--lastfm-red-subtle); color:var(--lastfm-red); }
+    .tag-feature { background:#e8f5e9; color:#2e7d32; }
+    .tag-fix { background:#e3f2fd; color:#1565c0; }
+    .changelog-desc { color:var(--text-secondary); font-size:14px; line-height:1.6; margin:0; }
+    .changelog-list { margin:8px 0 0 0; padding-left:20px; }
+    .changelog-list li { color:var(--text-secondary); font-size:14px; line-height:1.8; }
+    .changelog-list li strong { color:var(--text-primary); font-weight:600; }
+    .back-link { display:inline-block; margin-bottom:24px; color:var(--lastfm-red); text-decoration:none; font-weight:500; font-size:14px; }
+    .back-link:hover { text-decoration:underline; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-brand"><div class="header-icon">⏪</div><h1>Changelog</h1></div>
+    <p>Version history for Scrobble Time Machine</p>
+  </div>
+
+  <div class="changelog">
+    <a href="./" class="back-link">← Back to app</a>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v2.0</h2>
+        <span class="date">2025-03-05</span>
+        <span class="tag tag-major">Major</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>On This Day</strong> — new mode that plays what you were listening to on today's date in a random past year</li>
+        <li><strong>Artist autocomplete</strong> — suggestions from your top 500 artists as you type, with play counts</li>
+        <li><strong>Remember username</strong> — your Last.fm username is saved to localStorage</li>
+        <li><strong>Keyboard shortcuts</strong> — Escape to cancel, Enter to go</li>
+        <li><strong>Smarter artist search</strong> — two-phase find-then-zoom algorithm finds dense listening sessions</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.9</h2>
+        <span class="date">2025-03-03</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Multi-file architecture</strong> — split from single HTML file into separate JS, CSS, and HTML files</li>
+        <li><strong>Favicon</strong> — red rewind icon in browser tab</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.8</h2>
+        <span class="date">2025-03-03</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Mood search</strong> — pick a vibe (Chill, Melancholy, Energetic, Raw, Dreamy, Soul, Indie) and find matching tracks using Last.fm tags</li>
+        <li><strong>Dynamic year dropdown</strong> — date picker starts from your actual first scrobble year</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.7</h2>
+        <span class="date">2025-03-03</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Save as Playlist</strong> — save matched tracks as a private Spotify playlist</li>
+        <li><strong>Barlow font</strong> — updated typography to match Last.fm's style</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.6</h2>
+        <span class="date">2025-03-03</span>
+        <span class="tag tag-fix">Fix</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Session tracking</strong> — detects when another device takes over Spotify playback</li>
+        <li><strong>Multi-device safety</strong> — click any track to reclaim your session</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.5</h2>
+        <span class="date">2025-03-03</span>
+        <span class="tag tag-fix">Fix</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Auto-continuation bugfix</strong> — fixed foundCurrent guard preventing tracks from loading</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.4</h2>
+        <span class="date">2025-03-02</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Date picker</strong> — jump to a specific year, month, or day</li>
+        <li><strong>Artist search</strong> — find pages where a specific artist appears</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.3</h2>
+        <span class="date">2025-03-02</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Now-playing tracking</strong> — highlights the currently playing track in real time</li>
+        <li><strong>Auto-continuation</strong> — next batch loads automatically as you listen</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.2</h2>
+        <span class="date">2025-03-02</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Smart matching</strong> — deduplicates searches, caches results</li>
+        <li><strong>Rate limit strategy</strong> — respects Spotify API limits with batching and delays</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.1</h2>
+        <span class="date">2025-03-01</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Interactive timeline</strong> — drag the slider to scrub through your entire listening history</li>
+        <li><strong>Mobile fixes</strong> — responsive layout improvements</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v1.0</h2>
+        <span class="date">2025-02-27</span>
+        <span class="tag tag-major">Launch</span>
+      </div>
+      <p class="changelog-desc">Initial release. Random page selection from Last.fm history with Spotify playback via PKCE OAuth.</p>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <div>Built with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · v2.0</div>
+</div>
+</body>
+</html>
