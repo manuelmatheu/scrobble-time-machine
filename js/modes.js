@@ -124,7 +124,7 @@ async function handleGoArtist() {
     const label = artist + (dateStr ? " · " + dateStr : "");
 
     renderEraPanelFromTracks(tracks, label, totalPages);
-    showStatus("Found " + artist + " on page " + result.page.toLocaleString() + " (attempt " + result.attempt + ")");
+    showStatus("Found " + (result.matchCount || "some") + " " + artist + " tracks" + (dateStr ? " from " + dateStr : "") + " (attempt " + result.attempt + ")");
     await fetchAndPlayDirect(tracks, label);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
