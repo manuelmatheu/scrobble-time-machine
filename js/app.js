@@ -13,8 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("usernameInput").addEventListener("change", refreshYearsForUser);
   $("artistInput").addEventListener("input", updateGoButton);
   $("artistInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("goBtn").disabled) handleGo(); });
-  $("dateMonth").addEventListener("change", populateDays);
-  $("dateYear").addEventListener("change", populateDays);
+  $("dateMonth").addEventListener("change", () => { populateDays(); updateGoButton(); });
+  $("dateYear").addEventListener("change", () => { populateDays(); updateGoButton(); });
   populateYears();
   updateGoButton();
 });
