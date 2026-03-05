@@ -6,6 +6,7 @@ async function handleGo() {
   if (searchMode === "date") return handleGoDate();
   if (searchMode === "artist") return handleGoArtist();
   if (searchMode === "mood") return handleGoMood();
+  if (searchMode === "onthisday") return handleGoOnThisDay();
   return handleGoRandom();
 }
 
@@ -181,6 +182,81 @@ async function handleGoMood() {
     renderEraPanelFromTracks(bestTracks, label, totalPages);
     showStatus("Found " + bestCount + " " + moodLabel + " tracks on page " + bestPage.toLocaleString());
     await fetchAndPlayDirect(bestTracks, label);
+  } catch(err) {
+    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    endSessionUI();
+  }
+}
+
+// ── ON THIS DAY MODE ─────────────────────────────────────────────────────
+async function handleGoOnThisDay() {
+  const user = $("usernameInput").value.trim(); if (!user || !spotifyToken) return;
+
+  beginSession();
+  try {
+    showStatus("Finding what you listened to on this day…");
+
+    // Get user's earliest year
+    const year = await fetchEarliestYear(user);
+    const startYear = year || 2005;
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisDay = now.getDate();
+    const currentYear = now.getFullYear();
+
+    // Build list of candidate years (all past years where this date existed)
+    const candidateYears = [];
+    for (let y = startYear; y < currentYear; y++) {
+      // Check that this date exists in this year (handles Feb 29)
+      const testDate = new Date(y, thisMonth, thisDay);
+      if (testDate.getMonth() === thisMonth && testDate.getDate() === thisDay) {
+        candidateYears.push(y);
+      }
+    }
+    if (!candidateYears.length) throw new Error("No past years to search");
+
+    // Shuffle and try each year until we find scrobbles
+    const shuffled = candidateYears.sort(() => Math.random() - 0.5);
+    let foundTracks = null, foundYear = null;
+
+    for (const y of shuffled) {
+      if (abortController.signal.aborted) return;
+      const from = Math.floor(new Date(y, thisMonth, thisDay, 0, 0, 0).getTime() / 1000);
+      const to = Math.floor(new Date(y, thisMonth, thisDay, 23, 59, 59).getTime() / 1000);
+      showStatus("Checking " + new Date(y, thisMonth, thisDay).toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }) + "…");
+
+      const result = await getLastFmPageByDate(user, from, to);
+      if (result.total > 0) {
+        let tracks;
+        if (result.totalPages > 1) {
+          const rndPage = Math.floor(Math.random() * result.totalPages) + 1;
+          const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(from), to:String(to), page:String(rndPage) }));
+          if (r.ok) {
+            const d = await r.json();
+            if (!d.error) tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+          }
+        } else {
+          tracks = result.tracks.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+        }
+        if (tracks && tracks.length > 0) {
+          foundTracks = tracks;
+          foundYear = y;
+          break;
+        }
+      }
+    }
+
+    if (!foundTracks) throw new Error("No scrobbles found on " + now.toLocaleDateString("en-US", { month:"long", day:"numeric" }) + " in any past year.");
+
+    const label = new Date(foundYear, thisMonth, thisDay).toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+    const yearsAgo = currentYear - foundYear;
+    const yearsAgoStr = yearsAgo === 1 ? "1 year ago" : yearsAgo + " years ago";
+
+    const { totalPages } = await getLastFmTotalPages(user);
+    cachedTotalPages = totalPages;
+    renderEraPanelFromTracks(foundTracks, label, totalPages);
+    showStatus("On this day " + yearsAgoStr + " · " + label + " · " + foundTracks.length + " scrobbles", "success");
+    await fetchAndPlayDirect(foundTracks, "On this day · " + label);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
     endSessionUI();
