@@ -96,7 +96,7 @@ function updateGoButton() {
   if (searchMode === "date") ok = base && $("dateYear").value;
   else if (searchMode === "artist") ok = base && $("artistInput").value.trim();
   $("goBtn").disabled = !ok; $("goBtn").className = "btn btn-primary" + (ok ? " ready" : "");
-  const labels = { random: currentPhase==="done" ? "↻ Again" : "Time Travel", date: "Go to Date", artist: "Find Artist", mood: "Find Mood" };
+  const labels = { random: currentPhase==="done" ? "↻ Again" : "Time Travel", date: "Go to Date", artist: "Find Artist", mood: "Find Mood", onthisday: "On This Day" };
   $("goBtn").textContent = labels[searchMode] || "Time Travel";
 }
 
@@ -193,4 +193,102 @@ function handleReset() {
   endSessionUI();
   $("pagePicker").style.display = "none"; $("eraPanel").style.display = "none";
   $("trackListWrapper").style.display = "none"; hideStatus();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ARTIST AUTOCOMPLETE
+// ═════════════════════════════════════════════════════════════════════════════
+let acCache = null;
+let acUser = "";
+let acTimer = null;
+let acSelectedIdx = -1;
+
+async function fetchTopArtists(user) {
+  if (acCache && acUser === user) return acCache;
+  const artists = [];
+  // Fetch up to 500 top artists (5 pages of 100)
+  for (let page = 1; page <= 5; page++) {
+    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.gettopartists", user, api_key:LASTFM_API_KEY, format:"json", limit:"100", page:String(page), period:"overall" }));
+    if (!r.ok) break;
+    const d = await r.json();
+    if (d.error) break;
+    const list = d.topartists && d.topartists.artist || [];
+    if (!list.length) break;
+    for (const a of list) artists.push({ name: a.name, playcount: parseInt(a.playcount) });
+  }
+  acCache = artists;
+  acUser = user;
+  return artists;
+}
+
+function handleArtistAutocomplete() {
+  clearTimeout(acTimer);
+  const query = $("artistInput").value.trim().toLowerCase();
+  if (query.length < 2) { clearArtistSuggestions(); return; }
+  const user = $("usernameInput").value.trim();
+  if (!user) return;
+
+  acTimer = setTimeout(async () => {
+    const artists = await fetchTopArtists(user);
+    const matches = artists.filter(a => a.name.toLowerCase().includes(query)).slice(0, 6);
+    renderArtistSuggestions(matches);
+  }, 150);
+}
+
+function renderArtistSuggestions(matches) {
+  let box = $("artistSuggestions");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "artistSuggestions";
+    box.className = "autocomplete-box";
+    $("artistInput").parentNode.appendChild(box);
+  }
+  acSelectedIdx = -1;
+  if (!matches.length) { box.innerHTML = ""; box.style.display = "none"; return; }
+  box.innerHTML = matches.map((m, i) =>
+    '<div class="autocomplete-item" data-idx="'+i+'" onmousedown="selectArtistSuggestion('+i+')">'
+    + '<span class="ac-name">'+escHtml(m.name)+'</span>'
+    + '<span class="ac-count">'+m.playcount.toLocaleString()+' plays</span>'
+    + '</div>'
+  ).join("");
+  box.style.display = "";
+  box._matches = matches;
+}
+
+function selectArtistSuggestion(idx) {
+  const box = $("artistSuggestions");
+  if (!box || !box._matches || !box._matches[idx]) return;
+  $("artistInput").value = box._matches[idx].name;
+  clearArtistSuggestions();
+  updateGoButton();
+}
+
+function clearArtistSuggestions() {
+  const box = $("artistSuggestions");
+  if (box) { box.innerHTML = ""; box.style.display = "none"; }
+  acSelectedIdx = -1;
+}
+
+function handleArtistKeydown(e) {
+  const box = $("artistSuggestions");
+  if (!box || box.style.display === "none" || !box._matches || !box._matches.length) return false;
+  const items = box.querySelectorAll(".autocomplete-item");
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    acSelectedIdx = Math.min(acSelectedIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle("ac-active", i === acSelectedIdx));
+    return true;
+  }
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    acSelectedIdx = Math.max(acSelectedIdx - 1, -1);
+    items.forEach((el, i) => el.classList.toggle("ac-active", i === acSelectedIdx));
+    return true;
+  }
+  if ((e.key === "Enter" || e.key === "Tab") && acSelectedIdx >= 0) {
+    e.preventDefault();
+    selectArtistSuggestion(acSelectedIdx);
+    return true;
+  }
+  return false;
 }
