@@ -12,6 +12,7 @@
   v1.7  2025-03-03  Save as Spotify Playlist + Barlow font
   v1.8  2025-03-03  Mood search + dynamic year dropdown
   v1.9  2025-03-03  Split to multi-file architecture + favicon
+  v2.0  2025-03-05  On This Day mode + artist autocomplete + remember username
 -->
 <html lang="en">
 <head>
@@ -45,6 +46,7 @@
     <button class="mode-pill" data-mode="date" onclick="setMode('date')">📅 Date</button>
     <button class="mode-pill" data-mode="artist" onclick="setMode('artist')">🎤 Artist</button>
     <button class="mode-pill" data-mode="mood" onclick="setMode('mood')">🎭 Mood</button>
+    <button class="mode-pill" data-mode="onthisday" onclick="setMode('onthisday')">📆 On This Day</button>
   </div>
   <div class="mode-inputs" id="modeInputDate" style="display:none">
     <select id="dateYear" class="mode-input-field"></select>
@@ -75,7 +77,7 @@
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · v1.9</div>
+  <div style="margin-top:6px">Built with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · v2.0</div>
 </div>
 
 <script src="js/config.js"></script>
