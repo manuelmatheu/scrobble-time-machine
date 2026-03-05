@@ -23,7 +23,6 @@ async function getLastFmPageByDate(user, from, to) {
 // Find a random page containing the given artist by sampling random pages
 async function findArtistPage(user, artist, totalPages) {
   const artistLower = artist.toLowerCase();
-  const maxAttempts = 8;
 
   // Get time range of user's history
   const r1 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:"1" }));
@@ -42,13 +41,12 @@ async function findArtistPage(user, artist, totalPages) {
   const oldest = Array.isArray(oldestTrack) ? oldestTrack[oldestTrack.length - 1] : oldestTrack;
   const oldestUts = oldest && oldest.date ? parseInt(oldest.date.uts) : newestUts - 86400 * 365;
 
-  // Sample random time windows, fetching 200 tracks per call
-  const MIN_TRACKS = 5;
-  let bestResult = null, bestCount = 0;
+  // PHASE 1: Sample random time windows to find ANY occurrence of the artist
+  const maxScanAttempts = 10;
+  let hitTimestamps = []; // collect timestamps where we found the artist
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < maxScanAttempts; attempt++) {
     const randomUts = oldestUts + Math.floor(Math.random() * (newestUts - oldestUts));
-    // Use a bounded window: from randomUts to randomUts + 30 days
     const windowEnd = Math.min(randomUts + 86400 * 30, newestUts);
     const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(randomUts), to:String(windowEnd) }));
     if (!r.ok) continue;
@@ -56,33 +54,84 @@ async function findArtistPage(user, artist, totalPages) {
     if (d.error) continue;
     const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
 
-    // Count artist matches
-    let count = 0;
     for (const t of tracks) {
       const a = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
-      if (a.toLowerCase() === artistLower) count++;
-    }
-
-    if (count > bestCount) {
-      bestCount = count;
-      // Find the densest cluster of this artist within the 200 tracks
-      // Slide a 50-track window and pick the one with the most matches
-      let bestSliceStart = 0, bestSliceCount = 0;
-      for (let s = 0; s <= Math.max(0, tracks.length - 50); s++) {
-        let sc = 0;
-        for (let j = s; j < Math.min(s + 50, tracks.length); j++) {
-          const a = (tracks[j].artist && (tracks[j].artist["#text"] || tracks[j].artist.name)) || "";
-          if (a.toLowerCase() === artistLower) sc++;
-        }
-        if (sc > bestSliceCount) { bestSliceCount = sc; bestSliceStart = s; }
+      if (a.toLowerCase() === artistLower && t.date && t.date.uts) {
+        hitTimestamps.push(parseInt(t.date.uts));
       }
-      const slice = tracks.slice(bestSliceStart, bestSliceStart + 50);
-      bestResult = { tracks: slice, page: Math.floor(randomUts / 86400), attempt: attempt + 1, matchCount: bestSliceCount };
+    }
+    if (hitTimestamps.length > 0) break;
+  }
+
+  if (!hitTimestamps.length) return null;
+
+  // PHASE 2: For each hit timestamp, zoom in with a tight window (3 days) to find dense clusters
+  // Pick a random hit to explore
+  const MIN_TRACKS = 5;
+  let bestResult = null, bestSliceCount = 0;
+
+  // Shuffle hits and try up to 3 different ones
+  hitTimestamps.sort(() => Math.random() - 0.5);
+  const hitsToTry = hitTimestamps.slice(0, 3);
+
+  for (const hitUts of hitsToTry) {
+    // Search 3 days centered on the hit
+    const zoomFrom = hitUts - 86400 * 1.5;
+    const zoomTo = hitUts + 86400 * 1.5;
+    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(Math.floor(zoomFrom)), to:String(Math.floor(zoomTo)) }));
+    if (!r.ok) continue;
+    const d = await r.json();
+    if (d.error) continue;
+    const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+    if (!tracks.length) continue;
+
+    // Slide a 50-track window to find the densest cluster
+    let localBestStart = 0, localBestCount = 0;
+    for (let s = 0; s <= Math.max(0, tracks.length - 50); s++) {
+      let sc = 0;
+      for (let j = s; j < Math.min(s + 50, tracks.length); j++) {
+        const a = (tracks[j].artist && (tracks[j].artist["#text"] || tracks[j].artist.name)) || "";
+        if (a.toLowerCase() === artistLower) sc++;
+      }
+      if (sc > localBestCount) { localBestCount = sc; localBestStart = s; }
     }
 
-    // Stop early if we found a dense page
-    if (bestCount >= MIN_TRACKS) break;
+    if (localBestCount > bestSliceCount) {
+      bestSliceCount = localBestCount;
+      const slice = tracks.slice(localBestStart, localBestStart + 50);
+      bestResult = { tracks: slice, page: 0, attempt: hitsToTry.indexOf(hitUts) + 1, matchCount: localBestCount };
+    }
+    if (bestSliceCount >= MIN_TRACKS) break;
   }
+
+  // If zoom didn't yield good results but we had hits, try a wider 14-day window
+  if (bestSliceCount < MIN_TRACKS && hitTimestamps.length > 0) {
+    const hitUts = hitTimestamps[0];
+    const wideFrom = hitUts - 86400 * 7;
+    const wideTo = hitUts + 86400 * 7;
+    const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(Math.floor(wideFrom)), to:String(Math.floor(wideTo)) }));
+    if (r.ok) {
+      const d = await r.json();
+      if (!d.error) {
+        const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+        let localBestStart = 0, localBestCount = 0;
+        for (let s = 0; s <= Math.max(0, tracks.length - 50); s++) {
+          let sc = 0;
+          for (let j = s; j < Math.min(s + 50, tracks.length); j++) {
+            const a = (tracks[j].artist && (tracks[j].artist["#text"] || tracks[j].artist.name)) || "";
+            if (a.toLowerCase() === artistLower) sc++;
+          }
+          if (sc > localBestCount) { localBestCount = sc; localBestStart = s; }
+        }
+        if (localBestCount > bestSliceCount) {
+          bestSliceCount = localBestCount;
+          const slice = tracks.slice(localBestStart, localBestStart + 50);
+          bestResult = { tracks: slice, page: 0, attempt: 0, matchCount: localBestCount };
+        }
+      }
+    }
+  }
+
   return bestResult;
 }
 
