@@ -8,6 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <script>
+    const saved = localStorage.getItem("theme");
+    if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
+  </script>
   <style>
     .changelog { max-width:680px; margin:0 auto; padding:0 20px; }
     .changelog-entry { margin-bottom:32px; }
@@ -16,8 +20,8 @@
     .changelog-version .date { font-size:13px; color:var(--text-tertiary); font-family:'JetBrains Mono',monospace; }
     .changelog-version .tag { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; }
     .tag-major { background:var(--lastfm-red-subtle); color:var(--lastfm-red); }
-    .tag-feature { background:#e8f5e9; color:#2e7d32; }
-    .tag-fix { background:#e3f2fd; color:#1565c0; }
+    .tag-feature { background:rgba(34,197,94,0.08); color:var(--success); }
+    .tag-fix { background:rgba(59,130,246,0.08); color:#3b82f6; }
     .changelog-desc { color:var(--text-secondary); font-size:14px; line-height:1.6; margin:0; }
     .changelog-list { margin:8px 0 0 0; padding-left:20px; }
     .changelog-list li { color:var(--text-secondary); font-size:14px; line-height:1.8; }
