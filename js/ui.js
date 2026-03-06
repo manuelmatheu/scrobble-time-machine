@@ -307,20 +307,4 @@ function closeChangelog() {
   document.body.style.overflow = "";
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// THEME TOGGLE
-// ═════════════════════════════════════════════════════════════════════════════
-function toggleTheme() {
-  const current = document.documentElement.getAttribute("data-theme");
-  const next = current === "light" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", next);
-  localStorage.setItem("theme", next);
-  $("themeToggle").textContent = next === "light" ? "☀️" : "🌙";
-}
-function initTheme() {
-  const saved = localStorage.getItem("theme");
-  if (saved === "light") {
-    document.documentElement.setAttribute("data-theme", "light");
-    $("themeToggle").textContent = "☀️";
-  }
-}
+// (Theme toggle is handled by inline IIFE in index.html to prevent flash)
