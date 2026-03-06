@@ -23,7 +23,38 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-
+<script>
+// Theme toggle — runs early to prevent flash
+(function() {
+  const saved = localStorage.getItem('stm_theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  function updateThemeIcon(t) {
+    requestAnimationFrame(() => {
+      const icon = document.querySelector('.theme-icon');
+      if (icon) icon.textContent = t === 'dark' ? '☀' : '☽';
+    });
+  }
+  // Run icon update after DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => updateThemeIcon(theme));
+  } else {
+    updateThemeIcon(theme);
+  }
+  window.toggleTheme = function() {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const next = isLight ? 'dark' : 'light';
+    if (next === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('stm_theme', next);
+    updateThemeIcon(next);
+  };
+})();
+</script>
 </head>
 <body>
 <div class="container">
@@ -91,33 +122,6 @@
   <iframe id="changelogFrame" class="overlay-frame" src="about:blank"></iframe>
 </div>
 
-<script>
-// Theme toggle — runs early to prevent flash
-(function() {
-  const saved = localStorage.getItem('stm_theme');
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const theme = saved || (prefersDark ? 'dark' : 'light');
-  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  updateThemeIcon(theme);
-  function updateThemeIcon(t) {
-    requestAnimationFrame(() => {
-      const icon = document.querySelector('.theme-icon');
-      if (icon) icon.textContent = t === 'dark' ? '☀' : '☽';
-    });
-  }
-  window.toggleTheme = function() {
-    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
-    if (next === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    localStorage.setItem('stm_theme', next);
-    updateThemeIcon(next);
-  };
-})();
-</script>
 <script src="js/config.js"></script>
 <script src="js/spotify.js"></script>
 <script src="js/lastfm.js"></script>
