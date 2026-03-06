@@ -48,5 +48,4 @@ document.addEventListener("DOMContentLoaded", () => {
 
   populateYears();
   updateGoButton();
-  initTheme();
 });
