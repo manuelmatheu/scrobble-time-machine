@@ -6,7 +6,7 @@
     body::after { content:''; position:fixed; top:-200px; left:50%; transform:translateX(-50%); width:600px; height:400px; background:radial-gradient(ellipse,rgba(213,16,7,0.06) 0%,transparent 70%); pointer-events:none; z-index:0; }
     [data-theme="light"] body::before, [data-theme="light"] body::after { display:none; }
     .theme-toggle {
-      position: absolute; top: 52px; right: 0;
+      position: absolute; top: 48px; right: 0;
       background: none; border: 1.5px solid var(--border);
       border-radius: 4px; width: 34px; height: 34px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
