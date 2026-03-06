@@ -26,10 +26,12 @@
 
 </head>
 <body>
-<button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
 <div class="container">
   <div class="header"><div class="header-brand"><div class="header-icon">⏪</div><h1>Scrobble Time Machine</h1></div>
-    <p>Your Last.fm history meets Spotify playback. Time travel through your music.</p></div>
+    <p>Your Last.fm history meets Spotify playback. Time travel through your music.</p>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode" aria-label="Toggle theme">
+      <span class="theme-icon">☀</span>
+    </button></div>
   <div class="setup-banner" id="setupBanner"><strong>⚠ Setup required</strong>
     Open <code>js/config.js</code> and replace the API keys:<br>
     <code>LASTFM_API_KEY</code> → <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api</a><br>
@@ -89,6 +91,33 @@
   <iframe id="changelogFrame" class="overlay-frame" src="about:blank"></iframe>
 </div>
 
+<script>
+// Theme toggle — runs early to prevent flash
+(function() {
+  const saved = localStorage.getItem('stm_theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  updateThemeIcon(theme);
+  function updateThemeIcon(t) {
+    requestAnimationFrame(() => {
+      const icon = document.querySelector('.theme-icon');
+      if (icon) icon.textContent = t === 'dark' ? '☀' : '☽';
+    });
+  }
+  window.toggleTheme = function() {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    if (next === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('stm_theme', next);
+    updateThemeIcon(next);
+  };
+})();
+</script>
 <script src="js/config.js"></script>
 <script src="js/spotify.js"></script>
 <script src="js/lastfm.js"></script>
