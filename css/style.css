@@ -126,6 +126,14 @@
       .page-picker-number { font-size:40px; min-width:140px; } .page-picker-card { padding:20px 36px; }
       .track-date { display:none; } .era-headline .date { font-size:18px; }
       .era-stats { flex-direction:column; gap:8px; } .era-stat { flex-basis:auto; }
+      .mode-selector { flex-wrap:wrap; }
+      .mode-pill { padding:7px 12px; font-size:12px; }
+      .controls { flex-direction:column; }
+      .input-username { flex:1 1 100%; }
+      .btn { width:100%; text-align:center; }
+      .spotify-badge { width:100%; text-align:center; }
+      .theme-toggle { top:48px; right:0; }
+      .mood-btn { padding:6px 10px; font-size:12px; }
     }
 
     /* Autocomplete */
