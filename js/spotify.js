@@ -21,7 +21,7 @@ async function exchangeCodeForToken(code) {
   sessionStorage.setItem("spotify_refresh_token", d.refresh_token);
   sessionStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
   const u = sessionStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshYearsForUser(); }
-  window.history.replaceState({}, document.title, SPOTIFY_REDIRECT_URI);
+  window.history.replaceState({}, document.title, window.location.pathname);
   return d.access_token;
 }
 async function refreshSpotifyToken() {
