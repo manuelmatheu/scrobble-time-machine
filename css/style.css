@@ -104,7 +104,11 @@
     .era-stat-value { font-size:15px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .era-stat-value .accent { color:var(--lastfm-red); }
     .era-stat-sub { font-size:11px; color:var(--text-tertiary); margin-top:2px; }
-    .mode-selector { display:flex; gap:6px; margin-bottom:16px; justify-content:center; }
+    .mode-selector { display:flex; gap:6px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
+    .mode-secondary { margin-top:-10px; }
+    .mode-more-toggle { opacity:0.5; font-size:12px; }
+    .mode-more-toggle:hover { opacity:0.8; }
+    .mode-more-toggle.open { opacity:0.8; }
     .mode-pill { padding:8px 16px; border:1px solid var(--border); border-radius:20px; background:var(--bg-secondary); color:var(--text-tertiary); font-size:13px; font-weight:500; font-family:inherit; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
     .mode-pill:hover { border-color:var(--text-muted); color:var(--text-secondary); }
     .mode-pill.active { border-color:var(--lastfm-red); background:var(--lastfm-red-subtle); color:var(--lastfm-red); font-weight:600; }
