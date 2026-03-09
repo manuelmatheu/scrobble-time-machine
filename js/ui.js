@@ -83,9 +83,17 @@ function setMode(mode) {
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
   $("modeInputMood").style.display = mode === "mood" ? "" : "none";
+  $("modeInputDecade").style.display = mode === "decade" ? "" : "none";
+  $("modeInputAlbum").style.display = mode === "album" ? "" : "none";
+  $("modeInputDiscovery").style.display = mode === "discovery" ? "" : "none";
+  $("modeInputStreak").style.display = mode === "streak" ? "" : "none";
   if (mode === "date") { lastRefreshedUser = ""; refreshYearsForUser().then(() => updateGoButton()); }
+  if (mode === "decade") populateDecades();
   updateGoButton();
   if (mode === "artist") $("artistInput").focus();
+  if (mode === "album") $("albumArtistInput").focus();
+  if (mode === "discovery") $("discoveryInput").focus();
+  if (mode === "streak") $("streakInput").focus();
 }
 
 function updateSpotifyUI(c) { $("spotifyConnectBtn").style.display = c ? "none" : ""; $("spotifyBadge").style.display = c ? "" : "none"; if (c) $("modeSelector").style.display = ""; updateGoButton(); }
@@ -95,8 +103,11 @@ function updateGoButton() {
   let ok = base;
   if (searchMode === "date") ok = base && $("dateYear").value;
   else if (searchMode === "artist") ok = base && $("artistInput").value.trim();
+  else if (searchMode === "album") ok = base && $("albumArtistInput").value.trim() && $("albumInput").value.trim();
+  else if (searchMode === "discovery") ok = base && $("discoveryInput").value.trim();
+  else if (searchMode === "streak") ok = base && $("streakInput").value.trim();
   $("goBtn").disabled = !ok; $("goBtn").className = "btn btn-primary" + (ok ? " ready" : "");
-  const labels = { random: currentPhase==="done" ? "↻ Again" : "Time Travel", date: "Go to Date", artist: "Find Artist", mood: "Find Mood", onthisday: "On This Day" };
+  const labels = { random: currentPhase==="done" ? "↻ Again" : "Time Travel", date: "Go to Date", artist: "Find Artist", mood: "Find Mood", onthisday: "On This Day", decade: "Go to Era", album: "Find Album", discovery: "Find First Listen", streak: "Find Streak" };
   $("goBtn").textContent = labels[searchMode] || "Time Travel";
 }
 
@@ -193,6 +204,37 @@ function handleReset() {
   endSessionUI();
   $("pagePicker").style.display = "none"; $("eraPanel").style.display = "none";
   $("trackListWrapper").style.display = "none"; hideStatus();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DECADE SELECTOR
+// ═════════════════════════════════════════════════════════════════════════════
+let selectedDecade = null;
+
+function populateDecades() {
+  const box = $("modeInputDecade");
+  const now = new Date().getFullYear();
+  const startYear = parseInt($("dateYear")?.options?.[1]?.value) || 2005;
+  const startDecade = Math.floor(startYear / 10) * 10;
+  const endDecade = Math.floor(now / 10) * 10;
+  let html = "";
+  for (let d = endDecade; d >= startDecade; d -= 10) {
+    const label = d + "s";
+    const active = selectedDecade === d ? " active" : "";
+    html += '<button class="mood-btn' + active + '" data-decade="' + d + '" onclick="selectDecade(this)">' + label + '</button>';
+  }
+  box.innerHTML = html;
+  if (!selectedDecade && box.children.length) {
+    box.children[0].classList.add("active");
+    selectedDecade = parseInt(box.children[0].dataset.decade);
+  }
+}
+
+function selectDecade(btn) {
+  document.querySelectorAll("#modeInputDecade .mood-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  selectedDecade = parseInt(btn.dataset.decade);
+  updateGoButton();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -308,3 +350,72 @@ function closeChangelog() {
 }
 
 // (Theme toggle is handled by inline IIFE in index.html to prevent flash)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GENERIC ARTIST AUTOCOMPLETE FACTORY
+// ═════════════════════════════════════════════════════════════════════════════
+function makeAutocomplete(inputId, boxId) {
+  let timer = null, selIdx = -1;
+  function getBox() {
+    let box = $(boxId);
+    if (!box) {
+      box = document.createElement("div");
+      box.id = boxId;
+      box.className = "autocomplete-box";
+      $(inputId).parentNode.appendChild(box);
+    }
+    return box;
+  }
+  function render(matches) {
+    const box = getBox();
+    selIdx = -1;
+    if (!matches.length) { box.innerHTML = ""; box.style.display = "none"; return; }
+    box.innerHTML = matches.map((m, i) =>
+      '<div class="autocomplete-item" data-idx="'+i+'" onmousedown="window._acSelect_'+boxId+'('+i+')">'
+      + '<span class="ac-name">'+escHtml(m.name)+'</span>'
+      + '<span class="ac-count">'+m.playcount.toLocaleString()+' plays</span></div>'
+    ).join("");
+    box.style.display = "";
+    box._matches = matches;
+  }
+  window['_acSelect_'+boxId] = function(idx) {
+    const box = getBox();
+    if (!box._matches || !box._matches[idx]) return;
+    $(inputId).value = box._matches[idx].name;
+    box.innerHTML = ""; box.style.display = "none"; selIdx = -1;
+    updateGoButton();
+  };
+  return {
+    handle: function() {
+      clearTimeout(timer);
+      const q = $(inputId).value.trim().toLowerCase();
+      if (q.length < 2) { getBox().innerHTML = ""; getBox().style.display = "none"; return; }
+      const user = $("usernameInput").value.trim();
+      if (!user) return;
+      timer = setTimeout(async () => {
+        const artists = await fetchTopArtists(user);
+        render(artists.filter(a => a.name.toLowerCase().includes(q)).slice(0, 6));
+      }, 150);
+    },
+    keydown: function(e) {
+      const box = getBox();
+      if (box.style.display === "none" || !box._matches || !box._matches.length) return false;
+      const items = box.querySelectorAll(".autocomplete-item");
+      if (e.key === "ArrowDown") { e.preventDefault(); selIdx = Math.min(selIdx + 1, items.length - 1); items.forEach((el, i) => el.classList.toggle("ac-active", i === selIdx)); return true; }
+      if (e.key === "ArrowUp") { e.preventDefault(); selIdx = Math.max(selIdx - 1, -1); items.forEach((el, i) => el.classList.toggle("ac-active", i === selIdx)); return true; }
+      if ((e.key === "Enter" || e.key === "Tab") && selIdx >= 0) { e.preventDefault(); window['_acSelect_'+boxId](selIdx); return true; }
+      return false;
+    },
+    clear: function() { const box = getBox(); box.innerHTML = ""; box.style.display = "none"; selIdx = -1; }
+  };
+}
+
+const discoveryAC = makeAutocomplete("discoveryInput", "discoverySuggestions");
+const handleDiscoveryAutocomplete = discoveryAC.handle;
+const handleDiscoveryKeydown = discoveryAC.keydown;
+const clearDiscoverySuggestions = discoveryAC.clear;
+
+const streakAC = makeAutocomplete("streakInput", "streakSuggestions");
+const handleStreakAutocomplete = streakAC.handle;
+const handleStreakKeydown = streakAC.keydown;
+const clearStreakSuggestions = streakAC.clear;
