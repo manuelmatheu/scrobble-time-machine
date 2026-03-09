@@ -7,6 +7,10 @@ async function handleGo() {
   if (searchMode === "artist") return handleGoArtist();
   if (searchMode === "mood") return handleGoMood();
   if (searchMode === "onthisday") return handleGoOnThisDay();
+  if (searchMode === "decade") return handleGoDecade();
+  if (searchMode === "album") return handleGoAlbum();
+  if (searchMode === "discovery") return handleGoDiscovery();
+  if (searchMode === "streak") return handleGoStreak();
   return handleGoRandom();
 }
 
@@ -257,6 +261,319 @@ async function handleGoOnThisDay() {
     renderEraPanelFromTracks(foundTracks, label, totalPages);
     showStatus("On this day " + yearsAgoStr + " · " + label + " · " + foundTracks.length + " scrobbles", "success");
     await fetchAndPlayDirect(foundTracks, "On this day · " + label);
+  } catch(err) {
+    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    endSessionUI();
+  }
+}
+
+// ── DECADE MODE ──────────────────────────────────────────────────────────
+async function handleGoDecade() {
+  const user = $("usernameInput").value.trim(); if (!user || !spotifyToken || !selectedDecade) return;
+  const decadeStart = selectedDecade;
+  const decadeEnd = decadeStart + 9;
+  const label = decadeStart + "s";
+
+  const from = Math.floor(new Date(decadeStart, 0, 1).getTime() / 1000);
+  const to = Math.floor(new Date(decadeEnd, 11, 31, 23, 59, 59).getTime() / 1000);
+
+  beginSession();
+  try {
+    showStatus("Traveling to the " + label + "...");
+    const result = await getLastFmPageByDate(user, from, to);
+    if (!result.total) throw new Error("No scrobbles found in the " + label);
+
+    let tracks;
+    if (result.totalPages > 1) {
+      const rndPage = Math.floor(Math.random() * result.totalPages) + 1;
+      showStatus("Found " + result.total.toLocaleString() + " scrobbles in the " + label + " - loading page " + rndPage + "...");
+      const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(from), to:String(to), page:String(rndPage) }));
+      if (!r.ok) throw new Error("Last.fm API error");
+      const d = await r.json(); if (d.error) throw new Error(d.message);
+      tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+    } else {
+      tracks = result.tracks.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+    }
+    if (!tracks.length) throw new Error("No tracks found in the " + label);
+
+    const { totalPages } = await getLastFmTotalPages(user);
+    cachedTotalPages = totalPages;
+    renderEraPanelFromTracks(tracks, "The " + label, totalPages);
+    showStatus("The " + label + " - " + result.total.toLocaleString() + " scrobbles from this era", "success");
+    await fetchAndPlayDirect(tracks, "The " + label);
+  } catch(err) {
+    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    endSessionUI();
+  }
+}
+
+// ── ALBUM MODE ──────────────────────────────────────────────────────────
+async function handleGoAlbum() {
+  const user = $("usernameInput").value.trim(); if (!user || !spotifyToken) return;
+  const artist = $("albumArtistInput").value.trim();
+  const album = $("albumInput").value.trim();
+  if (!artist || !album) return;
+
+  beginSession();
+  try {
+    showStatus("Searching for " + album + " by " + artist + "...");
+
+    // Get user's time range
+    const r1 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:"1" }));
+    if (!r1.ok) throw new Error("Last.fm API error");
+    const d1 = await r1.json();
+    const total = parseInt(d1.recenttracks["@attr"].total);
+    if (!total) throw new Error("No scrobbles found");
+    const newestUts = d1.recenttracks.track?.[0]?.date?.uts ? parseInt(d1.recenttracks.track[0].date.uts) : Math.floor(Date.now() / 1000);
+
+    const r2 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(total) }));
+    const d2 = await r2.ok ? await r2.json() : {};
+    const oldTrack = d2.recenttracks?.track;
+    const old = Array.isArray(oldTrack) ? oldTrack[oldTrack.length - 1] : oldTrack;
+    const oldestUts = old?.date?.uts ? parseInt(old.date.uts) : newestUts - 86400 * 365;
+
+    const artistLower = artist.toLowerCase();
+    const albumLower = album.toLowerCase();
+    let bestTracks = null, bestCount = 0;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (abortController.signal.aborted) return;
+      const randomUts = oldestUts + Math.floor(Math.random() * (newestUts - oldestUts));
+      const windowEnd = Math.min(randomUts + 86400 * 30, newestUts);
+      showStatus("Searching for " + album + "... (attempt " + (attempt + 1) + ")");
+      const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(randomUts), to:String(windowEnd) }));
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.error) continue;
+      const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+
+      // Find tracks matching artist + album
+      let count = 0;
+      for (const t of tracks) {
+        const a = ((t.artist && (t.artist["#text"] || t.artist.name)) || "").toLowerCase();
+        const al = ((t.album && t.album["#text"]) || "").toLowerCase();
+        if (a === artistLower && al.includes(albumLower)) count++;
+      }
+      if (count > bestCount) {
+        bestCount = count;
+        // Slide 50-track window for densest cluster
+        let bestStart = 0, bestSlice = 0;
+        for (let s = 0; s <= Math.max(0, tracks.length - 50); s++) {
+          let sc = 0;
+          for (let j = s; j < Math.min(s + 50, tracks.length); j++) {
+            const a = ((tracks[j].artist && (tracks[j].artist["#text"] || tracks[j].artist.name)) || "").toLowerCase();
+            const al = ((tracks[j].album && tracks[j].album["#text"]) || "").toLowerCase();
+            if (a === artistLower && al.includes(albumLower)) sc++;
+          }
+          if (sc > bestSlice) { bestSlice = sc; bestStart = s; }
+        }
+        bestTracks = tracks.slice(bestStart, bestStart + 50);
+        bestCount = bestSlice;
+      }
+      if (bestCount >= 5) break;
+    }
+
+    if (!bestTracks || bestCount === 0) throw new Error("Couldn't find " + album + " by " + artist + " in your history. Check the spelling or try again.");
+
+    const oldest = bestTracks[bestTracks.length - 1];
+    const dateStr = oldest?.date ? new Date(parseInt(oldest.date.uts) * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long" }) : "";
+    const label = album + " - " + artist + (dateStr ? " (" + dateStr + ")" : "");
+
+    const { totalPages } = await getLastFmTotalPages(user);
+    cachedTotalPages = totalPages;
+    renderEraPanelFromTracks(bestTracks, label, totalPages);
+    showStatus("Found " + bestCount + " tracks from " + album + (dateStr ? " - " + dateStr : ""), "success");
+    await fetchAndPlayDirect(bestTracks, label);
+  } catch(err) {
+    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    endSessionUI();
+  }
+}
+
+// ── DISCOVERY MODE (First Listen) ───────────────────────────────────────
+async function handleGoDiscovery() {
+  const user = $("usernameInput").value.trim(); if (!user || !spotifyToken) return;
+  const artist = $("discoveryInput").value.trim(); if (!artist) return;
+
+  beginSession();
+  try {
+    showStatus("Finding when you discovered " + artist + "...");
+    const artistLower = artist.toLowerCase();
+
+    // Get time range
+    const r1 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:"1" }));
+    if (!r1.ok) throw new Error("Last.fm API error");
+    const d1 = await r1.json();
+    const total = parseInt(d1.recenttracks["@attr"].total);
+    if (!total) throw new Error("No scrobbles found");
+    const newestUts = d1.recenttracks.track?.[0]?.date?.uts ? parseInt(d1.recenttracks.track[0].date.uts) : Math.floor(Date.now() / 1000);
+
+    const r2 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(total) }));
+    const d2 = await r2.ok ? await r2.json() : {};
+    const oldTrack = d2.recenttracks?.track;
+    const old = Array.isArray(oldTrack) ? oldTrack[oldTrack.length - 1] : oldTrack;
+    const oldestUts = old?.date?.uts ? parseInt(old.date.uts) : newestUts - 86400 * 365;
+
+    // Binary search: narrow down the earliest occurrence
+    let lo = oldestUts, hi = newestUts;
+    let earliestHitUts = null;
+
+    // First: verify the artist exists at all with a broad scan
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (abortController.signal.aborted) return;
+      const mid = Math.floor((lo + hi) / 2);
+      showStatus("Narrowing down... (step " + (attempt + 1) + ")");
+      const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(lo), to:String(mid) }));
+      if (!r.ok) { lo = mid; continue; }
+      const d = await r.json();
+      if (d.error) { lo = mid; continue; }
+      const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+      const found = tracks.some(t => {
+        const a = ((t.artist && (t.artist["#text"] || t.artist.name)) || "").toLowerCase();
+        return a === artistLower;
+      });
+      if (found) {
+        // Artist exists in the older half — search earlier
+        hi = mid;
+        // Record the earliest hit we've seen
+        for (let i = tracks.length - 1; i >= 0; i--) {
+          const a = ((tracks[i].artist && (tracks[i].artist["#text"] || tracks[i].artist.name)) || "").toLowerCase();
+          if (a === artistLower && tracks[i].date?.uts) {
+            earliestHitUts = parseInt(tracks[i].date.uts);
+          }
+        }
+      } else {
+        // Not in older half — search newer
+        lo = mid;
+      }
+    }
+
+    if (!earliestHitUts) {
+      // Didn't find via binary search — try a direct scan of the oldest range
+      showStatus("Scanning earliest history...");
+      const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(lo), to:String(hi) }));
+      if (r.ok) {
+        const d = await r.json();
+        if (!d.error) {
+          const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+          for (let i = tracks.length - 1; i >= 0; i--) {
+            const a = ((tracks[i].artist && (tracks[i].artist["#text"] || tracks[i].artist.name)) || "").toLowerCase();
+            if (a === artistLower && tracks[i].date?.uts) {
+              earliestHitUts = parseInt(tracks[i].date.uts);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (!earliestHitUts) throw new Error("Couldn't find " + artist + " in your history. Check the spelling or try again.");
+
+    // Fetch a page around the first listen
+    const zoomFrom = earliestHitUts - 86400;
+    const zoomTo = earliestHitUts + 86400 * 3;
+    const rz = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(zoomFrom), to:String(zoomTo) }));
+    let tracks = [];
+    if (rz.ok) {
+      const dz = await rz.json();
+      if (!dz.error) tracks = (dz.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+    }
+    if (!tracks.length) throw new Error("Found a match but couldn't load the page.");
+
+    const discoveryDate = new Date(earliestHitUts * 1000);
+    const dateStr = discoveryDate.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+    const yearsAgo = Math.floor((Date.now() - discoveryDate.getTime()) / (365.25 * 86400000));
+    const agoStr = yearsAgo > 0 ? " (" + yearsAgo + " year" + (yearsAgo > 1 ? "s" : "") + " ago)" : "";
+    const label = "Discovered " + artist + " - " + dateStr;
+
+    const { totalPages } = await getLastFmTotalPages(user);
+    cachedTotalPages = totalPages;
+    renderEraPanelFromTracks(tracks, label, totalPages);
+    showStatus("You discovered " + artist + " on " + dateStr + agoStr, "success");
+    await fetchAndPlayDirect(tracks, label);
+  } catch(err) {
+    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    endSessionUI();
+  }
+}
+
+// ── STREAK MODE ─────────────────────────────────────────────────────────
+async function handleGoStreak() {
+  const user = $("usernameInput").value.trim(); if (!user || !spotifyToken) return;
+  const artist = $("streakInput").value.trim(); if (!artist) return;
+
+  beginSession();
+  try {
+    showStatus("Searching for your biggest " + artist + " streak...");
+    const artistLower = artist.toLowerCase();
+
+    // Get time range
+    const r1 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:"1" }));
+    if (!r1.ok) throw new Error("Last.fm API error");
+    const d1 = await r1.json();
+    const total = parseInt(d1.recenttracks["@attr"].total);
+    if (!total) throw new Error("No scrobbles found");
+    const newestUts = d1.recenttracks.track?.[0]?.date?.uts ? parseInt(d1.recenttracks.track[0].date.uts) : Math.floor(Date.now() / 1000);
+
+    const r2 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(total) }));
+    const d2 = await r2.ok ? await r2.json() : {};
+    const oldTrack = d2.recenttracks?.track;
+    const old = Array.isArray(oldTrack) ? oldTrack[oldTrack.length - 1] : oldTrack;
+    const oldestUts = old?.date?.uts ? parseInt(old.date.uts) : newestUts - 86400 * 365;
+
+    // Sample random windows and find the densest consecutive streak
+    let bestStreak = 0, bestStreakTracks = null, bestStreakStart = null;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+      if (abortController.signal.aborted) return;
+      const randomUts = oldestUts + Math.floor(Math.random() * (newestUts - oldestUts));
+      const windowEnd = Math.min(randomUts + 86400 * 14, newestUts);
+      showStatus("Scanning for " + artist + " streaks... (attempt " + (attempt + 1) + ", best: " + bestStreak + ")");
+      const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"200", from:String(randomUts), to:String(windowEnd) }));
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.error) continue;
+      const tracks = (d.recenttracks.track || []).filter(t => !(t["@attr"] && t["@attr"].nowplaying));
+
+      // Find longest consecutive run of this artist
+      let streak = 0, streakStart = 0;
+      for (let i = 0; i < tracks.length; i++) {
+        const a = ((tracks[i].artist && (tracks[i].artist["#text"] || tracks[i].artist.name)) || "").toLowerCase();
+        if (a === artistLower) {
+          streak++;
+          if (streak > bestStreak) {
+            bestStreak = streak;
+            bestStreakStart = i - streak + 1;
+            bestStreakTracks = tracks;
+          }
+        } else {
+          streak = 0;
+        }
+      }
+      if (bestStreak >= 10) break;
+    }
+
+    if (!bestStreakTracks || bestStreak < 2) throw new Error("Couldn't find a significant " + artist + " streak. Try again or try a different artist.");
+
+    // Extract a 50-track window centered on the streak
+    const start = Math.max(0, bestStreakStart - Math.floor((50 - bestStreak) / 2));
+    const slice = bestStreakTracks.slice(start, start + 50);
+
+    const oldest = slice[slice.length - 1];
+    const newest = slice[0];
+    const dateFrom = oldest?.date ? new Date(parseInt(oldest.date.uts) * 1000) : null;
+    const dateTo = newest?.date ? new Date(parseInt(newest.date.uts) * 1000) : null;
+    const dateStr = dateFrom ? dateFrom.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }) : "";
+    const label = artist + " streak (" + bestStreak + " in a row)";
+
+    const { totalPages } = await getLastFmTotalPages(user);
+    cachedTotalPages = totalPages;
+    renderEraPanelFromTracks(slice, label, totalPages);
+
+    let msg = bestStreak + " consecutive " + artist + " tracks";
+    if (dateStr) msg += " - " + dateStr;
+    showStatus(msg, "success");
+    await fetchAndPlayDirect(slice, label);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
     endSessionUI();
