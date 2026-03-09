@@ -77,9 +77,26 @@ function selectMood(btn) {
   updateGoButton();
 }
 
+function toggleMoreModes() {
+  const sec = $("modeSecondary");
+  const btn = $("modeMoreToggle");
+  const showing = sec.style.display !== "none";
+  sec.style.display = showing ? "none" : "";
+  btn.textContent = showing ? "More ▾" : "Less ▴";
+  btn.classList.toggle("open", !showing);
+}
+
+const SECONDARY_MODES = ["mood", "decade", "album", "discovery", "streak"];
+
 function setMode(mode) {
   searchMode = mode;
   document.querySelectorAll(".mode-pill").forEach(p => p.classList.toggle("active", p.dataset.mode === mode));
+  // Auto-expand secondary row if a secondary mode is selected
+  if (SECONDARY_MODES.includes(mode)) {
+    $("modeSecondary").style.display = "";
+    $("modeMoreToggle").textContent = "Less ▴";
+    $("modeMoreToggle").classList.add("open");
+  }
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
   $("modeInputMood").style.display = mode === "mood" ? "" : "none";
@@ -211,10 +228,15 @@ function handleReset() {
 // ═════════════════════════════════════════════════════════════════════════════
 let selectedDecade = null;
 
-function populateDecades() {
+async function populateDecades() {
   const box = $("modeInputDecade");
   const now = new Date().getFullYear();
-  const startYear = parseInt($("dateYear")?.options?.[1]?.value) || 2005;
+  const user = $("usernameInput").value.trim();
+  let startYear = 2005;
+  if (user) {
+    const year = await fetchEarliestYear(user);
+    if (year) startYear = year;
+  }
   const startDecade = Math.floor(startYear / 10) * 10;
   const endDecade = Math.floor(now / 10) * 10;
   let html = "";
