@@ -36,6 +36,34 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("artistInput").addEventListener("blur", () => { setTimeout(clearArtistSuggestions, 200); });
 
+  // Album inputs
+  $("albumArtistInput").addEventListener("input", updateGoButton);
+  $("albumArtistInput").addEventListener("keydown", e => { if (e.key === "Enter") $("albumInput").focus(); });
+  $("albumInput").addEventListener("input", updateGoButton);
+  $("albumInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("goBtn").disabled) handleGo(); });
+
+  // Discovery input
+  $("discoveryInput").addEventListener("input", () => {
+    updateGoButton();
+    handleDiscoveryAutocomplete();
+  });
+  $("discoveryInput").addEventListener("keydown", e => {
+    if (handleDiscoveryKeydown(e)) return;
+    if (e.key === "Enter" && !$("goBtn").disabled) handleGo();
+  });
+  $("discoveryInput").addEventListener("blur", () => { setTimeout(clearDiscoverySuggestions, 200); });
+
+  // Streak input
+  $("streakInput").addEventListener("input", () => {
+    updateGoButton();
+    handleStreakAutocomplete();
+  });
+  $("streakInput").addEventListener("keydown", e => {
+    if (handleStreakKeydown(e)) return;
+    if (e.key === "Enter" && !$("goBtn").disabled) handleGo();
+  });
+  $("streakInput").addEventListener("blur", () => { setTimeout(clearStreakSuggestions, 200); });
+
   // Date selectors
   $("dateMonth").addEventListener("change", () => { populateDays(); updateGoButton(); });
   $("dateYear").addEventListener("change", () => { populateDays(); updateGoButton(); });
