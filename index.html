@@ -13,6 +13,7 @@
   v1.8  2025-03-03  Mood search + dynamic year dropdown
   v1.9  2025-03-03  Split to multi-file architecture + favicon
   v2.0  2025-03-05  On This Day mode + artist autocomplete + remember username
+  v2.1  2025-03-09  Decade mode + Album mode + First Listen + Streak finder
 -->
 <html lang="en">
 <head>
@@ -81,6 +82,10 @@
     <button class="mode-pill" data-mode="artist" onclick="setMode('artist')">🎤 Artist</button>
     <button class="mode-pill" data-mode="mood" onclick="setMode('mood')">🎭 Mood</button>
     <button class="mode-pill" data-mode="onthisday" onclick="setMode('onthisday')">📆 On This Day</button>
+    <button class="mode-pill" data-mode="decade" onclick="setMode('decade')">🔟 Decade</button>
+    <button class="mode-pill" data-mode="album" onclick="setMode('album')">💿 Album</button>
+    <button class="mode-pill" data-mode="discovery" onclick="setMode('discovery')">🔍 First Listen</button>
+    <button class="mode-pill" data-mode="streak" onclick="setMode('streak')">🔥 Streak</button>
   </div>
   <div class="mode-inputs" id="modeInputDate" style="display:none">
     <select id="dateYear" class="mode-input-field"></select>
@@ -99,6 +104,17 @@
     <button class="mood-btn" data-mood="soul" onclick="selectMood(this)">💜 Soul</button>
     <button class="mood-btn" data-mood="indie" onclick="selectMood(this)">🎉 Indie</button>
   </div>
+  <div class="mode-inputs mood-grid" id="modeInputDecade" style="display:none"></div>
+  <div class="mode-inputs" id="modeInputAlbum" style="display:none">
+    <input type="text" class="mode-input-field artist-input" id="albumArtistInput" placeholder="Artist name" autocomplete="off" spellcheck="false">
+    <input type="text" class="mode-input-field artist-input" id="albumInput" placeholder="Album name" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="mode-inputs" id="modeInputDiscovery" style="display:none">
+    <input type="text" class="mode-input-field artist-input" id="discoveryInput" placeholder="Artist name" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="mode-inputs" id="modeInputStreak" style="display:none">
+    <input type="text" class="mode-input-field artist-input" id="streakInput" placeholder="Artist name" autocomplete="off" spellcheck="false">
+  </div>
   <div class="page-picker" id="pagePicker" style="display:none"><div class="page-picker-card">
     <span class="page-picker-label">Page</span><span class="page-picker-number" id="pageNumber">—</span>
     <span class="page-picker-total" id="pageTotal">of …</span></div></div>
@@ -111,7 +127,7 @@
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.0</a></div>
+  <div style="margin-top:6px">Built with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.1</a></div>
 </div>
 
 <div class="overlay" id="changelogOverlay" style="display:none">
