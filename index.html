@@ -80,8 +80,11 @@
     <button class="mode-pill active" data-mode="random" onclick="setMode('random')">🎲 Random</button>
     <button class="mode-pill" data-mode="date" onclick="setMode('date')">📅 Date</button>
     <button class="mode-pill" data-mode="artist" onclick="setMode('artist')">🎤 Artist</button>
-    <button class="mode-pill" data-mode="mood" onclick="setMode('mood')">🎭 Mood</button>
     <button class="mode-pill" data-mode="onthisday" onclick="setMode('onthisday')">📆 On This Day</button>
+    <button class="mode-pill mode-more-toggle" id="modeMoreToggle" onclick="toggleMoreModes()">More ▾</button>
+  </div>
+  <div class="mode-selector mode-secondary" id="modeSecondary" style="display:none">
+    <button class="mode-pill" data-mode="mood" onclick="setMode('mood')">🎭 Mood</button>
     <button class="mode-pill" data-mode="decade" onclick="setMode('decade')">🔟 Decade</button>
     <button class="mode-pill" data-mode="album" onclick="setMode('album')">💿 Album</button>
     <button class="mode-pill" data-mode="discovery" onclick="setMode('discovery')">🔍 First Listen</button>
