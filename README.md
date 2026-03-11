@@ -2,7 +2,7 @@
 
 Your Last.fm history meets Spotify playback. Time travel through your music.
 
-**Live:** [manuelmatheu.github.io/scrobble-time-machine](https://manuelmatheu.github.io/scrobble-time-machine/)
+**Live:** [https://scrobble-time-machine.vercel.app/](https://scrobble-time-machine.vercel.app/)
 
 ## What it does
 
