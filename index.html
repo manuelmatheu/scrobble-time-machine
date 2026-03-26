@@ -14,6 +14,7 @@
   v1.9  2025-03-03  Split to multi-file architecture + favicon
   v2.0  2025-03-05  On This Day mode + artist autocomplete + remember username
   v2.1  2025-03-09  Decade mode + Album mode + First Listen + Streak finder
+  v2.2  2026-03-26  Spotify Web Playback SDK + player bar + liked songs + playlist UX
 -->
 <html lang="en">
 <head>
@@ -130,7 +131,7 @@
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.1</a></div>
+  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.2</a></div>
 </div>
 
 <div class="overlay" id="changelogOverlay" style="display:none">
@@ -141,6 +142,30 @@
   <iframe id="changelogFrame" class="overlay-frame" src="about:blank"></iframe>
 </div>
 
+<div id="player-bar" style="display:none">
+  <img id="pb-art" src="" alt="">
+  <div id="pb-info">
+    <div id="pb-track"></div>
+    <div id="pb-artist"></div>
+  </div>
+  <button id="pb-heart" onclick="toggleLikeCurrentTrack()">&#9825;</button>
+  <div id="pb-controls">
+    <button id="pb-prev" onclick="playerPrev()">&#9664;&#9664;</button>
+    <button id="pb-play" onclick="playerPlayPause()">&#9654;</button>
+    <button id="pb-next" onclick="playerNext()">&#9654;&#9654;</button>
+  </div>
+  <div id="pb-progress-wrap">
+    <span id="pb-elapsed">0:00</span>
+    <div id="pb-bar" onclick="seekTo(event)"><div id="pb-fill"></div></div>
+    <span id="pb-duration">0:00</span>
+  </div>
+  <div id="pb-volume-wrap">
+    <span id="pb-vol-icon">&#9834;</span>
+    <input type="range" id="pb-volume" min="0" max="100" value="80" oninput="setVolume(this.value)">
+  </div>
+</div>
+
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
 <script src="js/config.js"></script>
 <script src="js/spotify.js"></script>
 <script src="js/lastfm.js"></script>

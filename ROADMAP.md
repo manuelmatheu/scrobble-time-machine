@@ -2,7 +2,25 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## Now (v2.0) ✅
+## v2.2 (current) ✅
+
+- [x] Embedded Spotify Web Playback SDK player (in-browser streaming)
+- [x] Fixed player bar: album art, track info, prev/play-pause/next, seekable progress, volume
+- [x] Liked songs: heart on track rows + player bar, batch-checks on load, one-click toggle
+- [x] Save as Playlist: auto-named, one-click, opens result in Spotify, improved error messages
+
+---
+
+## v2.1 ✅
+
+- [x] Decade mode
+- [x] Album mode
+- [x] First Listen (Discovery Tracker)
+- [x] Streak finder
+
+---
+
+## v2.0 ✅
 
 - [x] Random time travel
 - [x] Date search (year/month/day)
@@ -25,18 +43,6 @@ A living document tracking planned features, improvements, and ideas for future 
 ---
 
 ## Next up (v2.x)
-
-### Decade Mode
-Quick-access buttons like "My 2010s" or "The 2008 Era" that jump to a random page from a specific era. Faster than date picker, more fun to browse. Could include decade-specific stats ("You scrobbled 12,340 tracks in the 2010s").
-
-### Album Mode
-Search for a specific album in your history and play it from the moment you first listened to it. Uses time-window sampling filtered by album name. Could show "First listened: March 2014" context.
-
-### Discovery Tracker
-Find the first time you ever scrobbled a specific artist. "You discovered Tame Impala on October 12, 2013." Could extend to albums and tracks too. Uses binary search through time to find the earliest occurrence efficiently.
-
-### Listening Streaks
-Find your longest consecutive listening period for an artist. "You listened to Radiohead 43 times between March 3-7, 2015." Surface obsessive listening phases.
 
 ---
 
@@ -101,8 +107,8 @@ These are raw ideas that need more thought before committing:
 - **Collaborative time travel** — two users enter their usernames, find pages where both were listening to the same artist at the same time
 - **Import/export** — export session history, import to playlist managers
 - **PWA** — installable as a phone app with push notifications ("On this day 5 years ago, you were listening to...")
-- **Last.fm integration** — love/unlove tracks directly from the Time Machine interface
+- **Last.fm integration** — love/unlove tracks on Last.fm directly from the interface (currently uses Spotify Liked Songs)
 
 ---
 
-*Last updated: v2.0 (March 2026)*
+*Last updated: v2.2 (March 2026)*

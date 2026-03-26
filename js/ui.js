@@ -13,7 +13,9 @@ function renderTrackRow(t, i) {
   const imgH = img ? '<img class="track-art" src="'+img+'" alt="" loading="lazy">' : '<div class="track-art-placeholder">♪</div>';
   return '<div class="track-row" id="track-'+i+'" onclick="playFromTrack('+i+')"><div class="track-num-wrap"><span class="track-num">'+(i+1)+'</span><span class="play-icon">▶</span></div>'
     +imgH+'<div class="track-info"><div class="track-name">'+escHtml(t.name)+'</div><div class="track-meta">'+escHtml(artist)+(album?' · '+escHtml(album):'')+'</div></div>'
-    +'<span class="track-date">'+dt+'</span><span class="track-status" id="status-'+i+'"></span></div>';
+    +'<span class="track-date">'+dt+'</span>'
+    +'<button class="heart-btn" id="heart-'+i+'" onclick="event.stopPropagation(); toggleLikeTrack('+i+')" title="Save to Liked Songs">&#9825;</button>'
+    +'<span class="track-status" id="status-'+i+'"></span></div>';
 }
 function setTrackStatus(i, s) {
   const e=$("status-"+i); if(!e) return;

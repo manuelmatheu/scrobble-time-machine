@@ -6,8 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("currentUrl").textContent = SPOTIFY_REDIRECT_URI;
   if (LASTFM_API_KEY !== "YOUR_LASTFM_API_KEY" && SPOTIFY_CLIENT_ID !== "YOUR_SPOTIFY_CLIENT_ID") $("setupBanner").style.display = "none";
   const code = new URLSearchParams(window.location.search).get("code");
-  if (code) exchangeCodeForToken(code).then(t => { spotifyToken = t; updateSpotifyUI(true); }).catch(() => showStatus("Spotify auth failed", "error"));
-  else getSpotifyToken().then(t => { if (t) { spotifyToken = t; updateSpotifyUI(true); } });
+  if (code) exchangeCodeForToken(code).then(t => { spotifyToken = t; updateSpotifyUI(true); if (window.Spotify && window.Spotify.Player) initSDKPlayer(); }).catch(() => showStatus("Spotify auth failed", "error"));
+  else getSpotifyToken().then(t => { if (t) { spotifyToken = t; updateSpotifyUI(true); if (window.Spotify && window.Spotify.Player) initSDKPlayer(); } });
 
   // Restore saved username from localStorage or sessionStorage
   const savedUser = localStorage.getItem("lastfm_username") || sessionStorage.getItem("lastfm_username");

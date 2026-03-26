@@ -12,6 +12,7 @@ function stopPolling() {
 }
 
 async function pollNowPlaying() {
+  if (sdkReady) return;
   const token = await getSpotifyToken();
   if (!token) return;
   const data = await getCurrentlyPlaying(token);
@@ -248,6 +249,171 @@ async function matchAndPlay(tracks, page, tp, label) {
   showStatus("▶ Playing " + matched + " tracks" + (where ? " from " + where : "") + pendingMsg, "success");
   for (let i = 0; i < tracks.length; i++) { if (matchedUris[i]) { highlightNowPlaying(i); break; } }
   startPolling();
+  checkLikedTracks();
   $("savePlaylistBtn").style.display = ""; $("savePlaylistBtn").disabled = false;
   $("savePlaylistBtn").textContent = "Save as Playlist"; $("savePlaylistBtn").className = "btn-save-playlist";
+  $("savePlaylistBtn").onclick = saveAsPlaylist;
+}
+
+// =========================================================================
+// SDK STATE HANDLER + PLAYER CONTROLS
+// =========================================================================
+let _sdkDurationMs = 0;
+let _sdkPositionMs = 0;
+let _sdkPlaying = false;
+let _sdkProgressTimer = null;
+
+function onSDKStateChange(state) {
+  if (!state) return;
+  const track = state.track_window && state.track_window.current_track;
+  if (!track) return;
+
+  const bar = $("player-bar");
+  if (bar) {
+    bar.style.display = "";
+    document.body.classList.add("has-player");
+  }
+
+  const artEl = $("pb-art");
+  if (artEl) artEl.src = (track.album && track.album.images && track.album.images[0] && track.album.images[0].url) || "";
+  const trackEl = $("pb-track");
+  if (trackEl) trackEl.textContent = track.name || "";
+  const artistEl = $("pb-artist");
+  if (artistEl) artistEl.textContent = (track.artists || []).map(a => a.name).join(", ");
+
+  const playBtn = $("pb-play");
+  if (playBtn) playBtn.innerHTML = state.paused ? "&#9654;" : "&#9646;&#9646;";
+
+  _sdkDurationMs = state.duration;
+  _sdkPositionMs = state.position;
+  _sdkPlaying = !state.paused;
+
+  updateProgressBar(_sdkPositionMs, _sdkDurationMs);
+
+  clearInterval(_sdkProgressTimer);
+  if (_sdkPlaying) {
+    _sdkProgressTimer = setInterval(() => {
+      _sdkPositionMs = Math.min(_sdkPositionMs + 250, _sdkDurationMs);
+      updateProgressBar(_sdkPositionMs, _sdkDurationMs);
+    }, 250);
+  }
+
+  // Highlight now-playing track
+  if (track.uri && uriToIndices[track.uri]) {
+    const candidates = uriToIndices[track.uri];
+    let best = candidates[0];
+    for (const idx of candidates) { if (idx >= nowPlayingIndex) { best = idx; break; } }
+    highlightNowPlaying(best);
+  }
+
+  updatePlayerBarHeart();
+}
+
+function updateProgressBar(position, duration) {
+  const fill = $("pb-fill");
+  const elapsed = $("pb-elapsed");
+  const dur = $("pb-duration");
+  if (fill && duration > 0) fill.style.width = (position / duration * 100) + "%";
+  if (elapsed) elapsed.textContent = fmtMs(position);
+  if (dur) dur.textContent = fmtMs(duration);
+}
+
+function fmtMs(ms) {
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60);
+  return m + ":" + String(s % 60).padStart(2, "0");
+}
+
+async function playerPlayPause() {
+  if (window._stmPlayer && sdkReady) { window._stmPlayer.togglePlay(); return; }
+}
+async function playerPrev() {
+  if (window._stmPlayer && sdkReady) { window._stmPlayer.previousTrack(); return; }
+}
+async function playerNext() {
+  if (window._stmPlayer && sdkReady) { window._stmPlayer.nextTrack(); return; }
+}
+async function setVolume(val) {
+  if (window._stmPlayer && sdkReady) window._stmPlayer.setVolume(val / 100);
+}
+function seekTo(e) {
+  const bar = $("pb-bar");
+  if (!bar || !window._stmPlayer || !_sdkDurationMs) return;
+  const pct = e.offsetX / bar.offsetWidth;
+  const posMs = Math.floor(pct * _sdkDurationMs);
+  _sdkPositionMs = posMs;
+  window._stmPlayer.seek(posMs);
+}
+
+// =========================================================================
+// LIKED SONGS
+// =========================================================================
+async function checkLikedTracks() {
+  if (!allTrackCount) return;
+  const token = await getSpotifyToken();
+  if (!token) return;
+  const matchedIds = [];
+  for (let i = 0; i < allTrackCount; i++) {
+    if (matchedUris[i]) matchedIds.push({ id: matchedUris[i].split(":").pop(), i });
+  }
+  if (!matchedIds.length) return;
+  likedSet = new Set();
+  for (let b = 0; b < matchedIds.length; b += 50) {
+    const batch = matchedIds.slice(b, b + 50);
+    try {
+      const ids = batch.map(x => x.id).join(",");
+      const r = await fetch("https://api.spotify.com/v1/me/tracks/contains?ids=" + ids,
+        { headers: { Authorization: "Bearer " + token } });
+      if (r.ok) {
+        const results = await r.json();
+        batch.forEach(({ id }, j) => { if (results[j]) likedSet.add(id); });
+      } else if (r.status === 403) { return; }
+    } catch {}
+  }
+  for (let i = 0; i < allTrackCount; i++) {
+    if (!matchedUris[i]) continue;
+    const id = matchedUris[i].split(":").pop();
+    const btn = $("heart-" + i);
+    if (btn) {
+      btn.classList.toggle("liked", likedSet.has(id));
+      btn.innerHTML = likedSet.has(id) ? "&#9829;" : "&#9825;";
+    }
+  }
+  updatePlayerBarHeart();
+}
+
+async function toggleLikeTrack(idx) {
+  if (!matchedUris[idx]) return;
+  const id = matchedUris[idx].split(":").pop();
+  const isLiked = likedSet.has(id);
+  const token = await getSpotifyToken(); if (!token) return;
+  try {
+    const r = await fetch("https://api.spotify.com/v1/me/tracks?ids=" + id, {
+      method: isLiked ? "DELETE" : "PUT",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [id] })
+    });
+    if (r.ok || r.status === 200) {
+      if (isLiked) likedSet.delete(id); else likedSet.add(id);
+      const btn = $("heart-" + idx);
+      if (btn) {
+        btn.classList.toggle("liked", !isLiked);
+        btn.innerHTML = !isLiked ? "&#9829;" : "&#9825;";
+      }
+      updatePlayerBarHeart();
+      showStatus(isLiked ? "Removed from Liked Songs" : "Saved to Liked Songs", "success");
+    }
+  } catch {}
+}
+
+async function toggleLikeCurrentTrack() {
+  if (nowPlayingIndex >= 0) await toggleLikeTrack(nowPlayingIndex);
+}
+
+function updatePlayerBarHeart() {
+  const btn = $("pb-heart");
+  if (!btn || nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
+  const id = matchedUris[nowPlayingIndex].split(":").pop();
+  const liked = likedSet.has(id);
+  btn.classList.toggle("liked", liked);
+  btn.innerHTML = liked ? "&#9829;" : "&#9825;";
 }

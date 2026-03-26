@@ -57,6 +57,20 @@ async function spotifySearch(token, artist, track, retries) {
 }
 
 async function spotifyPlay(token, uris) {
+  // Prefer SDK device when ready
+  if (sdkReady && sdkDeviceId) {
+    try {
+      // Transfer playback to SDK device first
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+        body:JSON.stringify({device_ids:[sdkDeviceId],play:false}) });
+      await new Promise(r => setTimeout(r, 300));
+      const r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id:sdkDeviceId}), {
+        method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify({uris}) });
+      if (r.ok || r.status === 204) return true;
+    } catch {}
+  }
+
   // First try without device_id (works if a device is already active)
   let r = await fetch("https://api.spotify.com/v1/me/player/play", {
     method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify({uris}) });
@@ -90,6 +104,37 @@ async function getCurrentlyPlaying(token) {
     return await r.json();
   } catch { return null; }
 }
+
+// =========================================================================
+// SPOTIFY WEB PLAYBACK SDK
+// =========================================================================
+function initSDKPlayer() {
+  if (!spotifyToken) return;
+  const player = new Spotify.Player({
+    name: 'Scrobble Time Machine',
+    getOAuthToken: async cb => { const t = await getSpotifyToken(); cb(t); },
+    volume: 0.8
+  });
+  player.addListener('ready', ({ device_id }) => {
+    sdkDeviceId = device_id;
+    sdkReady = true;
+  });
+  player.addListener('not_ready', () => {
+    sdkReady = false;
+    sdkDeviceId = null;
+  });
+  player.addListener('player_state_changed', state => {
+    if (state) onSDKStateChange(state);
+  });
+  player.addListener('authentication_error', async () => {
+    await refreshSpotifyToken();
+    player.connect();
+  });
+  player.connect();
+  window._stmPlayer = player;
+}
+
+window.onSpotifyWebPlaybackSDKReady = () => { initSDKPlayer(); };
 
 
 // =========================================================================
@@ -138,28 +183,26 @@ async function saveAsPlaylist() {
     const now = new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     const desc = "Created by Scrobble Time Machine on " + now + " - " + uris.length + " tracks";
     const playlist = await createSpotifyPlaylist(token, name, desc);
-    if (!playlist) throw new Error("Could not create playlist. You may need to reconnect Spotify with updated permissions.");
-    // Try adding tracks directly
+    if (!playlist) throw new Error("Could not create playlist. Disconnect and reconnect Spotify.");
     const addOk = await addTracksToPlaylist(token, playlist.id, uris);
-    if (addOk) {
-      btn.textContent = "Saved!";
-      btn.className = "btn-save-playlist saved";
+    if (!addOk) throw new Error("Playlist created but failed to add tracks. Try saving again.");
+    btn.textContent = "Saved! Open";
+    btn.className = "btn-save-playlist saved";
+    btn.disabled = false;
+    btn.onclick = function() {
       if (playlist.external_urls && playlist.external_urls.spotify) {
         window.open(playlist.external_urls.spotify, "_blank");
       }
-    } else {
-      // Dev mode fallback: copy URIs to clipboard, open empty playlist
-      await navigator.clipboard.writeText(uris.join("\n"));
-      btn.textContent = "Playlist created - URIs copied!";
-      btn.className = "btn-save-playlist saved";
-      showStatus("Playlist created but tracks must be added manually (dev mode limit). " + uris.length + " track URIs copied to clipboard - paste into Spotify search.", "success");
-      if (playlist.external_urls && playlist.external_urls.spotify) {
-        window.open(playlist.external_urls.spotify, "_blank");
-      }
-    }
+    };
   } catch (err) {
     btn.textContent = "Save as Playlist";
     btn.disabled = false;
-    showStatus(err.message, "error");
+    btn.onclick = saveAsPlaylist;
+    const msg = (err.message || "").toLowerCase();
+    if (msg.includes("403") || msg.includes("401") || msg.includes("permission")) {
+      showStatus("Permission error -- disconnect and reconnect Spotify.", "error");
+    } else {
+      showStatus("Could not save: " + err.message, "error");
+    }
   }
 }

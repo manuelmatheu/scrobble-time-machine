@@ -22,7 +22,14 @@ Scrobble Time Machine connects your Last.fm scrobble history with Spotify playba
 - **Auto-continuation** - as you listen, the next batch of tracks loads automatically
 - **Live now-playing tracking** - highlights the currently playing track in real time
 - **Session-aware polling** - detects if another device takes over Spotify playback
-- **Save as Playlist** - save any matched set of tracks as a private Spotify playlist
+- **Decade mode** - quick-access buttons for an era (My 2010s, The 2000s, etc.)
+- **Album mode** - find when you first listened to a specific album
+- **First Listen** - discover the exact date you first scrobbled an artist
+- **Streak finder** - surface your longest consecutive listening run for an artist
+- **Embedded player** - Spotify Web Playback SDK streams audio in-browser; no external device required
+- **Player bar** - persistent bottom bar with album art, track info, prev/play-pause/next, seekable progress, and volume control
+- **Liked songs** - heart button on each track row and in the player bar; saves/removes tracks from Spotify Liked Songs with one click
+- **Save as Playlist** - one-click, auto-named (includes mode context: date, artist, etc.), opens result in Spotify
 
 ## How it works
 
@@ -56,14 +63,14 @@ New Spotify apps start in Development Mode, which limits access to 25 manually-a
 ## Requirements
 
 - A Last.fm account with scrobble history
-- A Spotify Premium account (required for playback control)
-- An active Spotify device (open Spotify on any device before using)
+- A Spotify Premium account (required for playback control and in-browser SDK streaming)
 
 ## Tech stack
 
-- Vanilla HTML/CSS/JS (single file, no framework)
+- Vanilla HTML/CSS/JS (multi-file, no framework or build step)
 - Last.fm API (scrobble history)
-- Spotify Web API (search, playback, playlists)
+- Spotify Web API (search, playback, playlists, liked songs)
+- Spotify Web Playback SDK (in-browser audio streaming)
 - Spotify PKCE OAuth (no backend needed)
 - Barlow font (matching Last.fm's style)
 

@@ -4,7 +4,7 @@
 const LASTFM_API_KEY = "177b9e8ee70fe2325bfff606cfdaee23";
 const SPOTIFY_CLIENT_ID = "73fce01f5762463e86ff6555751a148c";
 const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname;
-const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public";
+const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read";
 const BATCH_SIZE = 15;    // max Spotify searches per batch
 const SEARCH_DELAY = 500; // ms between search calls
 const POLL_INTERVAL = 5000; // ms between now-playing polls
@@ -41,3 +41,6 @@ const MOOD_TAGS = {
   indie: ["indie", "alternative", "indie rock"]
 };
 let lastRefreshedUser = "";
+let sdkReady = false;
+let sdkDeviceId = null;
+let likedSet = new Set();
