@@ -148,11 +148,11 @@
     <div id="pb-track"></div>
     <div id="pb-artist"></div>
   </div>
-  <button id="pb-heart" onclick="toggleLikeCurrentTrack()">&#9825;</button>
+  <button id="pb-heart" onclick="toggleLikeCurrentTrack()" title="Save to Liked Songs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
   <div id="pb-controls">
-    <button id="pb-prev" onclick="playerPrev()">&#9664;&#9664;</button>
-    <button id="pb-play" onclick="playerPlayPause()">&#9654;</button>
-    <button id="pb-next" onclick="playerNext()">&#9654;&#9654;</button>
+    <button class="pb-btn" onclick="playerPrev()" title="Previous">&#9664;&#9664;</button>
+    <button class="pb-btn pb-play" id="pb-play" onclick="playerPlayPause()" title="Play/Pause">&#9654;</button>
+    <button class="pb-btn" onclick="playerNext()" title="Next">&#9654;&#9654;</button>
   </div>
   <div id="pb-progress-wrap">
     <span id="pb-elapsed">0:00</span>
@@ -160,7 +160,7 @@
     <span id="pb-duration">0:00</span>
   </div>
   <div id="pb-volume-wrap">
-    <span id="pb-vol-icon">&#9834;</span>
+    <svg class="pb-vol-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 5h2.5L8 2v12L4.5 11H2a1 1 0 01-1-1V6a1 1 0 011-1zm9 .5a4.5 4.5 0 010 5M13 3.5a7.5 7.5 0 010 9"/></svg>
     <input type="range" id="pb-volume" min="0" max="100" value="80" oninput="setVolume(this.value)">
   </div>
 </div>

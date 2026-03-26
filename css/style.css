@@ -181,22 +181,25 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     #pb-heart {
-      background: none; border: none; font-size: 18px; cursor: pointer;
-      color: var(--text-muted); padding: 4px 6px; flex-shrink: 0;
-      transition: color 0.15s;
-    }
-    #pb-heart:hover { color: var(--text-primary); }
-    #pb-heart.liked { color: var(--lastfm-red); }
-    #pb-controls {
-      display: flex; gap: 8px; align-items: center; flex-shrink: 0;
-    }
-    #pb-controls button {
       background: none; border: none; cursor: pointer;
-      color: var(--text-secondary); font-size: 14px; padding: 4px 6px;
-      transition: color 0.15s;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 6px; color: var(--text-primary); opacity: 0.7; flex-shrink: 0;
+      transition: opacity 100ms, color 120ms, transform 120ms;
     }
-    #pb-controls button:hover { color: var(--text-primary); }
-    #pb-play { font-size: 18px !important; color: var(--text-primary) !important; }
+    #pb-heart svg { width: 14px; height: 14px; }
+    #pb-heart:hover { opacity: 1; }
+    #pb-heart.liked { color: var(--lastfm-red); opacity: 1; }
+    #pb-heart.liked:hover { transform: scale(1.15); }
+    #pb-controls {
+      display: flex; gap: 4px; align-items: center; flex-shrink: 0;
+    }
+    .pb-btn {
+      background: none; border: none; color: var(--text-primary); cursor: pointer;
+      font-size: 14px; padding: 6px; line-height: 1; opacity: 0.7;
+      transition: opacity 100ms;
+    }
+    .pb-btn:hover { opacity: 1; }
+    .pb-play { font-size: 20px; opacity: 1; }
     #pb-progress-wrap {
       flex: 2; display: flex; align-items: center; gap: 8px; min-width: 0;
     }
@@ -215,7 +218,7 @@
     #pb-volume-wrap {
       display: flex; align-items: center; gap: 6px; flex-shrink: 0;
     }
-    #pb-vol-icon { font-size: 14px; color: var(--text-muted); }
+    .pb-vol-icon { color: var(--text-primary); opacity: 0.5; flex-shrink: 0; }
     #pb-volume {
       -webkit-appearance: none; appearance: none;
       width: 72px; height: 3px; background: var(--bg-tertiary);

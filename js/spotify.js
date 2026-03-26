@@ -158,13 +158,26 @@ async function createSpotifyPlaylist(token, name, desc) {
 async function addTracksToPlaylist(token, playlistId, uris) {
   for (let i = 0; i < uris.length; i += 100) {
     const batch = uris.slice(i, i + 100);
+    const method = i === 0 ? "PUT" : "POST";
     try {
-      const r = await fetch("https://api.spotify.com/v1/playlists/" + playlistId + "/tracks", {
-        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      let r = await fetch("https://api.spotify.com/v1/playlists/" + playlistId + "/items", {
+        method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({ uris: batch })
       });
-      if (!r.ok) return false;
-    } catch { return false; }
+      if (r.status === 401) {
+        const refreshed = await refreshSpotifyToken();
+        if (refreshed) {
+          r = await fetch("https://api.spotify.com/v1/playlists/" + playlistId + "/items", {
+            method, headers: { Authorization: "Bearer " + refreshed, "Content-Type": "application/json" },
+            body: JSON.stringify({ uris: batch })
+          });
+        }
+      }
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error("Adding tracks failed (" + r.status + "): " + (err?.error?.message || "unknown"));
+      }
+    } catch (e) { throw e; }
   }
   return true;
 }
@@ -184,8 +197,7 @@ async function saveAsPlaylist() {
     const desc = "Created by Scrobble Time Machine on " + now + " - " + uris.length + " tracks";
     const playlist = await createSpotifyPlaylist(token, name, desc);
     if (!playlist) throw new Error("Could not create playlist. Disconnect and reconnect Spotify.");
-    const addOk = await addTracksToPlaylist(token, playlist.id, uris);
-    if (!addOk) throw new Error("Playlist created but failed to add tracks. Try saving again.");
+    await addTracksToPlaylist(token, playlist.id, uris);
     btn.textContent = "Saved! Open";
     btn.className = "btn-save-playlist saved";
     btn.disabled = false;

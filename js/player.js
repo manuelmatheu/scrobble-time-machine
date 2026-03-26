@@ -413,7 +413,5 @@ function updatePlayerBarHeart() {
   const btn = $("pb-heart");
   if (!btn || nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
   const id = matchedUris[nowPlayingIndex].split(":").pop();
-  const liked = likedSet.has(id);
-  btn.classList.toggle("liked", liked);
-  btn.innerHTML = liked ? "&#9829;" : "&#9825;";
+  btn.classList.toggle("liked", likedSet.has(id));
 }
