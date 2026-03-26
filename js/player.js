@@ -262,6 +262,7 @@ let _sdkDurationMs = 0;
 let _sdkPositionMs = 0;
 let _sdkPlaying = false;
 let _sdkProgressTimer = null;
+let _sdkCurrentUri = null;
 
 function onSDKStateChange(state) {
   if (!state) return;
@@ -282,7 +283,7 @@ function onSDKStateChange(state) {
   if (artistEl) artistEl.textContent = (track.artists || []).map(a => a.name).join(", ");
 
   const playBtn = $("pb-play");
-  if (playBtn) playBtn.innerHTML = state.paused ? "&#9654;" : "&#9646;&#9646;";
+  if (playBtn) playBtn.textContent = state.paused ? "\u25B6" : "\u23F8";
 
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
@@ -306,7 +307,13 @@ function onSDKStateChange(state) {
     highlightNowPlaying(best);
   }
 
-  updatePlayerBarHeart();
+  // Check liked status whenever the track changes
+  if (track.uri !== _sdkCurrentUri) {
+    _sdkCurrentUri = track.uri;
+    checkAndUpdateTrackLiked(track.uri);
+  } else {
+    updatePlayerBarHeart();
+  }
 }
 
 function updateProgressBar(position, duration) {
@@ -347,6 +354,21 @@ function seekTo(e) {
 // =========================================================================
 // LIKED SONGS
 // =========================================================================
+async function checkAndUpdateTrackLiked(uri) {
+  const id = uri.split(":").pop();
+  const token = await getSpotifyToken();
+  if (!token) return;
+  try {
+    const r = await fetch("https://api.spotify.com/v1/me/tracks/contains?ids=" + id,
+      { headers: { Authorization: "Bearer " + token } });
+    if (r.ok) {
+      const results = await r.json();
+      if (results[0]) likedSet.add(id); else likedSet.delete(id);
+    }
+  } catch {}
+  updatePlayerBarHeart();
+}
+
 async function checkLikedTracks() {
   if (!allTrackCount) return;
   const token = await getSpotifyToken();
