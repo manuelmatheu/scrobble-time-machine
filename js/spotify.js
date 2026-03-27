@@ -37,6 +37,39 @@ async function refreshSpotifyToken() {
 async function getSpotifyToken() { const e = parseInt(sessionStorage.getItem("spotify_token_expires")||"0"); if (Date.now() < e - 60000) return sessionStorage.getItem("spotify_access_token"); return refreshSpotifyToken(); }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// SPOTIFY API HELPERS (auto-refresh on 401, surface 403 scope errors)
+// ═════════════════════════════════════════════════════════════════════════════
+async function spGet(path) {
+  let token = await getSpotifyToken(); if (!token) throw new Error("no token");
+  let r = await fetch("https://api.spotify.com/v1" + path, { headers: { Authorization: "Bearer " + token } });
+  if (r.status === 401) {
+    token = await refreshSpotifyToken();
+    if (token) r = await fetch("https://api.spotify.com/v1" + path, { headers: { Authorization: "Bearer " + token } });
+  }
+  if (r.status === 403) throw Object.assign(new Error("Spotify 403"), { status: 403 });
+  if (!r.ok) throw new Error("Spotify GET " + r.status);
+  return r.json();
+}
+async function spPut(path, body) {
+  let token = await getSpotifyToken(); if (!token) throw new Error("no token");
+  const opts = (t) => ({ method: "PUT", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let r = await fetch("https://api.spotify.com/v1" + path, opts(token));
+  if (r.status === 401) { token = await refreshSpotifyToken(); if (token) r = await fetch("https://api.spotify.com/v1" + path, opts(token)); }
+  if (r.status === 403) throw Object.assign(new Error("Spotify 403"), { status: 403 });
+  if (!r.ok) throw new Error("Spotify PUT " + r.status);
+  return r.status === 204 ? {} : r.json().catch(() => ({}));
+}
+async function spDelete(path, body) {
+  let token = await getSpotifyToken(); if (!token) throw new Error("no token");
+  const opts = (t) => ({ method: "DELETE", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let r = await fetch("https://api.spotify.com/v1" + path, opts(token));
+  if (r.status === 401) { token = await refreshSpotifyToken(); if (token) r = await fetch("https://api.spotify.com/v1" + path, opts(token)); }
+  if (r.status === 403) throw Object.assign(new Error("Spotify 403"), { status: 403 });
+  if (!r.ok) throw new Error("Spotify DELETE " + r.status);
+  return {};
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // SPOTIFY API
 // ═════════════════════════════════════════════════════════════════════════════
 async function spotifySearch(token, artist, track, retries) {

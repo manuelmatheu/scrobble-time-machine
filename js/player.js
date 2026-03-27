@@ -383,8 +383,6 @@ async function checkAndUpdateTrackLiked(uri) {
 
 async function checkLikedTracks() {
   if (!allTrackCount) return;
-  const token = await getSpotifyToken();
-  if (!token) return;
   const matchedIds = [];
   for (let i = 0; i < allTrackCount; i++) {
     if (matchedUris[i]) matchedIds.push({ id: matchedUris[i].split(":").pop(), i });
@@ -394,14 +392,11 @@ async function checkLikedTracks() {
   for (let b = 0; b < matchedIds.length; b += 50) {
     const batch = matchedIds.slice(b, b + 50);
     try {
-      const ids = batch.map(x => x.id).join(",");
-      const r = await fetch("https://api.spotify.com/v1/me/tracks/contains?ids=" + ids,
-        { headers: { Authorization: "Bearer " + token } });
-      if (r.ok) {
-        const results = await r.json();
-        batch.forEach(({ id }, j) => { if (results[j]) likedSet.add(id); });
-      } else if (r.status === 403) { return; }
-    } catch {}
+      const results = await spGet("/me/tracks/contains?ids=" + batch.map(x => x.id).join(","));
+      batch.forEach(({ id }, j) => { if (results[j]) likedSet.add(id); });
+    } catch (e) {
+      if (e.status === 403) { showStatus("Reconnect Spotify to enable Liked Songs", "error"); return; }
+    }
   }
   for (let i = 0; i < allTrackCount; i++) {
     if (!matchedUris[i]) continue;
@@ -428,27 +423,15 @@ async function toggleLikeTrack(idx) {
   updatePlayerBarHeart();
 
   try {
-    const method = wasLiked ? "DELETE" : "PUT";
-    let token = await getSpotifyToken(); if (!token) throw new Error("no token");
-    let r = await fetch("https://api.spotify.com/v1/me/tracks", {
-      method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [id] })
-    });
-    if (r.status === 401) {
-      token = await refreshSpotifyToken();
-      if (token) r = await fetch("https://api.spotify.com/v1/me/tracks", {
-        method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [id] })
-      });
-    }
-    if (!r.ok) throw new Error(r.status);
+    if (wasLiked) await spDelete("/me/tracks", { ids: [id] });
+    else await spPut("/me/tracks", { ids: [id] });
     showStatus(wasLiked ? "Removed from Liked Songs" : "Saved to Liked Songs", "success");
-  } catch {
+  } catch (e) {
     // Revert on error
     if (wasLiked) likedSet.add(id); else likedSet.delete(id);
     if (btn) { btn.classList.toggle("liked", wasLiked); btn.innerHTML = wasLiked ? HEART_FILLED : HEART_EMPTY; }
     updatePlayerBarHeart();
-    showStatus("Could not update Liked Songs", "error");
+    showStatus(e.status === 403 ? "Reconnect Spotify to enable Liked Songs" : "Could not update Liked Songs", "error");
   }
 }
 
