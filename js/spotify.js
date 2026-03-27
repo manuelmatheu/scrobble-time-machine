@@ -108,7 +108,8 @@ async function spotifySearch(token, artist, track, retries) {
   } catch (err) { if (!lastSearchError) lastSearchError = err.message; return null; }
 }
 
-async function spotifyPlay(token, uris) {
+async function spotifyPlay(token, uris, positionMs) {
+  const body = positionMs > 0 ? { uris, position_ms: positionMs } : { uris };
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
     try {
@@ -118,23 +119,22 @@ async function spotifyPlay(token, uris) {
         body:JSON.stringify({device_ids:[sdkDeviceId],play:false}) });
       await new Promise(r => setTimeout(r, 300));
       const r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id:sdkDeviceId}), {
-        method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify({uris}) });
+        method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
       if (r.ok || r.status === 204) return true;
     } catch {}
   }
 
   // First try without device_id (works if a device is already active)
   let r = await fetch("https://api.spotify.com/v1/me/player/play", {
-    method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify({uris}) });
+    method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
   if (r.ok || r.status === 204) return true;
 
   // If that failed, find a device and target it explicitly
   const devices = await getSpotifyDevices(token);
   if (!devices.length) return false;
-  // Prefer active device, then any non-restricted device
   const device = devices.find(d => d.is_active) || devices.find(d => !d.is_restricted) || devices[0];
   r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id: device.id}), {
-    method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify({uris}) });
+    method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
   return r.ok || r.status === 204;
 }
 

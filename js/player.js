@@ -78,39 +78,38 @@ async function continueMatching() {
 
   for (let bi = 0; bi < batch.length; bi++) {
     const p = batch[bi];
-    // Maybe it got cached from a previous search
     if (p.ck in searchCache) {
       const c = searchCache[p.ck];
-      if (c) {
-        matchedUris[p.i] = c.uri;
-        registerUri(c.uri, p.i);
-        totalMatched++; batchMatched++;
-        setTrackStatus(p.i, "found");
-        // Add to Spotify queue
-        await spotifyAddToQueue(token, c.uri);
-        sessionQueue.add(c.uri);
-      } else { setTrackStatus(p.i, "not_found"); }
-      updateMatchCount();
-      continue;
+      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); }
+      else { setTrackStatus(p.i, "not_found"); }
+      updateMatchCount(); continue;
     }
-
     setTrackStatus(p.i, "searching");
     const result = await spotifySearch(token, p.artist, p.track);
-    if (result) {
-      matchedUris[p.i] = result.uri;
-      registerUri(result.uri, p.i);
-      totalMatched++; batchMatched++;
-      setTrackStatus(p.i, "found");
-      await spotifyAddToQueue(token, result.uri);
-      sessionQueue.add(result.uri);
-    } else {
-      setTrackStatus(p.i, "not_found");
-    }
+    if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); }
+    else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
     if (bi < batch.length - 1) await new Promise(r => setTimeout(r, SEARCH_DELAY));
   }
 
   if (batchMatched > 0) {
+    // Re-issue spotifyPlay from the current track onwards so new tracks enter the
+    // Spotify context (not the persistent user queue). Matches SpotiMix pattern.
+    const currentUri = _sdkCurrentUri;
+    const remainingUris = [];
+    let passedCurrent = !currentUri;
+    for (let i = 0; i < allTrackCount; i++) {
+      if (!matchedUris[i]) continue;
+      if (!passedCurrent) { if (matchedUris[i] === currentUri) passedCurrent = true; }
+      if (passedCurrent) remainingUris.push(matchedUris[i]);
+    }
+    if (remainingUris.length > 0) {
+      const tok2 = await getSpotifyToken();
+      if (tok2) {
+        await spotifyPlay(tok2, remainingUris, _sdkPositionMs || 0);
+        remainingUris.forEach(u => sessionQueue.add(u));
+      }
+    }
     showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched" + (skippedPlan.length > 0 ? " · more pending" : ""), "success");
     checkLikedTracks();
   } else {
@@ -368,15 +367,9 @@ function seekTo(e) {
 // =========================================================================
 async function checkAndUpdateTrackLiked(uri) {
   const id = uri.split(":").pop();
-  const token = await getSpotifyToken();
-  if (!token) return;
   try {
-    const r = await fetch("https://api.spotify.com/v1/me/tracks/contains?ids=" + id,
-      { headers: { Authorization: "Bearer " + token } });
-    if (r.ok) {
-      const results = await r.json();
-      if (results[0]) likedSet.add(id); else likedSet.delete(id);
-    }
+    const results = await spGet("/me/library/contains?uris=" + encodeURIComponent(uri));
+    if (results[0]) likedSet.add(id); else likedSet.delete(id);
   } catch {}
   updatePlayerBarHeart();
 }
