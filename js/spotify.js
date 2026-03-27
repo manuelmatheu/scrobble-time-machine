@@ -35,6 +35,16 @@ async function refreshSpotifyToken() {
   return d.access_token;
 }
 async function getSpotifyToken() { const e = parseInt(sessionStorage.getItem("spotify_token_expires")||"0"); if (Date.now() < e - 60000) return sessionStorage.getItem("spotify_access_token"); return refreshSpotifyToken(); }
+function disconnectSpotify() {
+  sessionStorage.removeItem("spotify_access_token");
+  sessionStorage.removeItem("spotify_refresh_token");
+  sessionStorage.removeItem("spotify_token_expires");
+  spotifyToken = null;
+  if (window._stmPlayer) { window._stmPlayer.disconnect(); window._stmPlayer = null; }
+  sdkReady = false; sdkDeviceId = null;
+  updateSpotifyUI(false);
+  initiateSpotifyAuth();
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // SPOTIFY API HELPERS (auto-refresh on 401, surface 403 scope errors)

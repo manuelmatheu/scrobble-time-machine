@@ -73,7 +73,7 @@
   <div class="controls">
     <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false">
     <button class="btn btn-spotify" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
-    <span class="spotify-badge" id="spotifyBadge" style="display:none">✓ Spotify</span>
+    <span class="spotify-badge" id="spotifyBadge" style="display:none">✓ Spotify <button class="btn-disconnect" onclick="disconnectSpotify()" title="Disconnect Spotify">✕</button></span>
     <button class="btn btn-primary" id="goBtn" onclick="handleGo()" disabled>Time Travel</button>
     <button class="btn btn-ghost" id="cancelBtn" onclick="handleReset()" style="display:none">Cancel</button>
   </div>

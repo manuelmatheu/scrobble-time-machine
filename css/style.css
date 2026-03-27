@@ -37,7 +37,9 @@
     .btn-primary:hover:not(:disabled) { background:var(--lastfm-red-hover); transform:translateY(-1px); box-shadow:0 4px 20px var(--lastfm-red-glow); }
     .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--text-secondary); }
     .btn-ghost:hover:not(:disabled) { border-color:var(--text-tertiary); color:var(--text-primary); }
-    .spotify-badge { padding:11px 16px; background:rgba(29,185,84,0.08); border:1px solid rgba(29,185,84,0.25); border-radius:8px; color:var(--spotify-green); font-size:13px; font-weight:600; white-space:nowrap; }
+    .spotify-badge { padding:11px 16px; background:rgba(29,185,84,0.08); border:1px solid rgba(29,185,84,0.25); border-radius:8px; color:var(--spotify-green); font-size:13px; font-weight:600; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
+    .btn-disconnect { background:none; border:none; cursor:pointer; color:var(--spotify-green); opacity:0.6; font-size:12px; padding:0 2px; line-height:1; }
+    .btn-disconnect:hover { opacity:1; }
     .page-picker { text-align:center; margin-bottom:24px; }
     .page-picker-card { display:inline-flex; flex-direction:column; align-items:center; gap:8px; padding:28px 56px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:14px; position:relative; overflow:hidden; }
     .page-picker-card::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at center,var(--lastfm-red-subtle) 0%,transparent 70%); pointer-events:none; }
