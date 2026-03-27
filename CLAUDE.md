@@ -122,10 +122,28 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 
 ---
 
+## Spotify API Helpers
+
+`spotify.js` has three auto-refresh wrappers (call `getSpotifyToken()` internally, retry on 401):
+
+- `spGet(path)` -- GET request; throws `{ status: 403, spotifyMsg }` on 403
+- `spPut(path, body)` -- PUT request; pass `null` body for no-body requests (query-param-only endpoints)
+- `spDelete(path, body)` -- DELETE request; same null-body support
+
+---
+
 ## Liked Songs
 
-- `checkLikedTracks()` -- called at end of `matchAndPlay()`. Batch-checks all matched track IDs via `GET /v1/me/tracks/contains` (max 50 per request). Populates `likedSet` (a `Set` of track IDs), then updates all `.heart-btn` elements in the track list and the player bar heart.
-- `toggleLikeTrack(idx)` -- `PUT` (like) or `DELETE` (unlike) `/v1/me/tracks?ids=`. Updates `likedSet`, heart button, player bar heart, shows status message.
+**Current Spotify Library API (2025)** — the old `/me/tracks` endpoints return 403 on new tokens.
+
+| Operation | Endpoint | Notes |
+|-----------|----------|-------|
+| Check | `GET /v1/me/library/contains?uris=spotify:track:id,...` | max 40 URIs, returns bool array |
+| Save | `PUT /v1/me/library?uris=spotify:track:id` | no body, URIs in query string |
+| Remove | `DELETE /v1/me/library?uris=spotify:track:id` | no body, URIs in query string |
+
+- `checkLikedTracks()` -- called at end of `matchAndPlay()`. Batches up to 40 full URIs from `matchedUris[]`, calls `GET /me/library/contains`. Populates `likedSet` (Set of bare track IDs), then updates all heart buttons and the player bar heart.
+- `toggleLikeTrack(idx)` -- optimistic UI update first, then `spPut`/`spDelete` on `/me/library?uris=`. Reverts on error.
 - `toggleLikeCurrentTrack()` -- delegates to `toggleLikeTrack(nowPlayingIndex)`.
 - `updatePlayerBarHeart()` -- syncs `#pb-heart` with `likedSet` for the track at `nowPlayingIndex`.
 
@@ -165,9 +183,16 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 
 8. **SDK race condition** -- the Spotify SDK script may fire `onSpotifyWebPlaybackSDKReady` before or after PKCE auth completes. Both code paths check and call `initSDKPlayer()` if conditions are met.
 
+9. **Spotify Library API migration (2025)** -- Spotify replaced the old track-specific library endpoints with a unified Library API. Old endpoints return 403 "Forbidden" on new tokens (not "Insufficient client scope"). If you see 403 on library calls, check the endpoint — do NOT use the old paths:
+   - OLD (broken): `GET /me/tracks/contains?ids=bareId` / `PUT /me/tracks` body `{ids:[...]}`
+   - NEW (correct): `GET /me/library/contains?uris=spotify:track:id` / `PUT /me/library?uris=spotify:track:id`
+   Note: apps with old cached `localStorage` refresh tokens may still work temporarily with old endpoints.
+
+10. **Disconnect button** -- `spotifyBadge` contains a `✕` button that calls `disconnectSpotify()`, which clears all sessionStorage tokens, disconnects the SDK player, and immediately re-initiates PKCE auth with `show_dialog: true`. Without this, there was no way to force a fresh auth within the app.
+
 ---
 
-## Current Version: v2.2
+## Current Version: v2.3
 
 ---
 
@@ -175,8 +200,12 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 
 | Function | File | Purpose |
 |---|---|---|
-| `initiateSpotifyAuth()` | spotify.js | Start PKCE OAuth flow |
+| `initiateSpotifyAuth()` | spotify.js | Start PKCE OAuth flow (includes `show_dialog:true`) |
+| `disconnectSpotify()` | spotify.js | Clear tokens, disconnect SDK, re-initiate auth |
 | `getSpotifyToken()` | spotify.js | Get valid access token (refresh if needed) |
+| `spGet(path)` | spotify.js | GET with auto-401-retry |
+| `spPut(path, body)` | spotify.js | PUT with auto-401-retry; `null` body = no body sent |
+| `spDelete(path, body)` | spotify.js | DELETE with auto-401-retry; `null` body = no body sent |
 | `initSDKPlayer()` | spotify.js | Create and connect Spotify Web Playback SDK player |
 | `spotifyPlay(token, uris)` | spotify.js | Start playback (prefers SDK device) |
 | `saveAsPlaylist()` | spotify.js | Create Spotify playlist from current session |
