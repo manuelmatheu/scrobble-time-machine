@@ -307,10 +307,21 @@ function onSDKStateChange(state) {
     highlightNowPlaying(best);
   }
 
-  // Check liked status whenever the track changes
+  // Check liked status and auto-continue whenever the track changes
   if (track.uri !== _sdkCurrentUri) {
     _sdkCurrentUri = track.uri;
     checkAndUpdateTrackLiked(track.uri);
+
+    // Auto-continue: if we're near the end of matched tracks, load next batch
+    if (!isContinuing && skippedPlan.length > 0) {
+      const matchedAfter = [];
+      let foundCurrent = false;
+      for (let i = 0; i < allTrackCount; i++) {
+        if (matchedUris[i] === track.uri) foundCurrent = true;
+        if (foundCurrent && matchedUris[i] && matchedUris[i] !== track.uri) matchedAfter.push(i);
+      }
+      if (matchedAfter.length <= 2) continueMatching();
+    }
   } else {
     updatePlayerBarHeart();
   }
