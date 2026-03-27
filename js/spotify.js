@@ -67,7 +67,9 @@ async function spGet(path) {
 }
 async function spPut(path, body) {
   let token = await getSpotifyToken(); if (!token) throw new Error("no token");
-  const opts = (t) => ({ method: "PUT", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const opts = (t) => body !== null
+    ? { method: "PUT", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body) }
+    : { method: "PUT", headers: { Authorization: "Bearer " + t } };
   let r = await fetch("https://api.spotify.com/v1" + path, opts(token));
   if (r.status === 401) { token = await refreshSpotifyToken(); if (token) r = await fetch("https://api.spotify.com/v1" + path, opts(token)); }
   if (r.status === 403) throw Object.assign(new Error("Spotify 403"), { status: 403 });
@@ -76,7 +78,9 @@ async function spPut(path, body) {
 }
 async function spDelete(path, body) {
   let token = await getSpotifyToken(); if (!token) throw new Error("no token");
-  const opts = (t) => ({ method: "DELETE", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const opts = (t) => body !== null
+    ? { method: "DELETE", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body) }
+    : { method: "DELETE", headers: { Authorization: "Bearer " + t } };
   let r = await fetch("https://api.spotify.com/v1" + path, opts(token));
   if (r.status === 401) { token = await refreshSpotifyToken(); if (token) r = await fetch("https://api.spotify.com/v1" + path, opts(token)); }
   if (r.status === 403) throw Object.assign(new Error("Spotify 403"), { status: 403 });

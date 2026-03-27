@@ -383,28 +383,19 @@ async function checkAndUpdateTrackLiked(uri) {
 
 async function checkLikedTracks() {
   if (!allTrackCount) return;
-  // Diagnostic: test user-library-read scope with a simple call
-  try {
-    const tok = await getSpotifyToken();
-    console.log("Token (first 20):", tok ? tok.slice(0, 20) + "..." : "null");
-    const testR = await fetch("https://api.spotify.com/v1/me/tracks?limit=1", { headers: { Authorization: "Bearer " + tok } });
-    const testBody = await testR.json().catch(() => ({}));
-    console.log("GET /me/tracks test:", testR.status, JSON.stringify(testBody));
-  } catch (e) { console.warn("Diagnostic failed:", e.message); }
   const matchedIds = [];
   for (let i = 0; i < allTrackCount; i++) {
-    if (matchedUris[i]) matchedIds.push({ id: matchedUris[i].split(":").pop(), i });
+    if (matchedUris[i]) matchedIds.push({ uri: matchedUris[i], id: matchedUris[i].split(":").pop(), i });
   }
   if (!matchedIds.length) return;
   likedSet = new Set();
-  for (let b = 0; b < matchedIds.length; b += 50) {
-    const batch = matchedIds.slice(b, b + 50);
+  for (let b = 0; b < matchedIds.length; b += 40) {
+    const batch = matchedIds.slice(b, b + 40);
     try {
-      const results = await spGet("/me/tracks/contains?ids=" + batch.map(x => x.id).join(","));
+      const results = await spGet("/me/library/contains?uris=" + batch.map(x => x.uri).join(","));
       batch.forEach(({ id }, j) => { if (results[j]) likedSet.add(id); });
     } catch (e) {
-      console.error("checkLikedTracks error:", e.message || e);
-      if (e.status === 403) { showStatus("Liked Songs unavailable: " + (e.spotifyMsg || "403") + " — check console", "error"); return; }
+      if (e.status === 403) { showStatus("Liked Songs: " + (e.spotifyMsg || "403 Forbidden"), "error"); return; }
     }
   }
   for (let i = 0; i < allTrackCount; i++) {
@@ -432,8 +423,9 @@ async function toggleLikeTrack(idx) {
   updatePlayerBarHeart();
 
   try {
-    if (wasLiked) await spDelete("/me/tracks", { ids: [id] });
-    else await spPut("/me/tracks", { ids: [id] });
+    const uri = encodeURIComponent("spotify:track:" + id);
+    if (wasLiked) await spDelete("/me/library?uris=" + uri, null);
+    else await spPut("/me/library?uris=" + uri, null);
     showStatus(wasLiked ? "Removed from Liked Songs" : "Saved to Liked Songs", "success");
   } catch (e) {
     // Revert on error
