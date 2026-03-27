@@ -419,25 +419,37 @@ async function checkLikedTracks() {
 async function toggleLikeTrack(idx) {
   if (!matchedUris[idx]) return;
   const id = matchedUris[idx].split(":").pop();
-  const isLiked = likedSet.has(id);
-  const token = await getSpotifyToken(); if (!token) return;
+  const wasLiked = likedSet.has(id);
+
+  // Optimistic update
+  if (wasLiked) likedSet.delete(id); else likedSet.add(id);
+  const btn = $("heart-" + idx);
+  if (btn) { btn.classList.toggle("liked", !wasLiked); btn.innerHTML = !wasLiked ? HEART_FILLED : HEART_EMPTY; }
+  updatePlayerBarHeart();
+
   try {
-    const r = await fetch("https://api.spotify.com/v1/me/tracks?ids=" + id, {
-      method: isLiked ? "DELETE" : "PUT",
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    const method = wasLiked ? "DELETE" : "PUT";
+    let token = await getSpotifyToken(); if (!token) throw new Error("no token");
+    let r = await fetch("https://api.spotify.com/v1/me/tracks", {
+      method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ ids: [id] })
     });
-    if (r.ok || r.status === 200) {
-      if (isLiked) likedSet.delete(id); else likedSet.add(id);
-      const btn = $("heart-" + idx);
-      if (btn) {
-        btn.classList.toggle("liked", !isLiked);
-        btn.innerHTML = !isLiked ? HEART_FILLED : HEART_EMPTY;
-      }
-      updatePlayerBarHeart();
-      showStatus(isLiked ? "Removed from Liked Songs" : "Saved to Liked Songs", "success");
+    if (r.status === 401) {
+      token = await refreshSpotifyToken();
+      if (token) r = await fetch("https://api.spotify.com/v1/me/tracks", {
+        method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] })
+      });
     }
-  } catch {}
+    if (!r.ok) throw new Error(r.status);
+    showStatus(wasLiked ? "Removed from Liked Songs" : "Saved to Liked Songs", "success");
+  } catch {
+    // Revert on error
+    if (wasLiked) likedSet.add(id); else likedSet.delete(id);
+    if (btn) { btn.classList.toggle("liked", wasLiked); btn.innerHTML = wasLiked ? HEART_FILLED : HEART_EMPTY; }
+    updatePlayerBarHeart();
+    showStatus("Could not update Liked Songs", "error");
+  }
 }
 
 async function toggleLikeCurrentTrack() {
