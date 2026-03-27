@@ -112,6 +112,7 @@ async function continueMatching() {
 
   if (batchMatched > 0) {
     showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched" + (skippedPlan.length > 0 ? " · more pending" : ""), "success");
+    checkLikedTracks();
   } else {
     showStatus("▶ Playing · " + totalMatched + " matched · couldn't find more", "success");
   }
@@ -407,8 +408,9 @@ async function checkLikedTracks() {
     const id = matchedUris[i].split(":").pop();
     const btn = $("heart-" + i);
     if (btn) {
-      btn.classList.toggle("liked", likedSet.has(id));
-      btn.innerHTML = likedSet.has(id) ? "&#9829;" : "&#9825;";
+      const liked = likedSet.has(id);
+      btn.classList.toggle("liked", liked);
+      btn.innerHTML = liked ? HEART_FILLED : HEART_EMPTY;
     }
   }
   updatePlayerBarHeart();
@@ -430,7 +432,7 @@ async function toggleLikeTrack(idx) {
       const btn = $("heart-" + idx);
       if (btn) {
         btn.classList.toggle("liked", !isLiked);
-        btn.innerHTML = !isLiked ? "&#9829;" : "&#9825;";
+        btn.innerHTML = !isLiked ? HEART_FILLED : HEART_EMPTY;
       }
       updatePlayerBarHeart();
       showStatus(isLiked ? "Removed from Liked Songs" : "Saved to Liked Songs", "success");
