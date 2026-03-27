@@ -383,15 +383,14 @@ async function checkAndUpdateTrackLiked(uri) {
 
 async function checkLikedTracks() {
   if (!allTrackCount) return;
-  // Log token scopes for diagnostics
+  // Diagnostic: test user-library-read scope with a simple call
   try {
     const tok = await getSpotifyToken();
-    if (tok) {
-      const payload = JSON.parse(atob(tok.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
-      console.log("Token scopes:", payload.scope || payload.scp || "(none found)");
-      console.log("Token exp:", new Date((payload.exp || 0) * 1000).toISOString());
-    }
-  } catch (e) { console.warn("Could not decode token:", e.message); }
+    console.log("Token (first 20):", tok ? tok.slice(0, 20) + "..." : "null");
+    const testR = await fetch("https://api.spotify.com/v1/me/tracks?limit=1", { headers: { Authorization: "Bearer " + tok } });
+    const testBody = await testR.json().catch(() => ({}));
+    console.log("GET /me/tracks test:", testR.status, JSON.stringify(testBody));
+  } catch (e) { console.warn("Diagnostic failed:", e.message); }
   const matchedIds = [];
   for (let i = 0; i < allTrackCount; i++) {
     if (matchedUris[i]) matchedIds.push({ id: matchedUris[i].split(":").pop(), i });
