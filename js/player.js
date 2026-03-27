@@ -395,7 +395,8 @@ async function checkLikedTracks() {
       const results = await spGet("/me/tracks/contains?ids=" + batch.map(x => x.id).join(","));
       batch.forEach(({ id }, j) => { if (results[j]) likedSet.add(id); });
     } catch (e) {
-      if (e.status === 403) { showStatus("Reconnect Spotify to enable Liked Songs", "error"); return; }
+      console.error("checkLikedTracks error:", e.message || e);
+      if (e.status === 403) { showStatus("Liked Songs unavailable: " + (e.spotifyMsg || "403") + " — check console", "error"); return; }
     }
   }
   for (let i = 0; i < allTrackCount; i++) {

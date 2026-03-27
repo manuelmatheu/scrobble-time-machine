@@ -10,7 +10,7 @@ async function initiateSpotifyAuth() {
   const v = rndStr(128), ch = b64url(await sha256(v));
   sessionStorage.setItem("spotify_code_verifier", v);
   sessionStorage.setItem("lastfm_username", $("usernameInput").value.trim());
-  window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch });
+  window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch, show_dialog:"true" });
 }
 async function exchangeCodeForToken(code) {
   const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
@@ -46,8 +46,13 @@ async function spGet(path) {
     token = await refreshSpotifyToken();
     if (token) r = await fetch("https://api.spotify.com/v1" + path, { headers: { Authorization: "Bearer " + token } });
   }
-  if (r.status === 403) throw Object.assign(new Error("Spotify 403"), { status: 403 });
-  if (!r.ok) throw new Error("Spotify GET " + r.status);
+  if (!r.ok) {
+    let msg = r.status;
+    try { const e = await r.clone().json(); msg = (e.error && e.error.message) || r.status; } catch {}
+    console.error("spGet", path, r.status, msg);
+    if (r.status === 403) throw Object.assign(new Error("Spotify 403: " + msg), { status: 403, spotifyMsg: msg });
+    throw new Error("Spotify GET " + r.status + ": " + msg);
+  }
   return r.json();
 }
 async function spPut(path, body) {
