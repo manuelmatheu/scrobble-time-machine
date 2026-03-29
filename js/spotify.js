@@ -17,33 +17,32 @@ async function exchangeCodeForToken(code) {
     body: new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, grant_type:"authorization_code", code, redirect_uri:SPOTIFY_REDIRECT_URI, code_verifier:sessionStorage.getItem("spotify_code_verifier") }) });
   if (!r.ok) throw new Error("Token exchange failed");
   const d = await r.json();
-  sessionStorage.setItem("spotify_access_token", d.access_token);
-  sessionStorage.setItem("spotify_refresh_token", d.refresh_token);
-  sessionStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
+  localStorage.setItem("spotify_access_token", d.access_token);
+  localStorage.setItem("spotify_refresh_token", d.refresh_token);
+  localStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
   const u = sessionStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshYearsForUser(); }
   window.history.replaceState({}, document.title, window.location.pathname);
   return d.access_token;
 }
 async function refreshSpotifyToken() {
-  const rt = sessionStorage.getItem("spotify_refresh_token"); if (!rt) return null;
+  const rt = localStorage.getItem("spotify_refresh_token"); if (!rt) return null;
   const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
     body: new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, grant_type:"refresh_token", refresh_token:rt }) });
   if (!r.ok) return null; const d = await r.json();
-  sessionStorage.setItem("spotify_access_token", d.access_token);
-  if (d.refresh_token) sessionStorage.setItem("spotify_refresh_token", d.refresh_token);
-  sessionStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
+  localStorage.setItem("spotify_access_token", d.access_token);
+  if (d.refresh_token) localStorage.setItem("spotify_refresh_token", d.refresh_token);
+  localStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
   return d.access_token;
 }
-async function getSpotifyToken() { const e = parseInt(sessionStorage.getItem("spotify_token_expires")||"0"); if (Date.now() < e - 60000) return sessionStorage.getItem("spotify_access_token"); return refreshSpotifyToken(); }
+async function getSpotifyToken() { const e = parseInt(localStorage.getItem("spotify_token_expires")||"0"); if (Date.now() < e - 60000) return localStorage.getItem("spotify_access_token"); return refreshSpotifyToken(); }
 function disconnectSpotify() {
-  sessionStorage.removeItem("spotify_access_token");
-  sessionStorage.removeItem("spotify_refresh_token");
-  sessionStorage.removeItem("spotify_token_expires");
+  localStorage.removeItem("spotify_access_token");
+  localStorage.removeItem("spotify_refresh_token");
+  localStorage.removeItem("spotify_token_expires");
   spotifyToken = null;
   if (window._stmPlayer) { window._stmPlayer.disconnect(); window._stmPlayer = null; }
   sdkReady = false; sdkDeviceId = null;
   updateSpotifyUI(false);
-  initiateSpotifyAuth();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
