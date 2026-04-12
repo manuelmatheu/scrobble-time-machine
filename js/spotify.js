@@ -219,6 +219,7 @@ async function getCurrentlyPlaying(token) {
 // =========================================================================
 function initSDKPlayer() {
   if (!spotifyToken) return;
+  if (window._stmPlayer) return; // guard: localStorage tokens cause both DOMContentLoaded and onSpotifyWebPlaybackSDKReady to call this
   const player = new Spotify.Player({
     name: 'Scrobble Time Machine',
     getOAuthToken: async cb => {
