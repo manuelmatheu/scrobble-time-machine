@@ -45,4 +45,5 @@ const MOOD_TAGS = {
 let lastRefreshedUser = "";
 let sdkReady = false;
 let sdkDeviceId = null;
+let sdkNeedsRetransfer = false;
 let likedSet = new Set();

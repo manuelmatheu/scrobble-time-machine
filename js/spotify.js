@@ -107,47 +107,63 @@ async function spotifySearch(token, artist, track, retries) {
   } catch (err) { if (!lastSearchError) lastSearchError = err.message; return null; }
 }
 
+async function transferPlayback(token, deviceId) {
+  await fetch("https://api.spotify.com/v1/me/player", {
+    method: "PUT",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ device_ids: [deviceId], play: false })
+  });
+  await new Promise(r => setTimeout(r, 800));
+}
+
 async function spotifyPlay(token, uris, positionMs) {
-  const body = positionMs > 0 ? { uris, position_ms: positionMs } : { uris };
+  const playUris = uris.slice(0, 100);
+  const body = positionMs > 0 ? { uris: playUris, position_ms: positionMs } : { uris: playUris };
+
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
-    try {
-      // Transfer playback to SDK device first, bail out if device not found
-      const tr = await fetch("https://api.spotify.com/v1/me/player", {
-        method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
-        body:JSON.stringify({device_ids:[sdkDeviceId],play:false}) });
-      if (tr.ok || tr.status === 204) {
-        await new Promise(r => setTimeout(r, 300));
-        const r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id:sdkDeviceId}), {
-          method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
-        if (r.ok || r.status === 204) return true;
-      }
-      // Transfer or play failed — SDK device is gone, clear state so fallback is used immediately next time
-      sdkReady = false;
-      sdkDeviceId = null;
-    } catch {
-      sdkReady = false;
-      sdkDeviceId = null;
-    }
+    await fetch("https://api.spotify.com/v1/me/player", {
+      method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
+    });
+    await new Promise(r => setTimeout(r, 300));
+    const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
+      method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (r.ok || r.status === 204) return true;
+    // SDK play failed — fall through to remote
   }
 
-  // First try without device_id (works if a device is already active)
-  let r = await fetch("https://api.spotify.com/v1/me/player/play", {
-    method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
-  if (r.ok || r.status === 204) return true;
-
-  // If that failed, find a device and target it explicitly
+  // Remote fallback: find active device, or transfer to an available one
   const devices = await getSpotifyDevices(token);
-  if (!devices.length) return false;
-  const device = devices.find(d => d.is_active) || devices.find(d => !d.is_restricted) || devices[0];
-  // Disable shuffle on the fallback device so tracks play in scrobble order
+  let device = devices.find(d => d.is_active);
+
+  if (!device) {
+    device = devices.find(d => !d.is_restricted) || devices[0];
+    if (!device) {
+      // No devices at all — try without device_id as last resort
+      const r = await fetch("https://api.spotify.com/v1/me/player/play", {
+        method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      return r.ok || r.status === 204;
+    }
+    // Transfer to inactive device with 800ms delay (matches SpotiMix transferPlayback)
+    await transferPlayback(token, device.id);
+  }
+
+  // Disable shuffle on the remote device to preserve scrobble order
   try {
-    await fetch("https://api.spotify.com/v1/me/player/shuffle?" + new URLSearchParams({state:"false", device_id:device.id}), {
-      method:"PUT", headers:{Authorization:"Bearer "+token} });
-    await new Promise(r => setTimeout(r, 200));
+    await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + device.id, {
+      method: "PUT", headers: { Authorization: "Bearer " + token }
+    });
   } catch {}
-  r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id: device.id}), {
-    method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
+
+  const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + device.id, {
+    method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   return r.ok || r.status === 204;
 }
 
@@ -177,25 +193,45 @@ function initSDKPlayer() {
   if (!spotifyToken) return;
   const player = new Spotify.Player({
     name: 'Scrobble Time Machine',
-    getOAuthToken: async cb => { const t = await getSpotifyToken(); cb(t); },
+    getOAuthToken: async cb => {
+      // Proactively refresh if token expires within 5 minutes (matches SpotiMix)
+      const expiry = parseInt(localStorage.getItem("spotify_token_expires") || "0");
+      if (Date.now() > expiry - 5 * 60 * 1000) await refreshSpotifyToken();
+      cb(localStorage.getItem("spotify_access_token") || "");
+    },
     volume: 0.8
   });
   player.addListener('ready', ({ device_id }) => {
+    const reconnecting = sdkNeedsRetransfer;
     sdkDeviceId = device_id;
     sdkReady = true;
+    stopPolling();
+    // Re-transfer playback to SDK device after auth error recovery
+    if (reconnecting && sessionQueue.size > 0 && !sessionPaused) {
+      sdkNeedsRetransfer = false;
+      getSpotifyToken().then(t => { if (t) transferPlayback(t, sdkDeviceId).catch(() => {}); });
+    }
   });
   player.addListener('not_ready', () => {
     sdkReady = false;
     sdkDeviceId = null;
+    if (sessionQueue.size > 0) startPolling();
   });
   player.addListener('player_state_changed', state => {
     if (state) onSDKStateChange(state);
   });
+  player.addListener('initialization_error', () => {
+    sdkReady = false;
+  });
   player.addListener('authentication_error', async () => {
     sdkReady = false;
-    sdkDeviceId = null;
-    await refreshSpotifyToken();
-    player.connect();
+    if (sessionQueue.size > 0) startPolling();
+    const ok = await refreshSpotifyToken();
+    if (ok && player) {
+      sdkNeedsRetransfer = true;
+      player.disconnect();
+      player.connect();
+    }
   });
   player.connect();
   window._stmPlayer = player;
