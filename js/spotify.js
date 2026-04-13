@@ -112,15 +112,23 @@ async function spotifyPlay(token, uris, positionMs) {
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
     try {
-      // Transfer playback to SDK device first
-      await fetch("https://api.spotify.com/v1/me/player", {
+      // Transfer playback to SDK device first, bail out if device not found
+      const tr = await fetch("https://api.spotify.com/v1/me/player", {
         method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
         body:JSON.stringify({device_ids:[sdkDeviceId],play:false}) });
-      await new Promise(r => setTimeout(r, 300));
-      const r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id:sdkDeviceId}), {
-        method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
-      if (r.ok || r.status === 204) return true;
-    } catch {}
+      if (tr.ok || tr.status === 204) {
+        await new Promise(r => setTimeout(r, 300));
+        const r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id:sdkDeviceId}), {
+          method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
+        if (r.ok || r.status === 204) return true;
+      }
+      // Transfer or play failed — SDK device is gone, clear state so fallback is used immediately next time
+      sdkReady = false;
+      sdkDeviceId = null;
+    } catch {
+      sdkReady = false;
+      sdkDeviceId = null;
+    }
   }
 
   // First try without device_id (works if a device is already active)
@@ -132,6 +140,12 @@ async function spotifyPlay(token, uris, positionMs) {
   const devices = await getSpotifyDevices(token);
   if (!devices.length) return false;
   const device = devices.find(d => d.is_active) || devices.find(d => !d.is_restricted) || devices[0];
+  // Disable shuffle on the fallback device so tracks play in scrobble order
+  try {
+    await fetch("https://api.spotify.com/v1/me/player/shuffle?" + new URLSearchParams({state:"false", device_id:device.id}), {
+      method:"PUT", headers:{Authorization:"Bearer "+token} });
+    await new Promise(r => setTimeout(r, 200));
+  } catch {}
   r = await fetch("https://api.spotify.com/v1/me/player/play?" + new URLSearchParams({device_id: device.id}), {
     method:"PUT", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}, body:JSON.stringify(body) });
   return r.ok || r.status === 204;
@@ -178,6 +192,8 @@ function initSDKPlayer() {
     if (state) onSDKStateChange(state);
   });
   player.addListener('authentication_error', async () => {
+    sdkReady = false;
+    sdkDeviceId = null;
     await refreshSpotifyToken();
     player.connect();
   });
