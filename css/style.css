@@ -76,6 +76,7 @@
     .play-icon { display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-primary); font-size:12px; }
     .track-row.playable:hover .track-num { display:none; }
     .track-row.playable:hover .play-icon { display:flex; }
+    .track-art-wrap { width:40px; height:40px; flex-shrink:0; }
     .track-art { width:40px; height:40px; border-radius:4px; flex-shrink:0; object-fit:cover; background:var(--bg-tertiary); }
     .track-art-placeholder { width:40px; height:40px; border-radius:4px; flex-shrink:0; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:16px; }
     .track-info { flex:1; min-width:0; }

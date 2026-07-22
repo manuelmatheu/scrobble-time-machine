@@ -7,15 +7,33 @@ function hideStatus() { $("statusBar").style.display = "none"; }
 function escHtml(s) { const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
 function fmtDate(uts) { return new Date(parseInt(uts)*1000).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
 
+// Last.fm returns this fixed hash for tracks/albums with no artwork -- treat it as absent
+const LASTFM_BLANK_ART = "2a96cbd8b46e442fc41c2b86b821562f";
+function lastfmArt(t) {
+  const img = t.image && t.image[1] && t.image[1]["#text"];
+  return (img && img.indexOf(LASTFM_BLANK_ART) === -1) ? img : null;
+}
+
 function renderTrackRow(t, i) {
   const artist = (t.artist && (t.artist["#text"]||t.artist.name))||"", album = (t.album&&t.album["#text"])||"";
-  const img = t.image&&t.image[1]&&t.image[1]["#text"], dt = t.date ? fmtDate(t.date.uts) : "Now playing";
+  const img = lastfmArt(t), dt = t.date ? fmtDate(t.date.uts) : "Now playing";
   const imgH = img ? '<img class="track-art" src="'+img+'" alt="" loading="lazy">' : '<div class="track-art-placeholder">♪</div>';
   return '<div class="track-row" id="track-'+i+'" onclick="playFromTrack('+i+')"><div class="track-num-wrap"><span class="track-num">'+(i+1)+'</span><span class="play-icon">▶</span></div>'
-    +imgH+'<div class="track-info"><div class="track-name">'+escHtml(t.name)+'</div><div class="track-meta">'+escHtml(artist)+(album?' · '+escHtml(album):'')+'</div></div>'
+    +'<div class="track-art-wrap" id="art-'+i+'">'+imgH+'</div>'
+    +'<div class="track-info"><div class="track-name">'+escHtml(t.name)+'</div><div class="track-meta">'+escHtml(artist)+(album?' · '+escHtml(album):'')+'</div></div>'
     +'<span class="track-date">'+dt+'</span>'
     +'<button class="heart-btn" id="heart-'+i+'" onclick="event.stopPropagation(); toggleLikeTrack('+i+')" title="Save to Liked Songs">'+HEART_EMPTY+'</button>'
     +'<span class="track-status" id="status-'+i+'"></span></div>';
+}
+
+// Swap in Spotify's album art once a track is matched -- Last.fm's own art is frequently missing
+function updateTrackArt(i, spotifyItem) {
+  const images = spotifyItem && spotifyItem.album && spotifyItem.album.images;
+  if (!images || !images.length) return;
+  const wrap = $("art-"+i);
+  if (!wrap || wrap.querySelector("img")) return;
+  const url = (images[images.length-1] || images[0]).url;
+  wrap.innerHTML = '<img class="track-art" src="'+url+'" alt="" loading="lazy">';
 }
 function setTrackStatus(i, s) {
   const e=$("status-"+i); if(!e) return;

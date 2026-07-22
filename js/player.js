@@ -80,13 +80,13 @@ async function continueMatching() {
     const p = batch[bi];
     if (p.ck in searchCache) {
       const c = searchCache[p.ck];
-      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); }
+      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, c); }
       else { setTrackStatus(p.i, "not_found"); }
       updateMatchCount(); continue;
     }
     setTrackStatus(p.i, "searching");
     const result = await spotifySearch(token, p.artist, p.track);
-    if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); }
+    if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, result); }
     else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
     if (bi < batch.length - 1) await new Promise(r => setTimeout(r, SEARCH_DELAY));
@@ -160,7 +160,7 @@ async function smartMatch(tracks, token) {
     // Cached hit
     if (p.ck in searchCache) {
       const c = searchCache[p.ck];
-      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); }
+      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, c); }
       else { setTrackStatus(p.i, "not_found"); }
       updateMatchCount(); continue;
     }
@@ -173,7 +173,7 @@ async function smartMatch(tracks, token) {
     showStatus("Matching… (" + (searchesDone+1) + "/" + budget + " searches, " + totalMatched + " found)");
     const result = await spotifySearch(token, p.artist, p.track);
     searchesDone++;
-    if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); }
+    if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, result); }
     else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
     if (searchesDone < budget) await new Promise(r => setTimeout(r, SEARCH_DELAY));
@@ -184,7 +184,7 @@ async function smartMatch(tracks, token) {
     const p = skippedPlan[si];
     if (p.ck in searchCache) {
       const c = searchCache[p.ck];
-      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); }
+      if (c) { matchedUris[p.i] = c.uri; registerUri(c.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, c); }
       else { setTrackStatus(p.i, "not_found"); }
       skippedPlan.splice(si, 1);
     }

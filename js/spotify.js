@@ -127,6 +127,13 @@ async function spotifyPlay(token, uris, positionMs) {
       body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
     });
     await new Promise(r => setTimeout(r, 300));
+    // Disable shuffle on the SDK device too -- otherwise a shuffle state left on
+    // from a previous session (it persists on the user's account) reorders our queue
+    try {
+      await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + sdkDeviceId, {
+        method: "PUT", headers: { Authorization: "Bearer " + token }
+      });
+    } catch {}
     const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify(body)
