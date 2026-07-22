@@ -90,21 +90,42 @@ async function spDelete(path, body) {
 // ═════════════════════════════════════════════════════════════════════════════
 // SPOTIFY API
 // ═════════════════════════════════════════════════════════════════════════════
-async function spotifySearch(token, artist, track, retries) {
+// Runs one Spotify search query, handling 429 retry. Returns { item } on success,
+// or { rateLimited: true } / { error: true } so the caller can decide whether to fall back.
+async function runSpotifySearch(token, q, retries) {
   if (retries === undefined) retries = 2;
+  try {
+    const r = await fetch("https://api.spotify.com/v1/search?" + new URLSearchParams({ q, type: "track", limit: "1" }), { headers: { Authorization: "Bearer " + token } });
+    if (r.status === 429) {
+      if (retries <= 0) { lastSearchError = "Rate limited (429)"; return { rateLimited: true }; }
+      const w = parseInt(r.headers.get("Retry-After") || "5"); await new Promise(x => setTimeout(x, (isNaN(w)?5:w) * 1000));
+      return runSpotifySearch(token, q, retries - 1);
+    }
+    if (!r.ok) { if (!lastSearchError) { try { const e = await r.json(); lastSearchError = r.status+": "+(e.error?e.error.message:r.statusText); } catch(e) { lastSearchError = r.status+": "+r.statusText; } } return { error: true }; }
+    const d = await r.json();
+    return { item: (d.tracks && d.tracks.items && d.tracks.items[0]) || null };
+  } catch (err) { if (!lastSearchError) lastSearchError = err.message; return { error: true }; }
+}
+
+async function spotifySearch(token, artist, track) {
   const ck = (artist + "||" + track).toLowerCase();
   if (ck in searchCache) return searchCache[ck];
-  try {
-    const r = await fetch("https://api.spotify.com/v1/search?" + new URLSearchParams({ q: "track:" + track + " artist:" + artist, type: "track", limit: "1" }), { headers: { Authorization: "Bearer " + token } });
-    if (r.status === 429) {
-      if (retries <= 0) { lastSearchError = "Rate limited (429)"; return null; }
-      const w = parseInt(r.headers.get("Retry-After") || "5"); await new Promise(x => setTimeout(x, (isNaN(w)?5:w) * 1000));
-      return spotifySearch(token, artist, track, retries - 1);
-    }
-    if (!r.ok) { if (!lastSearchError) { try { const e = await r.json(); lastSearchError = r.status+": "+(e.error?e.error.message:r.statusText); } catch(e) { lastSearchError = r.status+": "+r.statusText; } } return null; }
-    const d = await r.json(), item = (d.tracks && d.tracks.items && d.tracks.items[0]) || null;
-    searchCache[ck] = item; return item;
-  } catch (err) { if (!lastSearchError) lastSearchError = err.message; return null; }
+
+  // Field-qualified search first (precise, but brittle against punctuation/remaster
+  // tags/apostrophes that differ between Last.fm and Spotify's catalog metadata)
+  let res = await runSpotifySearch(token, "track:" + track + " artist:" + artist);
+  if (res.rateLimited || res.error) return null; // transient failure -- don't poison the cache
+
+  // No hit → retry with a plain unqualified query, which Spotify's relevance
+  // ranking handles much more forgivingly than strict field matching
+  if (!res.item) {
+    const plain = await runSpotifySearch(token, artist + " " + track);
+    if (plain.rateLimited || plain.error) return null; // transient failure -- don't poison the cache
+    if (plain.item) res = plain;
+  }
+
+  searchCache[ck] = res.item;
+  return res.item;
 }
 
 async function transferPlayback(token, deviceId) {
