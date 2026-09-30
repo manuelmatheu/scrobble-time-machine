@@ -9,6 +9,16 @@ Scrobble Time Machine is a client-side web app that connects a user's Last.fm sc
 
 ---
 
+## Development
+
+No build step, no package manager, no test suite, no linter -- there is nothing to install or compile. Edit the `.html`/`.css`/`.js` files directly.
+
+- **Run locally:** serve the folder with any static file server (e.g. `npx serve`, `python -m http.server`) and open it in a browser. Opening `index.html` directly via `file://` will break Spotify PKCE auth, since `SPOTIFY_REDIRECT_URI` (`js/config.js`) is derived from `window.location.origin + window.location.pathname` and must exactly match a redirect URI registered on the Spotify app.
+- **Verify changes:** there are no automated tests. Manually exercise the flow in a browser -- connect Spotify, run a mode, confirm playback/highlighting/save-playlist still work.
+- API keys (`LASTFM_API_KEY`, `SPOTIFY_CLIENT_ID`) live in `js/config.js`, not `index.html` (README's self-hosting instructions are slightly out of date on this point).
+
+---
+
 ## Architecture
 
 ### File Structure
@@ -68,12 +78,12 @@ streaming user-library-modify user-library-read
 
 ### PKCE Auth
 
-- `initiateSpotifyAuth()` -- generates code verifier + challenge, redirects to Spotify authorize
-- `exchangeCodeForToken(code)` -- exchanges auth code for tokens, stores in **sessionStorage**
-- `refreshSpotifyToken()` -- refreshes using stored refresh token
+- `initiateSpotifyAuth()` -- generates code verifier + challenge, redirects to Spotify authorize; the verifier and the Last.fm username are stashed in `sessionStorage` for the round trip
+- `exchangeCodeForToken(code)` -- exchanges auth code for tokens, stores `spotify_access_token` / `spotify_refresh_token` / `spotify_token_expires` in **localStorage**
+- `refreshSpotifyToken()` -- refreshes using the stored refresh token, updates the same `localStorage` keys
 - `getSpotifyToken()` -- returns cached token or refreshes if within 60s of expiry
 
-**Important:** STM uses `sessionStorage` (not `localStorage`) for Spotify tokens. Tokens are lost on tab close. This is intentional for security.
+**Important:** Spotify tokens are stored in `localStorage` (not `sessionStorage`), so the session survives browser/tab restarts -- see commit `bd8354c`. Only the transient PKCE code verifier and a redundant copy of the Last.fm username use `sessionStorage` for the auth redirect round trip.
 
 ### SDK Init
 
@@ -81,15 +91,24 @@ streaming user-library-modify user-library-read
 1. `window.onSpotifyWebPlaybackSDKReady` callback (if token already exists when SDK loads)
 2. `app.js` auth success callbacks (if SDK already loaded when auth completes)
 
-Both call sites check `if (window.Spotify && window.Spotify.Player)` to avoid race conditions.
+Both call sites check `if (window.Spotify && window.Spotify.Player)` to avoid race conditions. `initSDKPlayer()` itself guards on `if (window._stmPlayer) return;` since, with tokens persisted in `localStorage`, both call sites can fire on a normal page load.
 
-The player instance is stored as `window._stmPlayer` for access from player controls.
+The player instance is stored as `window._stmPlayer` for access from player controls. SDK-parity logic (`sdkNeedsRetransfer`, proactive token refresh, retry after auth errors) was ported from a sibling project ("SpotiMix") in commit `4976e4f` to fix skipped/random-order tracks -- see listener behavior below.
+
+- `getOAuthToken` proactively calls `refreshSpotifyToken()` if the token expires within 5 minutes, rather than waiting for a 401.
+- `ready` -- sets `sdkReady = true`, `sdkDeviceId`, calls `stopPolling()`. If this fire is a reconnect after an auth error (`sdkNeedsRetransfer`) and there's an active session (`sessionQueue.size > 0 && !sessionPaused`), it re-transfers playback to the new device via `transferPlayback()`.
+- `not_ready` -- sets `sdkReady = false`, `sdkDeviceId = null`; resumes `startPolling()` if a session is active, so now-playing tracking doesn't go dark.
+- `authentication_error` -- sets `sdkReady = false`, starts polling as a fallback, refreshes the token, then sets `sdkNeedsRetransfer = true` and calls `player.disconnect()` + `player.connect()` to force a fresh `ready` event (which performs the retransfer above).
+- `initialization_error` -- sets `sdkReady = false` (SDK unsupported/blocked in this browser).
 
 ### `spotifyPlay()` Device Logic
 
-1. If `sdkReady && sdkDeviceId`: transfer playback to SDK device (`PUT /me/player`), wait 300ms, then play with explicit `device_id`
-2. Else: try `PUT /me/player/play` without device_id (works if device already active)
-3. Fallback: fetch device list, prefer active device, retry with explicit device_id
+Rewritten in commits `ca73300`/`4976e4f`/`4828bab` to match SpotiMix's device-transfer behavior and fix skipped/shuffled tracks. URIs are capped to 100 (`uris.slice(0, 100)`, the Spotify API limit).
+
+1. **If `sdkReady && sdkDeviceId`:** transfer playback to the SDK device (`PUT /me/player`, `play:false`), wait 300ms, explicitly disable shuffle on that device (`PUT /me/player/shuffle?state=false&device_id=...`), then play with explicit `device_id`. If this play request fails, falls through to step 2 instead of giving up.
+2. **Remote fallback:** fetch the device list via `getSpotifyDevices()`. Prefer an already-active device; if none is active, pick a non-restricted device (or the first) and call `transferPlayback()` (800ms delay) to activate it -- unless there are no devices at all, in which case it makes one last attempt at `PUT /me/player/play` with no `device_id`. Then disable shuffle on that device and play with explicit `device_id`.
+
+**Why shuffle is explicitly disabled before every play:** Spotify shuffle state persists on the user's account across sessions/devices. If a user previously shuffled on their phone, a leftover `shuffle=true` state reorders STM's carefully-ordered queue the moment playback starts. STM resets it to `false` on both the SDK and remote paths every time (commit `4828bab`).
 
 ---
 
@@ -108,6 +127,8 @@ When `sdkReady = false` (SDK not initialized, non-Premium, or SDK error):
 - `pollNowPlaying()` runs every `POLL_INTERVAL` (5000ms)
 - Calls `getCurrentlyPlaying()` and updates highlight via `uriToIndices` reverse map
 
+`startPolling()`/`stopPolling()` aren't just called once at session start -- the SDK `ready`/`not_ready` listeners in `initSDKPlayer()` call `stopPolling()`/`startPolling()` directly, so polling automatically resumes if the SDK device drops (e.g. after an `authentication_error`) and stops again once it reconnects.
+
 ### `onSDKStateChange(state)`
 
 Called by the SDK `player_state_changed` listener. Updates:
@@ -119,6 +140,10 @@ Called by the SDK `player_state_changed` listener. Updates:
 - Player bar heart button via `updatePlayerBarHeart()`
 
 A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state events.
+
+### `spotifySearch()` Two-Tier Query
+
+`spotifySearch(token, artist, track)` in `spotify.js` (commit `9d83b9c`) first tries a field-qualified query (`track:X artist:Y`) via `runSpotifySearch()`. Field-qualified search is precise but brittle against punctuation, "remaster" tags, or apostrophe differences between Last.fm and Spotify's metadata. If that returns no hit, it retries once with a plain unqualified query (`"artist track"`), which Spotify's relevance ranking handles more forgivingly. Only the final result (from whichever tier hit) is cached in `searchCache`; a `rateLimited` or `error` result from either tier returns `null` without caching, so a transient failure doesn't permanently poison the cache for that artist/track pair.
 
 ---
 
@@ -171,7 +196,7 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 
 2. **Unicode box-drawing characters in HTML comments cause tool failures** -- use ASCII-only comments in HTML (e.g., use `===` separators, not `═══`).
 
-3. **`sessionStorage` not `localStorage` for Spotify tokens** -- tokens are session-scoped intentionally. Don't change this to localStorage.
+3. **Spotify tokens live in `localStorage`, not `sessionStorage`** -- intentional (v2.3+), so a reconnect isn't needed every time a tab closes. Only the PKCE code verifier and a spare copy of the Last.fm username use `sessionStorage`. Don't revert the token storage to `sessionStorage` without checking why it was changed (commit `bd8354c`).
 
 4. **`pollNowPlaying()` only runs when `!sdkReady`** -- first line is `if (sdkReady) return;`. When SDK is active, `player_state_changed` events handle all updates.
 
@@ -188,7 +213,7 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
    - NEW (correct): `GET /me/library/contains?uris=spotify:track:id` / `PUT /me/library?uris=spotify:track:id`
    Note: apps with old cached `localStorage` refresh tokens may still work temporarily with old endpoints.
 
-10. **Disconnect button** -- `spotifyBadge` contains a `✕` button that calls `disconnectSpotify()`, which clears all sessionStorage tokens, disconnects the SDK player, and immediately re-initiates PKCE auth with `show_dialog: true`. Without this, there was no way to force a fresh auth within the app.
+10. **Disconnect button** -- `spotifyBadge` (in `index.html`) contains a `✕` button wired via inline `onclick="disconnectSpotify()"`, which clears the `localStorage` tokens and disconnects the SDK player, then calls `updateSpotifyUI(false)`. It does **not** auto re-trigger auth -- the user clicks "Connect Spotify" (`onclick="initiateSpotifyAuth()"`) again, which always passes `show_dialog: true` so Spotify shows the account picker instead of silently re-using the last session. Both buttons are wired via inline `onclick` in `index.html`, not `addEventListener` in `app.js`.
 
 ---
 
@@ -201,7 +226,7 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 | Function | File | Purpose |
 |---|---|---|
 | `initiateSpotifyAuth()` | spotify.js | Start PKCE OAuth flow (includes `show_dialog:true`) |
-| `disconnectSpotify()` | spotify.js | Clear tokens, disconnect SDK, re-initiate auth |
+| `disconnectSpotify()` | spotify.js | Clear tokens, disconnect SDK (does not re-initiate auth) |
 | `getSpotifyToken()` | spotify.js | Get valid access token (refresh if needed) |
 | `spGet(path)` | spotify.js | GET with auto-401-retry |
 | `spPut(path, body)` | spotify.js | PUT with auto-401-retry; `null` body = no body sent |
