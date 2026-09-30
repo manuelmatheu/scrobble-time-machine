@@ -6,6 +6,7 @@ A living document tracking planned features, improvements, and ideas for future 
 
 - [x] Library Radio: endless stream of random scrobbles from the whole Last.fm history
 - [x] Radio-first redesign: home with one Start radio button, radio view with Up next, artist bio and your play counts, time travel as secondary
+- [x] Time Travel in the radio view (all nine modes); page numbers removed
 - [x] Contrast, shape, and reduced-motion pass; Phosphor icons
 
 ---
