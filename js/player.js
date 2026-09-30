@@ -47,6 +47,7 @@ async function pollNowPlaying() {
     }
     highlightNowPlaying(best);
   }
+  radioMaybeRefill(playingUri, data.progress_ms);
 
   // Auto-continue: check if we're near the end of matched tracks and have skipped ones
   if (!isContinuing && skippedPlan.length > 0) {
@@ -322,6 +323,7 @@ function onSDKStateChange(state) {
       }
       if (matchedAfter.length <= 2) continueMatching();
     }
+    radioMaybeRefill(track.uri, state.position);
   } else {
     updatePlayerBarHeart();
   }

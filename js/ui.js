@@ -137,6 +137,7 @@ function updateSpotifyUI(c) { $("spotifyConnectBtn").style.display = c ? "none" 
 function updateGoButton() {
   const user = $("usernameInput").value.trim();
   const base = user && spotifyToken && LASTFM_API_KEY !== "YOUR_LASTFM_API_KEY" && (currentPhase==="idle"||currentPhase==="done"||currentPhase==="error");
+  $("radioBtn").disabled = !base;
   let ok = base;
   if (searchMode === "date") ok = base && $("dateYear").value;
   else if (searchMode === "artist") ok = base && $("artistInput").value.trim();
@@ -234,6 +235,7 @@ function renderEraPanelFromTracks(tracks, label, totalPages) {
   panel.style.display = "";
 }
 function handleReset() {
+  radioStop(); trackMeta = {};
   if (abortController) abortController.abort();
   stopPolling();
   currentPhase = "idle"; matchedUris = {}; allTrackCount = 0; uriToIndices = {};

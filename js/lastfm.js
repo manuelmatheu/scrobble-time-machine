@@ -156,6 +156,15 @@ async function fetchEarliestYear(user) {
   return null;
 }
 
+// One scrobble at a 1-based position in the user's history (limit=1 makes "page" an index)
+async function getLastFmScrobbleAt(user, page) {
+  const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(page) }));
+  if (r.status === 429) throw new Error("Last.fm rate limit");
+  if (!r.ok) throw new Error("Last.fm API error");
+  const d = await r.json(); if (d.error) throw new Error(d.message);
+  return d.recenttracks.track || [];
+}
+
 async function getMoodArtists(mood) {
   const tags = MOOD_TAGS[mood] || [mood];
   const artists = new Set();

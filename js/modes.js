@@ -582,6 +582,7 @@ async function handleGoStreak() {
 
 // ── SESSION HELPERS ──────────────────────────────────────────────────────────
 function beginSession() {
+  radioStop();
   abortController = new AbortController(); currentPhase = "working"; updateGoButton();
   $("goBtn").style.display = "none"; $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
   $("pagePicker").style.display = "none"; $("eraPanel").style.display = "none";
