@@ -11,10 +11,10 @@ Scrobble Time Machine is a client-side web app that connects a user's Last.fm sc
 
 ## Development
 
-No build step, no package manager, no test suite, no linter -- there is nothing to install or compile. Edit the `.html`/`.css`/`.js` files directly.
+No build step, no package manager, no linter -- there is nothing to install or compile. A few dependency-free Node scripts in `tests/` cover the pure radio helpers, the radio engine (network stubbed), and CSS contrast; run them with `node tests/radio-helpers.test.js`, `node tests/radio-engine.test.js`, `node tests/contrast.test.js`, and `node tests/no-page-numbers.test.js` (no page numbers in status or error messages), and `node tests/no-era-panel.test.js` (the era panel and slider stay removed). Edit the `.html`/`.css`/`.js` files directly.
 
 - **Run locally:** serve the folder with any static file server (e.g. `npx serve`, `python -m http.server`) and open it in a browser. Opening `index.html` directly via `file://` will break Spotify PKCE auth, since `SPOTIFY_REDIRECT_URI` (`js/config.js`) is derived from `window.location.origin + window.location.pathname` and must exactly match a redirect URI registered on the Spotify app.
-- **Verify changes:** there are no automated tests. Manually exercise the flow in a browser -- connect Spotify, run a mode, confirm playback/highlighting/save-playlist still work.
+- **Verify changes:** the node scripts above cover only the radio logic and contrast tokens; everything else is manual. Exercise the flow in a browser -- connect Spotify, run a mode, confirm playback/highlighting/save-playlist still work.
 - API keys (`LASTFM_API_KEY`, `SPOTIFY_CLIENT_ID`) live in `js/config.js`, not `index.html` (README's self-hosting instructions are slightly out of date on this point).
 
 ---
@@ -27,13 +27,16 @@ No build step, no package manager, no test suite, no linter -- there is nothing 
 index.html          -- Page shell, player bar HTML, script load order
 css/
   style.css         -- All styles; single file; CSS custom properties for theming
+tests/              -- node test scripts (see Development)
 js/
   config.js         -- API keys, SPOTIFY_SCOPES, all global state variables
   spotify.js        -- PKCE auth, Spotify API calls, SDK init, save playlist
   lastfm.js         -- Last.fm API calls (getLastFmPage, fetchEarliestYear, etc.)
-  ui.js             -- DOM helpers, renderTrackRow(), track interactions, era panel, autocomplete
+  ui.js             -- DOM helpers, renderTrackRow(), track interactions, autocomplete
   player.js         -- pollNowPlaying(), smartMatch(), fetchAndPlay(), matchAndPlay(),
                        onSDKStateChange(), player controls, liked songs functions
+  radio.js          -- Library Radio: pure helpers, engine (radioFill/startRadio/continueRadio),
+                       radio view rendering, artist bio + play counts
   modes.js          -- Mode dispatch + all mode handlers (random, date, artist, mood,
                        onthisday, decade, album, discovery, streak)
   app.js            -- DOMContentLoaded init, event listener wiring
@@ -48,6 +51,7 @@ js/
 <script src="js/lastfm.js"></script>
 <script src="js/ui.js"></script>         <!-- uses showStatus, $ from config -->
 <script src="js/player.js"></script>     <!-- uses spotify.js + ui.js functions -->
+<script src="js/radio.js"></script>      <!-- uses player.js + spotify.js; before modes.js -->
 <script src="js/modes.js"></script>      -- uses player.js functions -->
 <script src="js/app.js"></script>        <!-- wires up all event listeners -->
 ```
@@ -186,7 +190,24 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 5. On success: button becomes "Saved! Open" with onclick to open playlist URL
 6. On error: button resets, error shown via `showStatus()`
 
-`playlistLabel` is set in `matchAndPlay()` as `label || ("Page " + page)`. Each mode passes a descriptive label string (e.g., "January 15, 2014", "Radiohead - Jan 2015", "The 2010s").
+`playlistLabel` is set in `matchAndPlay()` as `label || radioEraLabel(tracks)` (the oldest scrobble date, falling back to "Random" when no track has one; the radio uses "Library Radio"). Each mode passes a descriptive label string (e.g., "January 15, 2014", "Radiohead - Jan 2015", "The 2010s").
+
+---
+
+## Library Radio
+
+Start radio plays an endless stream of random scrobbles from the user's whole history.
+
+- **Sampling:** `getLastFmScrobbleAt(user, page)` calls `user.getrecenttracks` with `limit=1`; with `limit=1`, `page` is an index into the scrobbles, so `radioPickPage(total)` is uniform over history. Songs played more often come up more often.
+- **Engine (`radio.js`):** `radioFill(want)` fires `RADIO_CONCURRENCY` parallel single-scrobble requests per round, dedupes by `artist||track` (`radioSeen`) and by Spotify URI, matches with `spotifySearch()`, and appends to `matchedUris` / `allTrackCount` / `sessionQueue` / `trackMeta[index]`.
+- **Top-up:** `radioMaybeRefill()` runs on every track change (SDK state handler and polling fallback). When `RADIO_LOW_WATER` tracks remain it calls `continueRadio()`, which re-issues `spotifyPlay()` from the current track with the new tracks appended (same approach as `continueMatching`, avoids the persistent user queue).
+- **Stale work:** every start/stop bumps `radioSession`; in-flight fills compare against it and bail. `beginSession()` and `handleReset()` call `radioStop()`.
+- **Views:** `#homeView` (headline, Start radio, `#timeTravel` mode inputs) and `#radioView`, which serves both Library Radio and every Time Travel mode via `showRadioView("radio" | "travel")`. Travel shows the full clickable `#trackList` instead of Up next (there is no context panel and no time slider), plus an Again button (`travelAgain()` re-runs `handleGo()`). `matchAndPlay()` opens the travel view; failures in `fetchAndPlay*` call `radioStop()` to return home (errors raised earlier, inside a mode handler, never left home). `body.radio-mode` hides the bottom player bar. There are no page numbers in the UI: moments are labelled by date (`radioEraLabel(tracks)`, which also names the saved playlist).
+- **Session-only player events:** the hero, info panel and radio progress bar only follow tracks that belong to the current session (`uriToIndices[track.uri]`), and the progress bar is gated by `radioHeroLive`, so the previous session's song never shows while the next one loads.
+- **Artist info:** on every track change `radioSyncInfo()` calls `radioInfoFor(idx)`, which fetches `artist.getinfo` (bio summary + `stats.userplaycount`) and `track.getinfo` (`userplaycount`) with `username`, using the scrobble's own names (`radioInfoSource(idx)`: `trackMeta[idx].lfmArtist` / `lfmTrack` in the radio, the Last.fm track objects in `currentTracks` in time travel) and the username from `radioUser` or the username field. Results are cached per artist and per track as promises (`radioArtistCache` / `radioTrackCache`); a failed lookup is not cached and never throws. `radioParseBio()` strips the HTML and the trailing "Read more on Last.fm" link (http(s) only); the panel (`#radioInfo`) hides itself when there is nothing to show.
+- **Clickable Up next:** each row calls `radioPlayFrom(idx)`, which re-issues `spotifyPlay()` from that track onward (`radioUrisFrom`).
+- **Back:** `leaveRadio()` pauses Spotify and calls `handleReset()`.
+- **Icons:** Phosphor web font from jsDelivr (regular and fill stylesheets in `index.html`).
 
 ---
 
@@ -204,7 +225,7 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 
 6. **`uriToIndices` reverse map supports duplicate URIs** -- maps `"spotify:track:xyz"` to an array of track indices. Used to find the correct row to highlight when the same track appears multiple times.
 
-7. **`skippedPlan` + auto-continuation** -- tracks that exceed `BATCH_SIZE` (15) in the first search are pushed to `skippedPlan`. `continueMatching()` loads them in batches of 15 as `pollNowPlaying()` / `onSDKStateChange()` detects < 2 tracks remaining in the queue.
+7. **`skippedPlan` + auto-continuation** -- tracks that exceed `BATCH_SIZE` (5) in the first search are pushed to `skippedPlan`. `continueMatching()` loads them in batches of 5 as `pollNowPlaying()` / `onSDKStateChange()` detects < 2 tracks remaining in the queue.
 
 8. **SDK race condition** -- the Spotify SDK script may fire `onSpotifyWebPlaybackSDKReady` before or after PKCE auth completes. Both code paths check and call `initSDKPlayer()` if conditions are met.
 
@@ -215,9 +236,11 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 
 10. **Disconnect button** -- `spotifyBadge` (in `index.html`) contains a `✕` button wired via inline `onclick="disconnectSpotify()"`, which clears the `localStorage` tokens and disconnects the SDK player, then calls `updateSpotifyUI(false)`. It does **not** auto re-trigger auth -- the user clicks "Connect Spotify" (`onclick="initiateSpotifyAuth()"`) again, which always passes `show_dialog: true` so Spotify shows the account picker instead of silently re-using the last session. Both buttons are wired via inline `onclick` in `index.html`, not `addEventListener` in `app.js`.
 
+11. **Spotify 429 cooldown** -- `runSpotifySearch()` waits out a `Retry-After` of 5 seconds or less (up to 2 retries); a longer one sets `spotifyBlockedUntil` instead of sleeping. While `spotifyBlockedFor() > 0`, `spotifySearch()` returns `null` without calling Spotify, `smartMatch`, `continueMatching` and `radioFill` stop their batch, and the unsearched tracks go back to `skippedPlan` with status "skipped" (never "not_found"). The status bar shows `spotifyLimitMessage()` ("Spotify is limiting searches. Try again in about N ..."), and `continueRadio()` does not treat a cooldown as an exhausted library. Matching starts with `BATCH_SIZE` (5) searches and loads more as you listen, to stay well under the limit.
+
 ---
 
-## Current Version: v2.3
+## Current Version: v2.4
 
 ---
 
@@ -247,3 +270,8 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 | `handleGo()` | modes.js | Dispatch to active mode handler |
 | `handleReset()` | ui.js | Full reset of state and UI |
 | `registerUri(uri, index)` | player.js | Populate uriToIndices reverse map |
+| `startRadio()` | radio.js | Start Library Radio (random scrobbles, endless) |
+| `radioFill(want)` | radio.js | Pick, dedupe, match, and append random tracks |
+| `continueRadio()` | radio.js | Top up the queue and re-issue playback |
+| `radioStop()` | radio.js | Stop radio and invalidate in-flight fills |
+| `getLastFmScrobbleAt(user, page)` | lastfm.js | One scrobble at a 1-based history position |

@@ -47,6 +47,11 @@ async function pollNowPlaying() {
     }
     highlightNowPlaying(best);
   }
+  if ((radioActive || travelActive) && uriToIndices[playingUri]) {
+    radioRenderNow(data.item, !data.is_playing);
+    if (data.item.duration_ms) updateProgressBar(data.progress_ms || 0, data.item.duration_ms);
+  }
+  radioMaybeRefill(playingUri, data.progress_ms);
 
   // Auto-continue: check if we're near the end of matched tracks and have skipped ones
   if (!isContinuing && skippedPlan.length > 0) {
@@ -66,13 +71,16 @@ async function pollNowPlaying() {
 
 async function continueMatching() {
   if (isContinuing || skippedPlan.length === 0) return;
+  if (spotifyBlockedFor() > 0) { showStatus(spotifyLimitMessage(), "error"); return; }
   isContinuing = true;
   const token = await getSpotifyToken();
   if (!token) { isContinuing = false; return; }
 
   // Take the next batch from skippedPlan
   const batch = skippedPlan.splice(0, BATCH_SIZE);
-  let batchMatched = 0;
+  let batchMatched = 0, limited = false;
+  // Spotify is rate limiting us: put the unsearched tracks back for later instead of calling them missing
+  const requeue = from => { const rest = batch.slice(from); rest.forEach(q => setTrackStatus(q.i, "skipped")); skippedPlan.unshift(...rest); limited = true; };
 
   showStatus("Loading more tracks… (" + totalMatched + " matched so far)", "");
 
@@ -84,9 +92,11 @@ async function continueMatching() {
       else { setTrackStatus(p.i, "not_found"); }
       updateMatchCount(); continue;
     }
+    if (spotifyBlockedFor() > 0) { requeue(bi); break; }
     setTrackStatus(p.i, "searching");
     const result = await spotifySearch(token, p.artist, p.track);
     if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, result); }
+    else if (spotifyBlockedFor() > 0) { requeue(bi); break; }
     else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
     if (bi < batch.length - 1) await new Promise(r => setTimeout(r, SEARCH_DELAY));
@@ -110,10 +120,12 @@ async function continueMatching() {
         remainingUris.forEach(u => sessionQueue.add(u));
       }
     }
-    showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched" + (skippedPlan.length > 0 ? " · more pending" : ""), "success");
+    if (limited) showStatus(spotifyLimitMessage(), "error");
+    else showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched" + (skippedPlan.length > 0 ? " · more pending" : ""), "success");
     checkLikedTracks();
   } else {
-    showStatus("▶ Playing · " + totalMatched + " matched · couldn't find more", "success");
+    if (limited) showStatus(spotifyLimitMessage(), "error");
+    else showStatus("▶ Playing · " + totalMatched + " matched · couldn't find more", "success");
   }
   isContinuing = false;
 }
@@ -166,7 +178,7 @@ async function smartMatch(tracks, token) {
     }
 
     // Over budget → skip for later
-    if (searchesDone >= budget) { setTrackStatus(p.i, "skipped"); skippedPlan.push(p); continue; }
+    if (searchesDone >= budget || spotifyBlockedFor() > 0) { setTrackStatus(p.i, "skipped"); skippedPlan.push(p); continue; }
 
     // Search
     setTrackStatus(p.i, "searching");
@@ -174,9 +186,10 @@ async function smartMatch(tracks, token) {
     const result = await spotifySearch(token, p.artist, p.track);
     searchesDone++;
     if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, result); }
+    else if (spotifyBlockedFor() > 0) { setTrackStatus(p.i, "skipped"); skippedPlan.push(p); }  // rate limited, not missing: try again later
     else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
-    if (searchesDone < budget) await new Promise(r => setTimeout(r, SEARCH_DELAY));
+    if (searchesDone < budget && spotifyBlockedFor() === 0) await new Promise(r => setTimeout(r, SEARCH_DELAY));
   }
 
   // Resolve skipped tracks that may have been cached during this batch
@@ -200,14 +213,13 @@ async function fetchAndPlay(user, page, tp) {
   $("trackListWrapper").style.display="none"; $("trackList").innerHTML=""; $("matchCount").textContent="";
   stopPolling();
   try {
-    showStatus("Loading page "+page.toLocaleString()+"…");
+    showStatus("Loading that moment…");
     const raw = await getLastFmPage(user, page);
     const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
-    if (!tracks.length) throw new Error("No tracks on this page");
-    updateEraInfo(tracks, page, tp);
+    if (!tracks.length) throw new Error("No tracks found for that moment");
     await matchAndPlay(tracks, page, tp);
   } catch(err) {
-    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    if (!abortController.signal.aborted) { radioStop(); currentPhase = "error"; showStatus(err.message, "error"); }
   } finally {
     $("goBtn").style.display = ""; $("cancelBtn").style.display = "none";
     $("usernameInput").disabled = false; updateGoButton();
@@ -222,7 +234,7 @@ async function fetchAndPlayDirect(tracks, label) {
     if (!tracks.length) throw new Error("No tracks found for this date");
     await matchAndPlay(tracks, null, null, label);
   } catch(err) {
-    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    if (!abortController.signal.aborted) { radioStop(); currentPhase = "error"; showStatus(err.message, "error"); }
   } finally {
     $("goBtn").style.display = ""; $("cancelBtn").style.display = "none";
     $("usernameInput").disabled = false; updateGoButton();
@@ -231,21 +243,26 @@ async function fetchAndPlayDirect(tracks, label) {
 
 // Shared match + play logic
 async function matchAndPlay(tracks, page, tp, label) {
+  showRadioView("travel");
   $("trackListWrapper").style.display = "";
   $("trackList").innerHTML = tracks.map((t,i) => renderTrackRow(t,i)).join("");
   let token = await getSpotifyToken(); if (!token) throw new Error("Spotify expired. Reconnect.");
   const { matched } = await smartMatch(tracks, token);
-  if (!matched) { const d = lastSearchError ? " (" + lastSearchError + ")" : ""; throw new Error("No tracks matched" + d); }
+  if (!matched) {
+    if (spotifyBlockedFor() > 0) throw new Error(spotifyLimitMessage());
+    const d = lastSearchError ? " (" + lastSearchError + ")" : ""; throw new Error("No tracks matched" + d);
+  }
   const uris = []; for (let i = 0; i < tracks.length; i++) if (matchedUris[i]) uris.push(matchedUris[i]);
   sessionQueue = new Set(uris); sessionPaused = false;
-  playlistLabel = label || (page ? "Page " + page.toLocaleString() : "Random");
+  const eraLabel = label || radioEraLabel(tracks);
+  playlistLabel = eraLabel;
   showStatus("Starting playback…");
   token = await getSpotifyToken();
   const ok = await spotifyPlay(token, uris);
   if (!ok) { const devs = await getSpotifyDevices(token); throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active."); }
   currentPhase = "done";
-  const where = label || (page ? "page " + page.toLocaleString() : "");
-  const pendingMsg = skippedPlan.length > 0 ? " · more will load as you listen" : "";
+  const where = eraLabel === "Random" ? "" : eraLabel;
+  const pendingMsg = spotifyBlockedFor() > 0 ? " · " + spotifyLimitMessage() : (skippedPlan.length > 0 ? " · more will load as you listen" : "");
   showStatus("▶ Playing " + matched + " tracks" + (where ? " from " + where : "") + pendingMsg, "success");
   for (let i = 0; i < tracks.length; i++) { if (matchedUris[i]) { highlightNowPlaying(i); break; } }
   startPolling();
@@ -283,7 +300,7 @@ function onSDKStateChange(state) {
   if (artistEl) artistEl.textContent = (track.artists || []).map(a => a.name).join(", ");
 
   const playBtn = $("pb-play");
-  if (playBtn) playBtn.textContent = state.paused ? "\u25B6" : "\u23F8";
+  if (playBtn) playBtn.innerHTML = '<i class="ph-fill ph-' + (state.paused ? "play" : "pause") + '"></i>';
 
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
@@ -306,6 +323,7 @@ function onSDKStateChange(state) {
     for (const idx of candidates) { if (idx >= nowPlayingIndex) { best = idx; break; } }
     highlightNowPlaying(best);
   }
+  if ((radioActive || travelActive) && uriToIndices[track.uri]) radioRenderNow(track, state.paused);
 
   // Check liked status and auto-continue whenever the track changes
   if (track.uri !== _sdkCurrentUri) {
@@ -322,18 +340,24 @@ function onSDKStateChange(state) {
       }
       if (matchedAfter.length <= 2) continueMatching();
     }
+    radioMaybeRefill(track.uri, state.position);
   } else {
     updatePlayerBarHeart();
   }
 }
 
 function updateProgressBar(position, duration) {
-  const fill = $("pb-fill");
-  const elapsed = $("pb-elapsed");
-  const dur = $("pb-duration");
-  if (fill && duration > 0) fill.style.width = (position / duration * 100) + "%";
+  const pct = duration > 0 ? (position / duration * 100) + "%" : null;
+  const fill = $("pb-fill"), elapsed = $("pb-elapsed"), dur = $("pb-duration");
+  if (fill && pct) fill.style.width = pct;
   if (elapsed) elapsed.textContent = fmtMs(position);
   if (dur) dur.textContent = fmtMs(duration);
+  if (radioHeroLive) {
+    const rf = $("radioFill"), re = $("radioElapsed"), rd = $("radioDuration");
+    if (rf && pct) rf.style.width = pct;
+    if (re) re.textContent = fmtMs(position);
+    if (rd) rd.textContent = fmtMs(duration);
+  }
 }
 
 function fmtMs(ms) {
@@ -341,22 +365,34 @@ function fmtMs(ms) {
   return m + ":" + String(s % 60).padStart(2, "0");
 }
 
+// Without the SDK (polling fallback) the controls talk to the Spotify REST API instead
+async function playerRest(action) {
+  const req = radioTransportRequest(action, radioPaused);
+  if (!req) return;
+  const token = await getSpotifyToken();
+  if (!token) return;
+  try { await fetch("https://api.spotify.com/v1" + req.path, { method: req.method, headers: { Authorization: "Bearer " + token } }); } catch (e) {}
+}
 async function playerPlayPause() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.togglePlay(); return; }
+  playerRest("toggle");
 }
 async function playerPrev() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.previousTrack(); return; }
+  playerRest("prev");
 }
 async function playerNext() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.nextTrack(); return; }
+  playerRest("next");
 }
 async function setVolume(val) {
   if (window._stmPlayer && sdkReady) window._stmPlayer.setVolume(val / 100);
 }
 function seekTo(e) {
-  const bar = $("pb-bar");
+  const bar = e.currentTarget;
   if (!bar || !window._stmPlayer || !_sdkDurationMs) return;
-  const pct = e.offsetX / bar.offsetWidth;
+  const rect = bar.getBoundingClientRect();
+  const pct = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
   const posMs = Math.floor(pct * _sdkDurationMs);
   _sdkPositionMs = posMs;
   window._stmPlayer.seek(posMs);
@@ -437,5 +473,8 @@ function updatePlayerBarHeart() {
   const btn = $("pb-heart");
   if (!btn || nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
   const id = matchedUris[nowPlayingIndex].split(":").pop();
-  btn.classList.toggle("liked", likedSet.has(id));
+  const liked = likedSet.has(id);
+  btn.classList.toggle("liked", liked);
+  const rh = $("radioHeart");
+  if (rh) { rh.classList.toggle("liked", liked); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart"></i>'; }
 }

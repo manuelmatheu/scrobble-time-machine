@@ -5,7 +5,7 @@ const LASTFM_API_KEY = "177b9e8ee70fe2325bfff606cfdaee23";
 const SPOTIFY_CLIENT_ID = "73fce01f5762463e86ff6555751a148c";
 const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname;
 const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read";
-const BATCH_SIZE = 15;    // max Spotify searches per batch
+const BATCH_SIZE = 5;     // max Spotify searches per batch (time travel loads more as you listen)
 const SEARCH_DELAY = 500; // ms between search calls
 const POLL_INTERVAL = 5000; // ms between now-playing polls
 
@@ -47,3 +47,23 @@ let sdkReady = false;
 let sdkDeviceId = null;
 let sdkNeedsRetransfer = false;
 let likedSet = new Set();
+
+// Library Radio
+const RADIO_INITIAL = 8;        // tracks matched before playback starts
+const RADIO_REFILL = 8;         // tracks added per top-up
+const RADIO_LOW_WATER = 2;      // top up when this many tracks remain after the current one
+const RADIO_CONCURRENCY = 4;    // parallel Last.fm requests per round
+const RADIO_MAX_ATTEMPTS = 40;  // Last.fm fetches per fill before giving up
+const RADIO_UPNEXT_ROWS = 6;    // rows shown in the Up next list
+let radioActive = false, radioUser = "", radioTotal = 0;
+let radioSession = 0;           // bumped on every start/stop; stale fills compare against it
+let radioSeen = new Set();      // artist||track keys already picked this session
+let radioRefilling = false, radioExhausted = false, radioFailures = 0;
+let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the SDK is not driving state
+let radioPaused = false, radioPendingReissue = false;  // a top-up finished while paused: re-issue playback on resume
+let radioInfoIdx = -1;          // index whose bio/plays panel is showing (or loading)
+let radioArtistCache = {}, radioTrackCache = {};  // Last.fm getInfo results (promises), by artist / artist||track
+let travelActive = false;       // the radio view is showing a time-travel session
+let radioHeroLive = false;      // the hero has a track from the current session (gates the progress bar)
+let spotifyBlockedUntil = 0;    // Spotify 429 cooldown: no search is sent before this timestamp (ms)
+let trackMeta = {};             // index -> { name, artist, album, page, year, art }

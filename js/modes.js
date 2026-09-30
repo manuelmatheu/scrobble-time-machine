@@ -23,16 +23,13 @@ async function handleGoRandom() {
     const { totalPages, totalScrobbles } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages; cachedTotalScrobbles = totalScrobbles;
     if (!totalPages) throw new Error("No scrobbles found");
-    $("pagePicker").style.display = ""; $("pageTotal").textContent = "of " + totalPages.toLocaleString() + " pages · " + totalScrobbles.toLocaleString() + " scrobbles";
-    showStatus("Spinning the wheel…");
+    showStatus("Picking a random moment…");
     const page = Math.floor(Math.random() * totalPages) + 1;
-    await animatePagePick(page, totalPages);
     if (abortController.signal.aborted) return;
-    showStatus("Loading page " + page.toLocaleString() + "…");
+    showStatus("Loading that moment…");
     const raw = await getLastFmPage(user, page);
     const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
-    if (!tracks.length) throw new Error("No tracks on this page");
-    renderEraPanel(tracks, page, totalPages);
+    if (!tracks.length) throw new Error("No tracks found for that moment");
     await fetchAndPlay(user, page, totalPages);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
@@ -74,7 +71,7 @@ async function handleGoDate() {
     let tracks;
     if (result.totalPages > 1) {
       const rndPage = Math.floor(Math.random() * result.totalPages) + 1;
-      showStatus("Found " + result.total.toLocaleString() + " scrobbles in " + label + " · loading page " + rndPage + "…");
+      showStatus("Found " + result.total.toLocaleString() + " scrobbles in " + label + " · loading a moment…");
       const r2 = await getLastFmPageByDate(user, from, to);
       // Actually fetch the random page
       const r3 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(from), to:String(to), page:String(rndPage) }));
@@ -86,18 +83,6 @@ async function handleGoDate() {
     }
 
     if (!tracks.length) throw new Error("No tracks found for " + label);
-
-    // Build era panel from the tracks we got
-    const oldest = tracks[tracks.length-1], newest = tracks[0];
-    if (oldest && oldest.date && newest && newest.date) {
-      // Get total pages for the slider context
-      const { totalPages } = await getLastFmTotalPages(user);
-      cachedTotalPages = totalPages;
-      // Estimate what page this falls on: use the timestamp to guess
-      const midUts = parseInt(oldest.date.uts);
-      // We don't know the exact page, so render era panel without slider interaction
-      renderEraPanelFromTracks(tracks, label, totalPages);
-    }
 
     showStatus("Found " + result.total.toLocaleString() + " scrobbles in " + label);
     await fetchAndPlayDirect(tracks, label);
@@ -121,14 +106,13 @@ async function handleGoArtist() {
 
     showStatus("Searching for " + artist + " in your history…");
     const result = await findArtistPage(user, artist, totalPages);
-    if (!result) throw new Error("Couldn't find " + artist + " in your history. Check the spelling or try again — each search samples different time periods.");
+    if (!result) throw new Error("Couldn't find " + artist + " in your history. Check the spelling or try again. Each search samples different time periods.");
 
     const tracks = result.tracks;
     const oldest = tracks[tracks.length - 1];
     const dateStr = oldest && oldest.date ? new Date(parseInt(oldest.date.uts) * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long" }) : "";
     const label = artist + (dateStr ? " · " + dateStr : "");
 
-    renderEraPanelFromTracks(tracks, label, totalPages);
     showStatus("Found " + (result.matchCount || "some") + " " + artist + " tracks" + (dateStr ? " from " + dateStr : "") + " (attempt " + result.attempt + ")");
     await fetchAndPlayDirect(tracks, label);
   } catch(err) {
@@ -183,8 +167,7 @@ async function handleGoMood() {
     const dateStr = oldest && oldest.date ? new Date(parseInt(oldest.date.uts) * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long" }) : "";
     const label = moodLabel + (dateStr ? " · " + dateStr : "");
 
-    renderEraPanelFromTracks(bestTracks, label, totalPages);
-    showStatus("Found " + bestCount + " " + moodLabel + " tracks on page " + bestPage.toLocaleString());
+    showStatus("Found " + bestCount + " " + moodLabel + " tracks");
     await fetchAndPlayDirect(bestTracks, label);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
@@ -256,9 +239,6 @@ async function handleGoOnThisDay() {
     const yearsAgo = currentYear - foundYear;
     const yearsAgoStr = yearsAgo === 1 ? "1 year ago" : yearsAgo + " years ago";
 
-    const { totalPages } = await getLastFmTotalPages(user);
-    cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(foundTracks, label, totalPages);
     showStatus("On this day " + yearsAgoStr + " · " + label + " · " + foundTracks.length + " scrobbles", "success");
     await fetchAndPlayDirect(foundTracks, "On this day · " + label);
   } catch(err) {
@@ -286,7 +266,7 @@ async function handleGoDecade() {
     let tracks;
     if (result.totalPages > 1) {
       const rndPage = Math.floor(Math.random() * result.totalPages) + 1;
-      showStatus("Found " + result.total.toLocaleString() + " scrobbles in the " + label + " - loading page " + rndPage + "...");
+      showStatus("Found " + result.total.toLocaleString() + " scrobbles in the " + label + " - loading a moment...");
       const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(from), to:String(to), page:String(rndPage) }));
       if (!r.ok) throw new Error("Last.fm API error");
       const d = await r.json(); if (d.error) throw new Error(d.message);
@@ -296,9 +276,6 @@ async function handleGoDecade() {
     }
     if (!tracks.length) throw new Error("No tracks found in the " + label);
 
-    const { totalPages } = await getLastFmTotalPages(user);
-    cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(tracks, "The " + label, totalPages);
     showStatus("The " + label + " - " + result.total.toLocaleString() + " scrobbles from this era", "success");
     await fetchAndPlayDirect(tracks, "The " + label);
   } catch(err) {
@@ -381,7 +358,6 @@ async function handleGoAlbum() {
 
     const { totalPages } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(bestTracks, label, totalPages);
     showStatus("Found " + bestCount + " tracks from " + album + (dateStr ? " - " + dateStr : ""), "success");
     await fetchAndPlayDirect(bestTracks, label);
   } catch(err) {
@@ -488,7 +464,6 @@ async function handleGoDiscovery() {
 
     const { totalPages } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(tracks, label, totalPages);
     showStatus("You discovered " + artist + " on " + dateStr + agoStr, "success");
     await fetchAndPlayDirect(tracks, label);
   } catch(err) {
@@ -568,7 +543,6 @@ async function handleGoStreak() {
 
     const { totalPages } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(slice, label, totalPages);
 
     let msg = bestStreak + " consecutive " + artist + " tracks";
     if (dateStr) msg += " - " + dateStr;
@@ -582,9 +556,9 @@ async function handleGoStreak() {
 
 // ── SESSION HELPERS ──────────────────────────────────────────────────────────
 function beginSession() {
+  radioStop();
   abortController = new AbortController(); currentPhase = "working"; updateGoButton();
   $("goBtn").style.display = "none"; $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
-  $("pagePicker").style.display = "none"; $("eraPanel").style.display = "none";
   $("trackListWrapper").style.display = "none"; $("trackList").innerHTML = ""; $("matchCount").textContent = "";
   searchCache = {}; sessionQueue = new Set(); sessionPaused = false; stopPolling(); hideStatus();
   $("savePlaylistBtn").style.display = "none";

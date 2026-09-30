@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Restore saved username from localStorage or sessionStorage
   const savedUser = localStorage.getItem("lastfm_username") || sessionStorage.getItem("lastfm_username");
   if (savedUser) { $("usernameInput").value = savedUser; refreshYearsForUser(); }
+  refreshHomeMeta();
 
   // Username: save on change, update button
   $("usernameInput").addEventListener("input", updateGoButton);
@@ -22,8 +23,9 @@ document.addEventListener("DOMContentLoaded", () => {
       sessionStorage.setItem("lastfm_username", user);
     }
     refreshYearsForUser();
+    refreshHomeMeta();
   });
-  $("usernameInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("goBtn").disabled) handleGo(); });
+  $("usernameInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("radioBtn").disabled) startRadio(); });
 
   // Artist input: autocomplete + validation
   $("artistInput").addEventListener("input", () => {
