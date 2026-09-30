@@ -2,7 +2,15 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.2 (current) ✅
+## v2.4 (current) ✅
+
+- [x] Library Radio: endless stream of random scrobbles from the whole Last.fm history
+- [x] Radio-first redesign: cover mosaic home, radio view with Up next, time travel as secondary
+- [x] Contrast, shape, and reduced-motion pass; Phosphor icons
+
+---
+
+## v2.2 ✅
 
 - [x] Embedded Spotify Web Playback SDK player (in-browser streaming)
 - [x] Fixed player bar: album art, track info, prev/play-pause/next, seekable progress, volume
