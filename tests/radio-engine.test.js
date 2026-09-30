@@ -196,5 +196,22 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   run("trackMeta = { 0: { lfmArtist: 'Radio Artist', lfmTrack: 'Radio Song' } };");
   assert.deepEqual(run("radioInfoSource(0)"), { artist: "Radio Artist", track: "Radio Song" });
 
+  // 19. time travel: radioSyncInfo loads the panel from currentTracks (no trackMeta) using the username field
+  const realGetElementById = global.document.getElementById;
+  const els = {};
+  global.document.getElementById = id => els[id] || (els[id] = { style: {}, textContent: "", innerHTML: "", value: id === "usernameInput" ? "tester" : "" });
+  global.escHtml = s => s;
+  reset();
+  run("radioUser = ''; trackMeta = {}; nowPlayingIndex = 0; radioInfoIdx = -1; currentTracks = [{ name: 'Ready To Start', artist: { '#text': 'Arcade Fire' } }];");
+  let seenUser = null;
+  global.getLastFmArtistInfo = async (user, artist) => { seenUser = user; return { artist: { bio: { summary: "Indie band." }, stats: { userplaycount: "62" } } }; };
+  global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "1" } });
+  run("radioSyncInfo()");
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(seenUser, "tester");
+  assert.match(els.radioStats.innerHTML, /You've listened to/);
+  assert.equal(els.radioInfo.style.display, "");
+  global.document.getElementById = realGetElementById;
+
   console.log("radio engine: ok");
 })().catch(e => { console.error(e); process.exit(1); });

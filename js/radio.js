@@ -344,7 +344,8 @@ function radioInfoSource(idx) {
 async function radioInfoFor(idx) {
   const src = radioInfoSource(idx);
   if (!src) return null;
-  const user = radioUser;
+  // radioUser is only set by the radio; time travel reads the username field
+  const user = radioUser || $("usernameInput").value.trim();
   const aKey = src.artist.toLowerCase(), tKey = radioTrackKey(src.artist, src.track);
   if (!(aKey in radioArtistCache)) radioArtistCache[aKey] = getLastFmArtistInfo(user, src.artist).then(radioArtistFromInfo, () => null);
   if (!(tKey in radioTrackCache)) radioTrackCache[tKey] = getLastFmTrackInfo(user, src.artist, src.track).then(radioTrackPlaysFromInfo, () => null);
@@ -382,7 +383,7 @@ function radioSyncInfo() {
   radioInfoIdx = nowPlayingIndex;
   const idx = radioInfoIdx, sid = radioSession;
   radioHideInfo();
-  if (idx < 0 || !trackMeta[idx]) return;
+  if (idx < 0 || !radioInfoSource(idx)) return;
   radioInfoFor(idx).then(info => {
     if (!info || sid !== radioSession || idx !== radioInfoIdx) return;
     radioRenderInfo(info);
