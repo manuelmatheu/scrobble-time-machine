@@ -302,3 +302,8 @@ body.radio-mode.has-player { padding-bottom:0; }
 .radio-bio-text { font-size:14px; line-height:1.6; color:var(--text-secondary); display:-webkit-box; -webkit-line-clamp:4; line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:8px; }
 .radio-bio-link { font-size:13px; color:var(--lastfm-red-text); text-decoration:none; }
 .radio-bio-link:hover { text-decoration:underline; }
+
+/* Time travel inside the radio view */
+.radio-top-left { display:flex; align-items:center; gap:16px; }
+.radio-view .era-panel { margin-bottom:24px; }
+.radio-view .track-list-wrapper { margin-bottom:24px; }

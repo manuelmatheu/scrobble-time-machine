@@ -134,17 +134,17 @@
         <input type="text" class="mode-input-field artist-input" id="streakInput" placeholder="Artist name" autocomplete="off" spellcheck="false" aria-label="Artist name">
       </div>
       <div class="go-row"><button class="btn btn-primary" id="goBtn" onclick="handleGo()" disabled>Time Travel</button></div>
-      <div class="era-panel" id="eraPanel" style="display:none"></div>
-      <div class="track-list-wrapper" id="trackListWrapper" style="display:none">
-        <div class="track-list-header"><h3>Tracks from this page</h3><span class="match-count" id="matchCount"></span><span id="saveSlotTrackList"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span></div>
-        <div class="track-list" id="trackList"></div></div>
     </section>
   </div>
   <section id="radioView" class="radio-view" style="display:none" aria-label="Library radio">
     <div class="radio-top">
-      <button class="btn-text" onclick="leaveRadio()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
-      <h2 class="radio-title">Library radio</h2>
+      <div class="radio-top-left">
+        <button class="btn-text" onclick="leaveRadio()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
+        <button class="btn-text" id="radioAgainBtn" onclick="travelAgain()" style="display:none"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Again</button>
+      </div>
+      <h2 class="radio-title" id="radioTitle">Library radio</h2>
     </div>
+    <div class="era-panel" id="eraPanel" style="display:none"></div>
     <div class="radio-hero">
       <img id="radioArt" class="radio-art" alt="">
       <div class="radio-hero-text">
@@ -162,7 +162,7 @@
       <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
       <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
       <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
-      <span id="saveSlotRadio"></span>
+      <span id="saveSlotRadio"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span>
     </div>
     <div class="radio-info" id="radioInfo" style="display:none">
       <p class="radio-stats" id="radioStats"></p>
@@ -172,8 +172,14 @@
         <a class="radio-bio-link" id="radioBioLink" href="#" target="_blank" rel="noopener noreferrer">Read more on Last.fm</a>
       </div>
     </div>
-    <h3 class="radio-upnext-title">Up next</h3>
-    <div class="radio-upnext" id="radioUpNext"></div>
+    <div id="radioUpNextBlock">
+      <h3 class="radio-upnext-title">Up next</h3>
+      <div class="radio-upnext" id="radioUpNext"></div>
+    </div>
+    <div class="track-list-wrapper" id="trackListWrapper" style="display:none">
+      <div class="track-list-header"><h3>Tracks</h3><span class="match-count" id="matchCount"></span></div>
+      <div class="track-list" id="trackList"></div>
+    </div>
   </section>
 </div>
 <div class="footer">

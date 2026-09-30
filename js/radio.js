@@ -293,26 +293,41 @@ async function refreshHomeMeta() {
 // =============================================================================
 // RADIO VIEW
 // =============================================================================
-function showRadioView() {
-  $("homeView").style.display = "none";
-  $("radioView").style.display = "";
-  document.body.classList.add("radio-mode");
-  $("saveSlotRadio").appendChild($("savePlaylistBtn"));
-  radioRenderQueue();
-}
-
-function hideRadioView() {
-  $("radioView").style.display = "none";
-  $("homeView").style.display = "";
-  document.body.classList.remove("radio-mode");
-  $("saveSlotTrackList").appendChild($("savePlaylistBtn"));
+function radioResetHero() {
+  radioHeroLive = false;
   $("radioTrack").textContent = "Tuning...";
   $("radioArtist").textContent = "";
   $("radioArt").removeAttribute("src");
   $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
-  $("radioUpNext").innerHTML = "";
+  $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioInfoIdx = -1; radioHideInfo();
 }
+
+// mode "radio" (default) shows Up next; "travel" shows the era panel and the full track list
+function showRadioView(mode) {
+  const travel = mode === "travel";
+  travelActive = travel;
+  $("homeView").style.display = "none";
+  $("radioView").style.display = "";
+  document.body.classList.add("radio-mode");
+  $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
+  $("radioAgainBtn").style.display = travel ? "" : "none";
+  $("radioUpNextBlock").style.display = travel ? "none" : "";
+  radioResetHero();
+  if (!travel) radioRenderQueue();
+}
+
+function hideRadioView() {
+  travelActive = false;
+  $("radioView").style.display = "none";
+  $("homeView").style.display = "";
+  document.body.classList.remove("radio-mode");
+  $("radioUpNext").innerHTML = "";
+  radioResetHero();
+}
+
+// Repeat the last Time Travel mode with the same inputs
+function travelAgain() { handleGo(); }
 
 // Last.fm names for the track at idx: the radio's scrobble names, or the time-travel track objects
 function radioInfoSource(idx) {
@@ -377,6 +392,7 @@ function radioSyncInfo() {
 // Hero: the playing track (SDK track object or Spotify currently-playing item)
 function radioRenderNow(track, paused) {
   radioSetPaused(paused);
+  radioHeroLive = true;
   const meta = trackMeta[nowPlayingIndex];
   const img = track.album && track.album.images && track.album.images[0];
   $("radioArt").src = img ? img.url : (meta && meta.art) || "";

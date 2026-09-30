@@ -47,7 +47,7 @@ async function pollNowPlaying() {
     }
     highlightNowPlaying(best);
   }
-  if (radioActive) {
+  if ((radioActive || travelActive) && uriToIndices[playingUri]) {
     radioRenderNow(data.item, !data.is_playing);
     if (data.item.duration_ms) updateProgressBar(data.progress_ms || 0, data.item.duration_ms);
   }
@@ -212,7 +212,7 @@ async function fetchAndPlay(user, page, tp) {
     updateEraInfo(tracks, page, tp);
     await matchAndPlay(tracks, page, tp);
   } catch(err) {
-    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    if (!abortController.signal.aborted) { radioStop(); currentPhase = "error"; showStatus(err.message, "error"); }
   } finally {
     $("goBtn").style.display = ""; $("cancelBtn").style.display = "none";
     $("usernameInput").disabled = false; updateGoButton();
@@ -227,7 +227,7 @@ async function fetchAndPlayDirect(tracks, label) {
     if (!tracks.length) throw new Error("No tracks found for this date");
     await matchAndPlay(tracks, null, null, label);
   } catch(err) {
-    if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
+    if (!abortController.signal.aborted) { radioStop(); currentPhase = "error"; showStatus(err.message, "error"); }
   } finally {
     $("goBtn").style.display = ""; $("cancelBtn").style.display = "none";
     $("usernameInput").disabled = false; updateGoButton();
@@ -236,6 +236,7 @@ async function fetchAndPlayDirect(tracks, label) {
 
 // Shared match + play logic
 async function matchAndPlay(tracks, page, tp, label) {
+  showRadioView("travel");
   $("trackListWrapper").style.display = "";
   $("trackList").innerHTML = tracks.map((t,i) => renderTrackRow(t,i)).join("");
   let token = await getSpotifyToken(); if (!token) throw new Error("Spotify expired. Reconnect.");
@@ -312,7 +313,7 @@ function onSDKStateChange(state) {
     for (const idx of candidates) { if (idx >= nowPlayingIndex) { best = idx; break; } }
     highlightNowPlaying(best);
   }
-  if (radioActive) radioRenderNow(track, state.paused);
+  if ((radioActive || travelActive) && uriToIndices[track.uri]) radioRenderNow(track, state.paused);
 
   // Check liked status and auto-continue whenever the track changes
   if (track.uri !== _sdkCurrentUri) {
@@ -341,10 +342,12 @@ function updateProgressBar(position, duration) {
   if (fill && pct) fill.style.width = pct;
   if (elapsed) elapsed.textContent = fmtMs(position);
   if (dur) dur.textContent = fmtMs(duration);
-  const rf = $("radioFill"), re = $("radioElapsed"), rd = $("radioDuration");
-  if (rf && pct) rf.style.width = pct;
-  if (re) re.textContent = fmtMs(position);
-  if (rd) rd.textContent = fmtMs(duration);
+  if (radioHeroLive) {
+    const rf = $("radioFill"), re = $("radioElapsed"), rd = $("radioDuration");
+    if (rf && pct) rf.style.width = pct;
+    if (re) re.textContent = fmtMs(position);
+    if (rd) rd.textContent = fmtMs(duration);
+  }
 }
 
 function fmtMs(ms) {

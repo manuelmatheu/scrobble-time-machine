@@ -63,4 +63,6 @@ let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the 
 let radioPaused = false, radioPendingReissue = false;  // a top-up finished while paused: re-issue playback on resume
 let radioInfoIdx = -1;          // index whose bio/plays panel is showing (or loading)
 let radioArtistCache = {}, radioTrackCache = {};  // Last.fm getInfo results (promises), by artist / artist||track
+let travelActive = false;       // the radio view is showing a time-travel session
+let radioHeroLive = false;      // the hero has a track from the current session (gates the progress bar)
 let trackMeta = {};             // index -> { name, artist, album, page, year, art }
