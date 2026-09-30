@@ -285,7 +285,7 @@ function onSDKStateChange(state) {
   if (artistEl) artistEl.textContent = (track.artists || []).map(a => a.name).join(", ");
 
   const playBtn = $("pb-play");
-  if (playBtn) playBtn.textContent = state.paused ? "\u25B6" : "\u23F8";
+  if (playBtn) playBtn.innerHTML = '<i class="ph-fill ph-' + (state.paused ? "play" : "pause") + '"></i>';
 
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;

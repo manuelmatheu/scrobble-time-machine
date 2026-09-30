@@ -121,7 +121,7 @@ async function handleGoArtist() {
 
     showStatus("Searching for " + artist + " in your history…");
     const result = await findArtistPage(user, artist, totalPages);
-    if (!result) throw new Error("Couldn't find " + artist + " in your history. Check the spelling or try again — each search samples different time periods.");
+    if (!result) throw new Error("Couldn't find " + artist + " in your history. Check the spelling or try again. Each search samples different time periods.");
 
     const tracks = result.tracks;
     const oldest = tracks[tracks.length - 1];

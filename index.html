@@ -154,7 +154,7 @@
       <h2 class="radio-title">Library radio</h2>
     </div>
     <div class="radio-hero">
-      <img id="radioArt" class="radio-art" src="" alt="">
+      <img id="radioArt" class="radio-art" alt="">
       <div class="radio-hero-text">
         <div class="radio-page" id="radioPage"></div>
         <div class="radio-track" id="radioTrack">Tuning...</div>
@@ -192,16 +192,16 @@
 </div>
 
 <div id="player-bar" style="display:none">
-  <img id="pb-art" src="" alt="">
+  <img id="pb-art" alt="">
   <div id="pb-info">
     <div id="pb-track"></div>
     <div id="pb-artist"></div>
   </div>
   <button id="pb-heart" onclick="toggleLikeCurrentTrack()" title="Save to Liked Songs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
   <div id="pb-controls">
-    <button class="pb-btn" onclick="playerPrev()" title="Previous">&#9198;</button>
-    <button class="pb-btn pb-play" id="pb-play" onclick="playerPlayPause()" title="Play/Pause">&#9654;</button>
-    <button class="pb-btn" onclick="playerNext()" title="Next">&#9197;</button>
+    <button class="pb-btn" onclick="playerPrev()" title="Previous" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
+    <button class="pb-btn pb-play" id="pb-play" onclick="playerPlayPause()" title="Play/Pause" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
+    <button class="pb-btn" onclick="playerNext()" title="Next" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
   </div>
   <div id="pb-progress-wrap">
     <span id="pb-elapsed">0:00</span>

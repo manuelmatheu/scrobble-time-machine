@@ -17,8 +17,8 @@ function lastfmArt(t) {
 function renderTrackRow(t, i) {
   const artist = (t.artist && (t.artist["#text"]||t.artist.name))||"", album = (t.album&&t.album["#text"])||"";
   const img = lastfmArt(t), dt = t.date ? fmtDate(t.date.uts) : "Now playing";
-  const imgH = img ? '<img class="track-art" src="'+img+'" alt="" loading="lazy">' : '<div class="track-art-placeholder">♪</div>';
-  return '<div class="track-row" id="track-'+i+'" onclick="playFromTrack('+i+')"><div class="track-num-wrap"><span class="track-num">'+(i+1)+'</span><span class="play-icon">▶</span></div>'
+  const imgH = img ? '<img class="track-art" src="'+img+'" alt="" loading="lazy">' : '<div class="track-art-placeholder"><i class="ph ph-music-note" aria-hidden="true"></i></div>';
+  return '<div class="track-row" id="track-'+i+'" onclick="playFromTrack('+i+')"><div class="track-num-wrap"><span class="track-num">'+(i+1)+'</span><span class="play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span></div>'
     +'<div class="track-art-wrap" id="art-'+i+'">'+imgH+'</div>'
     +'<div class="track-info"><div class="track-name">'+escHtml(t.name)+'</div><div class="track-meta">'+escHtml(artist)+(album?' · '+escHtml(album):'')+'</div></div>'
     +'<span class="track-date">'+dt+'</span>'
@@ -63,7 +63,17 @@ async function playFromTrack(i) {
   } else { showStatus("Playback failed. Is Spotify active?", "error"); }
 }
 
-function animatePagePick(final, total) { return new Promise(res => { const el=$("pageNumber"); let i=0; el.classList.add("spinning"); const iv=setInterval(()=>{i++;el.textContent=(Math.floor(Math.random()*total)+1).toLocaleString();if(i>=22){clearInterval(iv);el.textContent=final.toLocaleString();el.classList.remove("spinning");res();}},70); }); }
+function animatePagePick(final, total) {
+  return new Promise(res => {
+    const el = $("pageNumber");
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = final.toLocaleString(); res(); return; }
+    let i = 0; el.classList.add("spinning");
+    const iv = setInterval(() => {
+      i++; el.textContent = (Math.floor(Math.random() * total) + 1).toLocaleString();
+      if (i >= 22) { clearInterval(iv); el.textContent = final.toLocaleString(); el.classList.remove("spinning"); res(); }
+    }, 70);
+  });
+}
 
 
 function populateYears(startYear) {
