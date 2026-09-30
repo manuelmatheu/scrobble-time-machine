@@ -61,6 +61,15 @@ function radioTrackPlaysFromInfo(d) {
   return isNaN(n) ? null : n;
 }
 
+// Label for a set of Last.fm tracks: the oldest date, to the day when all tracks share one
+function radioEraLabel(tracks) {
+  const uts = (tracks || []).filter(t => t && t.date && t.date.uts).map(t => parseInt(t.date.uts, 10));
+  if (!uts.length) return "Random";
+  const oldest = new Date(Math.min(...uts) * 1000), newest = new Date(Math.max(...uts) * 1000);
+  const sameDay = oldest.toDateString() === newest.toDateString();
+  return oldest.toLocaleDateString("en-US", sameDay ? { year: "numeric", month: "long", day: "numeric" } : { year: "numeric", month: "long" });
+}
+
 // How many matched tracks come after currentUri (Infinity when it is not ours)
 function radioRemaining(matched, count, currentUri) {
   let found = false, after = 0;
@@ -305,20 +314,30 @@ function hideRadioView() {
   radioInfoIdx = -1; radioHideInfo();
 }
 
-// Bio + your play counts for trackMeta[idx]. Cached per artist and per track (as promises, so
+// Last.fm names for the track at idx: the radio's scrobble names, or the time-travel track objects
+function radioInfoSource(idx) {
+  const m = trackMeta[idx];
+  if (m && m.lfmArtist) return { artist: m.lfmArtist, track: m.lfmTrack };
+  const t = currentTracks[idx];
+  if (!t) return null;
+  const artist = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
+  return artist && t.name ? { artist, track: t.name } : null;
+}
+
+// Bio + your play counts for the track at idx. Cached per artist and per track (as promises, so
 // concurrent calls share one request); a failed lookup is never cached and never throws.
 async function radioInfoFor(idx) {
-  const m = trackMeta[idx];
-  if (!m) return null;
+  const src = radioInfoSource(idx);
+  if (!src) return null;
   const user = radioUser;
-  const aKey = m.lfmArtist.toLowerCase(), tKey = radioTrackKey(m.lfmArtist, m.lfmTrack);
-  if (!(aKey in radioArtistCache)) radioArtistCache[aKey] = getLastFmArtistInfo(user, m.lfmArtist).then(radioArtistFromInfo, () => null);
-  if (!(tKey in radioTrackCache)) radioTrackCache[tKey] = getLastFmTrackInfo(user, m.lfmArtist, m.lfmTrack).then(radioTrackPlaysFromInfo, () => null);
+  const aKey = src.artist.toLowerCase(), tKey = radioTrackKey(src.artist, src.track);
+  if (!(aKey in radioArtistCache)) radioArtistCache[aKey] = getLastFmArtistInfo(user, src.artist).then(radioArtistFromInfo, () => null);
+  if (!(tKey in radioTrackCache)) radioTrackCache[tKey] = getLastFmTrackInfo(user, src.artist, src.track).then(radioTrackPlaysFromInfo, () => null);
   const [artist, trackPlays] = await Promise.all([radioArtistCache[aKey], radioTrackCache[tKey]]);
   if (!artist) delete radioArtistCache[aKey];
   if (trackPlays === null) delete radioTrackCache[tKey];
   const bio = artist ? radioParseBio(artist.bioHtml) : { text: "", url: "" };
-  return { artist: m.lfmArtist, track: m.lfmTrack, bioText: bio.text, bioUrl: bio.url, plays: artist ? artist.plays : null, trackPlays };
+  return { artist: src.artist, track: src.track, bioText: bio.text, bioUrl: bio.url, plays: artist ? artist.plays : null, trackPlays };
 }
 
 function radioHideInfo() {
@@ -395,5 +414,5 @@ async function leaveRadio() {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
 }

@@ -96,4 +96,14 @@ assert.equal(r.radioTrackPlaysFromInfo({ track: { userplaycount: "1" } }), 1);
 assert.equal(r.radioTrackPlaysFromInfo({ track: {} }), null);
 assert.equal(r.radioTrackPlaysFromInfo(undefined), null);
 
+// radioEraLabel: playlist/status label for a set of Last.fm tracks
+const dayLabel = uts => new Date(uts * 1000).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+const monthLabel = uts => new Date(uts * 1000).toLocaleDateString("en-US", { year: "numeric", month: "long" });
+const sameDay = [{ date: { uts: "1331640000" } }, { date: { uts: "1331639000" } }];
+assert.equal(r.radioEraLabel(sameDay), dayLabel(1331639000));
+const spread = [{ date: { uts: "1331640000" } }, { date: { uts: "1321640000" } }];
+assert.equal(r.radioEraLabel(spread), monthLabel(1321640000));
+assert.equal(r.radioEraLabel([{ name: "no date" }]), "Random");
+assert.equal(r.radioEraLabel([]), "Random");
+
 console.log("radio helpers: ok");

@@ -182,5 +182,19 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 17. an index with no metadata yields nothing
   assert.equal(await run("radioInfoFor(99)"), null);
 
+  // 18. radioInfoSource / radioInfoFor fall back to Last.fm track objects (time travel has no trackMeta)
+  reset(); artistCalls = 0; trackCalls = 0; failArtist = false;
+  run("currentTracks = [{ name: 'Ready To Start', artist: { '#text': 'Arcade Fire' } }, { name: 'Wake Up', artist: { name: 'Arcade Fire' } }];");
+  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Arcade Fire", track: "Ready To Start" });
+  assert.deepEqual(run("radioInfoSource(1)"), { artist: "Arcade Fire", track: "Wake Up" });
+  assert.equal(run("radioInfoSource(5)"), null);
+  const travelInfo = await run("radioInfoFor(0)");
+  assert.equal(travelInfo.artist, "Arcade Fire");
+  assert.equal(travelInfo.plays, 62);
+  assert.equal(travelInfo.trackPlays, 1);
+  // trackMeta still wins when present (radio)
+  run("trackMeta = { 0: { lfmArtist: 'Radio Artist', lfmTrack: 'Radio Song' } };");
+  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Radio Artist", track: "Radio Song" });
+
   console.log("radio engine: ok");
 })().catch(e => { console.error(e); process.exit(1); });
