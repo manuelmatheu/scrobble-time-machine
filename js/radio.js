@@ -55,6 +55,14 @@ function radioShouldRefill(s, lowWater) {
   return !!s.active && !s.refilling && !s.exhausted && s.remaining <= lowWater;
 }
 
+// REST fallback for the radio controls when the SDK is not driving playback
+function radioTransportRequest(action, paused) {
+  if (action === "toggle") return { method: "PUT", path: paused ? "/me/player/play" : "/me/player/pause" };
+  if (action === "next") return { method: "POST", path: "/me/player/next" };
+  if (action === "prev") return { method: "POST", path: "/me/player/previous" };
+  return null;
+}
+
 function radioCoverUrl(hit, size) {
   const im = hit && hit.album && hit.album.images;
   if (!im || !im.length) return "";
@@ -130,7 +138,7 @@ async function startRadio() {
   beginSession();
   matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; skippedPlan = []; isContinuing = false;
   trackMeta = {}; radioSeen = new Set(); radioFailures = 0; radioRefilling = false; radioExhausted = false;
-  radioCurrentUri = null; radioLastPos = 0; radioUser = user; radioActive = true;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioUser = user; radioActive = true;
   const sid = ++radioSession;
   try {
     showStatus("Reading your Last.fm library...");
@@ -175,18 +183,38 @@ async function continueRadio() {
   try {
     const added = await radioFill(RADIO_REFILL);
     if (sid !== radioSession) return;
-    if (!added) { if (radioFailures === 0) radioExhausted = true; return; }
-    const currentUri = sdkReady ? _sdkCurrentUri : radioCurrentUri;
-    if (!currentUri) return;
-    const uris = radioUrisFrom(matchedUris, allTrackCount, currentUri);
-    if (!uris.length) return;
-    const token = await getSpotifyToken();
-    if (!token || sid !== radioSession) return;
-    await spotifyPlay(token, uris, sdkReady ? _sdkPositionMs : radioLastPos);
-    checkLikedTracks();
+    if (!added) {
+      // Only a healthy Last.fm + Spotify round that found nothing new means the library is exhausted;
+      // a failing search or a missing token is transient and must stay retryable
+      const healthy = radioFailures === 0 && !lastSearchError && await getSpotifyToken();
+      if (sid !== radioSession) return;
+      if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", ""); }
+      return;
+    }
+    if (radioPaused) { radioPendingReissue = true; return; }  // do not resume what the user paused
+    await radioReissue();
   } finally {
     if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
   }
+}
+
+// Re-issue playback from the current track so the queued tracks include the new ones
+async function radioReissue() {
+  const sid = radioSession;
+  const currentUri = sdkReady ? _sdkCurrentUri : radioCurrentUri;
+  if (!currentUri) return;
+  const uris = radioUrisFrom(matchedUris, allTrackCount, currentUri);
+  if (!uris.length) return;
+  const token = await getSpotifyToken();
+  if (!token || sid !== radioSession) return;
+  await spotifyPlay(token, uris, sdkReady ? _sdkPositionMs : radioLastPos);
+  checkLikedTracks();
+}
+
+// Track the play/pause state; a top-up that finished while paused re-issues on resume
+function radioSetPaused(paused) {
+  radioPaused = paused;
+  if (!paused && radioPendingReissue) { radioPendingReissue = false; radioReissue(); }
 }
 
 // Called from the SDK state handler and the polling fallback on every track change
@@ -198,7 +226,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false;
-  radioCurrentUri = null; radioLastPos = 0;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false;
   hideRadioView();
 }
 
@@ -320,6 +348,7 @@ function hideRadioView() {
 
 // Hero: the playing track (SDK track object or Spotify currently-playing item)
 function radioRenderNow(track, paused) {
+  radioSetPaused(paused);
   const meta = trackMeta[nowPlayingIndex];
   const img = track.album && track.album.images && track.album.images[0];
   $("radioArt").src = img ? img.url : (meta && meta.art) || "";
@@ -354,11 +383,11 @@ function radioRenderQueue() {
 
 // Back: pause playback and return to the home view
 async function leaveRadio() {
-  try { await spPut("/me/player/pause", null); } catch (e) {}
   handleReset();
+  try { await spPut("/me/player/pause", null); } catch (e) {}
 }
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioFormatPage, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioFormatPage, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
 }

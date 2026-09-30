@@ -42,6 +42,7 @@ function disconnectSpotify() {
   spotifyToken = null;
   if (window._stmPlayer) { window._stmPlayer.disconnect(); window._stmPlayer = null; }
   sdkReady = false; sdkDeviceId = null;
+  handleReset();
   updateSpotifyUI(false);
 }
 

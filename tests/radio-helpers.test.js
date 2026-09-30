@@ -59,4 +59,11 @@ assert.equal(r.radioCoverUrl({ album: { images: [{ url: "only" }] } }, "medium")
 assert.equal(r.radioCoverUrl({ album: { images: [] } }), "");
 assert.equal(r.radioCoverUrl(null), "");
 
+// radioTransportRequest: REST fallback for the radio controls when the SDK is not driving playback
+assert.deepEqual(r.radioTransportRequest("toggle", false), { method: "PUT", path: "/me/player/pause" });
+assert.deepEqual(r.radioTransportRequest("toggle", true), { method: "PUT", path: "/me/player/play" });
+assert.deepEqual(r.radioTransportRequest("next", false), { method: "POST", path: "/me/player/next" });
+assert.deepEqual(r.radioTransportRequest("prev", true), { method: "POST", path: "/me/player/previous" });
+assert.equal(r.radioTransportRequest("bogus", false), null);
+
 console.log("radio helpers: ok");

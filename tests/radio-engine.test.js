@@ -9,9 +9,10 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
 const run = code => vm.runInThisContext(code);
 load("config.js");
 load("radio.js");
+load("spotify.js");
 
 function reset() {
-  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false;");
+  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null;");
 }
 const song = n => [{ name: "Song " + n, artist: { "#text": "Artist" }, date: { uts: "1500000000" } }];
 const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
@@ -83,6 +84,72 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   run("radioMaybeRefill('a', 4200)");
   assert.equal(run("radioCurrentUri"), "a");
   assert.equal(run("radioLastPos"), 4200);
+
+  // shared setup for continueRadio cases: one track already queued and playing
+  const existing = "matchedUris = { 0: 'spotify:track:Existing' }; allTrackCount = 1; uriToIndices = { 'spotify:track:Existing': [0] }; radioCurrentUri = 'spotify:track:Existing';";
+  const defaultSearch = async (token, artist, track) => ({ uri: uriFor(track), name: track, album: { images: [] } });
+  let statuses = [], played = [];
+  global.showStatus = m => statuses.push(m);
+  global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
+  global.checkLikedTracks = () => {};
+
+  // 9. an exhausted library is marked exhausted, says so, and never re-issues playback
+  reset(); statuses = []; played = []; global.spotifySearch = defaultSearch;
+  run(existing); run("radioSeen = new Set(['artist||song 0']);");
+  global.getLastFmScrobbleAt = async () => song(0);
+  await run("continueRadio()");
+  assert.equal(run("radioExhausted"), true);
+  assert.ok(statuses.some(m => /No more new tracks/.test(m)));
+  assert.equal(played.length, 0);
+  assert.equal(run("radioRefilling"), false);
+
+  // 10. a transient Spotify failure (search error, or no token) must not end the stream
+  reset(); statuses = []; played = []; n = 0; run(existing);
+  global.getLastFmScrobbleAt = async () => song(n++);
+  global.spotifySearch = async () => { run("lastSearchError = 'Rate limited (429)'"); return null; };
+  await run("continueRadio()");
+  assert.equal(run("radioExhausted"), false);
+  assert.ok(!statuses.some(m => /No more new tracks/.test(m)));
+  reset(); statuses = []; n = 0; run(existing); global.spotifySearch = defaultSearch;
+  global.getSpotifyToken = async () => null;
+  await run("continueRadio()");
+  assert.equal(run("radioExhausted"), false);
+  global.getSpotifyToken = async () => "token";
+
+  // 11. a top-up that finishes while paused must not resume playback; it re-issues on resume
+  reset(); played = []; n = 0; global.spotifySearch = defaultSearch; run(existing); run("radioPaused = true;");
+  global.getLastFmScrobbleAt = async () => song(n++);
+  await run("continueRadio()");
+  assert.equal(played.length, 0);
+  assert.equal(run("radioPendingReissue"), true);
+  run("radioSetPaused(false)");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  assert.equal(played[0][0], "spotify:track:Existing");
+  assert.ok(played[0].length > 1);
+  assert.equal(run("radioPendingReissue"), false);
+  run("radioSetPaused(false)");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  reset(); played = []; n = 100; run(existing);
+  await run("continueRadio()");
+  assert.equal(played.length, 1);
+
+  // 12. leaving the radio invalidates the session before it pauses playback
+  const order = [];
+  global.handleReset = () => order.push("reset");
+  global.spPut = async () => { order.push("pause"); };
+  await run("leaveRadio()");
+  assert.deepEqual(order, ["reset", "pause"]);
+
+  // 13. disconnecting Spotify tears the session down
+  let resets = 0;
+  global.handleReset = () => { resets++; };
+  global.updateSpotifyUI = () => {};
+  global.localStorage = { removeItem() {}, getItem() { return null; }, setItem() {} };
+  run("spotifyToken = 'x'; radioActive = true;");
+  run("disconnectSpotify()");
+  assert.equal(resets, 1);
 
   console.log("radio engine: ok");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -47,7 +47,10 @@ async function pollNowPlaying() {
     }
     highlightNowPlaying(best);
   }
-  if (radioActive) radioRenderNow(data.item, !data.is_playing);
+  if (radioActive) {
+    radioRenderNow(data.item, !data.is_playing);
+    if (data.item.duration_ms) updateProgressBar(data.progress_ms || 0, data.item.duration_ms);
+  }
   radioMaybeRefill(playingUri, data.progress_ms);
 
   // Auto-continue: check if we're near the end of matched tracks and have skipped ones
@@ -348,14 +351,25 @@ function fmtMs(ms) {
   return m + ":" + String(s % 60).padStart(2, "0");
 }
 
+// Without the SDK (polling fallback) the controls talk to the Spotify REST API instead
+async function playerRest(action) {
+  const req = radioTransportRequest(action, radioPaused);
+  if (!req) return;
+  const token = await getSpotifyToken();
+  if (!token) return;
+  try { await fetch("https://api.spotify.com/v1" + req.path, { method: req.method, headers: { Authorization: "Bearer " + token } }); } catch (e) {}
+}
 async function playerPlayPause() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.togglePlay(); return; }
+  playerRest("toggle");
 }
 async function playerPrev() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.previousTrack(); return; }
+  playerRest("prev");
 }
 async function playerNext() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.nextTrack(); return; }
+  playerRest("next");
 }
 async function setVolume(val) {
   if (window._stmPlayer && sdkReady) window._stmPlayer.setVolume(val / 100);

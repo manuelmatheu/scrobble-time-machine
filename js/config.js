@@ -60,4 +60,5 @@ let radioSession = 0;           // bumped on every start/stop; stale fills compa
 let radioSeen = new Set();      // artist||track keys already picked this session
 let radioRefilling = false, radioExhausted = false, radioFailures = 0;
 let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the SDK is not driving state
+let radioPaused = false, radioPendingReissue = false;  // a top-up finished while paused: re-issue playback on resume
 let trackMeta = {};             // index -> { name, artist, album, page, year, art }
