@@ -36,7 +36,7 @@ js/
   player.js         -- pollNowPlaying(), smartMatch(), fetchAndPlay(), matchAndPlay(),
                        onSDKStateChange(), player controls, liked songs functions
   radio.js          -- Library Radio: pure helpers, engine (radioFill/startRadio/continueRadio),
-                       radio view rendering, home mosaic
+                       radio view rendering, artist bio + play counts
   modes.js          -- Mode dispatch + all mode handlers (random, date, artist, mood,
                        onthisday, decade, album, discovery, streak)
   app.js            -- DOMContentLoaded init, event listener wiring
@@ -202,7 +202,8 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 - **Engine (`radio.js`):** `radioFill(want)` fires `RADIO_CONCURRENCY` parallel single-scrobble requests per round, dedupes by `artist||track` (`radioSeen`) and by Spotify URI, matches with `spotifySearch()`, and appends to `matchedUris` / `allTrackCount` / `sessionQueue` / `trackMeta[index]`.
 - **Top-up:** `radioMaybeRefill()` runs on every track change (SDK state handler and polling fallback). When `RADIO_LOW_WATER` tracks remain it calls `continueRadio()`, which re-issues `spotifyPlay()` from the current track with the new tracks appended (same approach as `continueMatching`, avoids the persistent user queue).
 - **Stale work:** every start/stop bumps `radioSession`; in-flight fills compare against it and bail. `beginSession()` and `handleReset()` call `radioStop()`.
-- **Views:** `#homeView` (mosaic, Start radio, `#timeTravel` section) and `#radioView` (hero, controls, Up next). `showRadioView()` moves the shared `#savePlaylistBtn` into `#saveSlotRadio`; `hideRadioView()` moves it back to `#saveSlotTrackList`. `body.radio-mode` hides the bottom player bar.
+- **Views:** `#homeView` (headline, Start radio, `#timeTravel` section) and `#radioView` (hero, controls, Up next). `showRadioView()` moves the shared `#savePlaylistBtn` into `#saveSlotRadio`; `hideRadioView()` moves it back to `#saveSlotTrackList`. `body.radio-mode` hides the bottom player bar.
+- **Artist info:** on every track change `radioSyncInfo()` calls `radioInfoFor(idx)`, which fetches `artist.getinfo` (bio summary + `stats.userplaycount`) and `track.getinfo` (`userplaycount`) with `username`, using the scrobble's own names (`trackMeta[idx].lfmArtist` / `lfmTrack`). Results are cached per artist and per track as promises (`radioArtistCache` / `radioTrackCache`); a failed lookup is not cached and never throws. `radioParseBio()` strips the HTML and the trailing "Read more on Last.fm" link (http(s) only); the panel (`#radioInfo`) hides itself when there is nothing to show.
 - **Back:** `leaveRadio()` pauses Spotify and calls `handleReset()`.
 - **Icons:** Phosphor web font from jsDelivr (regular and fill stylesheets in `index.html`).
 

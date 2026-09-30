@@ -23,8 +23,42 @@ function radioScrobbleFromTracks(list, page) {
   return { artist, track: t.name, album: (t.album && t.album["#text"]) || "", page, year: uts ? new Date(uts * 1000).getFullYear() : null };
 }
 
-function radioFormatPage(page, total, year) {
-  return "Page " + page.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + (year ? ", " + year : "");
+// Last.fm bio summary (HTML) -> plain text plus the trailing "Read more on Last.fm" url
+function radioParseBio(html) {
+  if (!html) return { text: "", url: "" };
+  let url = "";
+  let s = String(html).replace(/<a\s[^>]*href="([^"]*)"[^>]*>\s*Read more on Last\.fm\s*<\/a>/i, (m, href) => { url = /^https?:\/\//i.test(href) ? href : ""; return " "; });
+  s = s.replace(/<br\s*\/?>|<\/p>/gi, " ").replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ").trim();
+  if (s.length > 600) { const cut = s.slice(0, 600); s = cut.slice(0, cut.lastIndexOf(" ")) + "..."; }
+  return { text: s, url };
+}
+
+function radioPlaysText(n) {
+  return n.toLocaleString("en-US") + (n === 1 ? " time" : " times");
+}
+
+// "You've listened to <artist> N times and <track> M times." (empty when the artist count is unknown)
+function radioStatsHtml(artist, artistPlays, track, trackPlays, esc) {
+  esc = esc || (s => s);
+  if (artistPlays === null || artistPlays === undefined) return "";
+  let s = "You've listened to <strong>" + esc(artist) + "</strong> " + radioPlaysText(artistPlays);
+  if (trackPlays !== null && trackPlays !== undefined) s += " and <strong>" + esc(track) + "</strong> " + radioPlaysText(trackPlays);
+  return s + ".";
+}
+
+// Last.fm getInfo responses carry userplaycount as a string
+function radioArtistFromInfo(d) {
+  const a = d && d.artist;
+  const raw = a && a.stats ? a.stats.userplaycount : undefined;
+  const plays = raw === undefined ? NaN : parseInt(raw, 10);
+  return { bioHtml: (a && a.bio && a.bio.summary) || "", plays: isNaN(plays) ? null : plays };
+}
+function radioTrackPlaysFromInfo(d) {
+  const t = d && d.track;
+  const n = t && t.userplaycount !== undefined ? parseInt(t.userplaycount, 10) : NaN;
+  return isNaN(n) ? null : n;
 }
 
 // How many matched tracks come after currentUri (Infinity when it is not ours)
@@ -121,7 +155,8 @@ async function radioFill(want) {
         trackMeta[idx] = {
           name: hit.name || p.track,
           artist: (hit.artists && hit.artists.length ? hit.artists.map(a => a.name).join(", ") : p.artist),
-          album: p.album, page: p.page, year: p.year, art: radioCoverUrl(hit)
+          album: p.album, page: p.page, year: p.year, art: radioCoverUrl(hit),
+          lfmArtist: p.artist, lfmTrack: p.track  // the scrobble's own names, for Last.fm getInfo lookups
         };
         added++;
       }
@@ -231,10 +266,8 @@ function radioStop() {
 }
 
 // =============================================================================
-// HOME: library meta line and cover mosaic
+// HOME: library meta line
 // =============================================================================
-let mosaicUser = "";
-
 async function refreshHomeMeta() {
   const user = $("usernameInput").value.trim();
   const el = $("homeMeta");
@@ -248,83 +281,9 @@ async function refreshHomeMeta() {
   }
 }
 
-function renderMosaic(urls) {
-  document.querySelectorAll("#mosaic .mosaic-tile").forEach((tile, i) => {
-    const old = tile.querySelector("img");
-    if (old) old.remove();
-    if (!urls[i]) return;
-    const img = new Image();
-    img.className = "mosaic-img"; img.alt = "";
-    img.onload = () => { tile.appendChild(img); requestAnimationFrame(() => img.classList.add("loaded")); };
-    img.src = urls[i];
-  });
-}
-
-// Fill the mosaic with Spotify covers of random scrobbles. Purely decorative: any failure
-// leaves the placeholder tiles, and it yields to a radio or time-travel session.
-async function loadMosaic() {
-  const user = $("usernameInput").value.trim();
-  if (!user || !spotifyToken || mosaicUser === user) return;
-  mosaicUser = user;
-  const cacheKey = "stm_mosaic:" + user.toLowerCase();
-  try {
-    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
-    if (cached && cached.length) { renderMosaic(cached); return; }
-  } catch (e) {}
-  try {
-    const { totalScrobbles } = await getLastFmTotalPages(user);
-    if (!totalScrobbles) { mosaicUser = ""; return; }
-    const token = await getSpotifyToken();
-    if (!token) { mosaicUser = ""; return; }
-    const urls = [], seen = new Set();
-    let tries = 0;
-    while (urls.length < 8 && tries < 16) {
-      const batch = await Promise.allSettled(Array.from({ length: 4 }, () => {
-        const p = radioPickPage(totalScrobbles);
-        return getLastFmScrobbleAt(user, p).then(list => radioScrobbleFromTracks(list, p));
-      }));
-      tries += 4;
-      for (const s of batch) {
-        if (urls.length >= 8) break;
-        if (s.status !== "fulfilled" || !s.value) continue;
-        const key = radioTrackKey(s.value.artist, s.value.track);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (radioActive || currentPhase === "working" || $("usernameInput").value.trim() !== user) { mosaicUser = ""; return; }
-        const hit = await spotifySearch(token, s.value.artist, s.value.track);
-        const url = hit ? radioCoverUrl(hit, "medium") : "";
-        if (url && !urls.includes(url)) urls.push(url);
-        await radioSleep(SEARCH_DELAY);
-      }
-    }
-    if (urls.length) {
-      renderMosaic(urls);
-      try { sessionStorage.setItem(cacheKey, JSON.stringify(urls)); } catch (e) {}
-    } else { mosaicUser = ""; }
-  } catch (e) { mosaicUser = ""; }
-}
-
 // =============================================================================
 // RADIO VIEW
 // =============================================================================
-let radioTuneTimer = null;
-
-function radioReducedMotion() {
-  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-}
-
-function startTuningRoll() {
-  stopTuningRoll();
-  if (radioReducedMotion()) return;
-  radioTuneTimer = setInterval(() => {
-    const el = $("radioTuningPage");
-    if (el && radioTotal) el.textContent = "p." + radioPickPage(radioTotal).toLocaleString("en-US");
-  }, 70);
-}
-function stopTuningRoll() {
-  if (radioTuneTimer) { clearInterval(radioTuneTimer); radioTuneTimer = null; }
-}
-
 function showRadioView() {
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
@@ -334,16 +293,66 @@ function showRadioView() {
 }
 
 function hideRadioView() {
-  stopTuningRoll();
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   document.body.classList.remove("radio-mode");
   $("saveSlotTrackList").appendChild($("savePlaylistBtn"));
   $("radioTrack").textContent = "Tuning...";
-  $("radioArtist").textContent = ""; $("radioPage").textContent = "";
+  $("radioArtist").textContent = "";
   $("radioArt").removeAttribute("src");
   $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
   $("radioUpNext").innerHTML = "";
+  radioInfoIdx = -1; radioHideInfo();
+}
+
+// Bio + your play counts for trackMeta[idx]. Cached per artist and per track (as promises, so
+// concurrent calls share one request); a failed lookup is never cached and never throws.
+async function radioInfoFor(idx) {
+  const m = trackMeta[idx];
+  if (!m) return null;
+  const user = radioUser;
+  const aKey = m.lfmArtist.toLowerCase(), tKey = radioTrackKey(m.lfmArtist, m.lfmTrack);
+  if (!(aKey in radioArtistCache)) radioArtistCache[aKey] = getLastFmArtistInfo(user, m.lfmArtist).then(radioArtistFromInfo, () => null);
+  if (!(tKey in radioTrackCache)) radioTrackCache[tKey] = getLastFmTrackInfo(user, m.lfmArtist, m.lfmTrack).then(radioTrackPlaysFromInfo, () => null);
+  const [artist, trackPlays] = await Promise.all([radioArtistCache[aKey], radioTrackCache[tKey]]);
+  if (!artist) delete radioArtistCache[aKey];
+  if (trackPlays === null) delete radioTrackCache[tKey];
+  const bio = artist ? radioParseBio(artist.bioHtml) : { text: "", url: "" };
+  return { artist: m.lfmArtist, track: m.lfmTrack, bioText: bio.text, bioUrl: bio.url, plays: artist ? artist.plays : null, trackPlays };
+}
+
+function radioHideInfo() {
+  const box = $("radioInfo");
+  if (box) box.style.display = "none";
+}
+
+function radioRenderInfo(info) {
+  const stats = radioStatsHtml(info.artist, info.plays, info.track, info.trackPlays, escHtml);
+  $("radioStats").innerHTML = stats;
+  $("radioStats").style.display = stats ? "" : "none";
+  const hasBio = !!info.bioText;
+  $("radioBio").style.display = hasBio ? "" : "none";
+  if (hasBio) {
+    $("radioBioName").textContent = info.artist;
+    $("radioBioText").textContent = info.bioText;
+    const link = $("radioBioLink");
+    link.style.display = info.bioUrl ? "" : "none";
+    if (info.bioUrl) link.href = info.bioUrl;
+  }
+  $("radioInfo").style.display = (stats || hasBio) ? "" : "none";
+}
+
+// Load the panel when the playing track changes (radioRenderNow runs on every player event)
+function radioSyncInfo() {
+  if (nowPlayingIndex === radioInfoIdx) return;
+  radioInfoIdx = nowPlayingIndex;
+  const idx = radioInfoIdx, sid = radioSession;
+  radioHideInfo();
+  if (idx < 0 || !trackMeta[idx]) return;
+  radioInfoFor(idx).then(info => {
+    if (!info || sid !== radioSession || idx !== radioInfoIdx) return;
+    radioRenderInfo(info);
+  });
 }
 
 // Hero: the playing track (SDK track object or Spotify currently-playing item)
@@ -356,8 +365,8 @@ function radioRenderNow(track, paused) {
   const artists = (track.artists || []).map(a => a.name).join(", ");
   const album = track.album && track.album.name;
   $("radioArtist").textContent = artists + (album ? " · " + album : "");
-  $("radioPage").textContent = meta ? radioFormatPage(meta.page, radioTotal, meta.year) : "";
   $("radioPlay").innerHTML = '<i class="ph-fill ph-' + (paused ? "play" : "pause") + '"></i>';
+  radioSyncInfo();
   radioRenderQueue();
 }
 
@@ -369,14 +378,11 @@ function radioRenderQueue() {
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
     const m = trackMeta[i];
     if (!m) continue;
-    html += '<div class="radio-row"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div><span class="radio-row-page">p.' + m.page.toLocaleString("en-US") + '</span></div>';
+    html += '<div class="radio-row"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div></div>';
     shown++;
   }
   if (radioRefilling) {
-    html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div><span class="radio-row-page" id="radioTuningPage">p.???</span></div>';
-    if (!radioTuneTimer) startTuningRoll();
-  } else {
-    stopTuningRoll();
+    html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
   }
   box.innerHTML = html;
 }
@@ -389,5 +395,5 @@ async function leaveRadio() {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioFormatPage, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
 }

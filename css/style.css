@@ -246,8 +246,6 @@
     }
 
 /* Home view */
-:root { --tile-l:22%; }
-[data-theme="light"] { --tile-l:82%; }
 .app-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:24px 0 20px; }
 .app-brand { display:flex; align-items:center; gap:10px; min-width:0; }
 .app-brand-icon { font-size:26px; color:var(--lastfm-red-text); flex-shrink:0; }
@@ -256,10 +254,6 @@
 .app-header .theme-toggle { position:static; }
 .spotify-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; }
 .status-dot { width:8px; height:8px; border-radius:50%; background:var(--spotify-green); display:inline-block; }
-.mosaic { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:24px; }
-.mosaic-tile { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:hsl(var(--h) 22% var(--tile-l)); }
-.mosaic-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity 0.4s ease; }
-.mosaic-img.loaded { opacity:1; }
 .home-headline { font-size:clamp(24px,5vw,32px); font-weight:800; letter-spacing:-0.6px; line-height:1.15; margin-bottom:8px; }
 .home-meta { color:var(--text-secondary); font-size:14px; margin-bottom:20px; }
 .btn-radio { flex:1 1 100%; padding:14px 20px; font-size:15px; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
@@ -267,7 +261,7 @@
 .time-travel { margin-top:32px; border-top:1px solid var(--border-subtle); padding-top:24px; }
 .go-row { display:flex; justify-content:flex-start; margin-bottom:20px; }
 .mode-pill i, .mood-btn i { margin-right:2px; vertical-align:-1px; }
-@media (max-width:520px) { .app-brand h1 { font-size:16px; } .mosaic { gap:4px; } }
+@media (max-width:520px) { .app-brand h1 { font-size:16px; } }
 
 /* Library radio view */
 .radio-view { width:100%; padding-bottom:48px; }
@@ -278,7 +272,6 @@
 .radio-hero { display:flex; gap:16px; align-items:center; margin-bottom:16px; }
 .radio-art { width:110px; height:110px; border-radius:8px; object-fit:cover; background:var(--bg-tertiary); flex-shrink:0; }
 .radio-hero-text { min-width:0; }
-.radio-page { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lastfm-red-text); min-height:16px; }
 .radio-track { font-size:22px; font-weight:800; line-height:1.15; margin-top:6px; overflow-wrap:anywhere; }
 .radio-artist { font-size:14px; color:var(--text-secondary); margin-top:4px; }
 .radio-progress { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
@@ -299,7 +292,6 @@
 .radio-row-text { min-width:0; }
 .radio-row-title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-artist { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.radio-row-page { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lastfm-red-text); flex-shrink:0; }
 .radio-row-tuning .radio-row-title { color:var(--text-secondary); font-weight:500; }
 body.radio-mode #player-bar { display:none !important; }
 body.radio-mode.has-player { padding-bottom:0; }
@@ -309,3 +301,12 @@ body.radio-mode.has-player { padding-bottom:0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 }
+
+/* Radio: your play counts and artist bio */
+.radio-info { margin-bottom:28px; }
+.radio-stats { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:8px; padding:14px 16px; font-size:14px; line-height:1.5; color:var(--text-secondary); margin-bottom:16px; }
+.radio-stats strong { color:var(--text-primary); font-weight:700; }
+.radio-bio-name { font-size:18px; font-weight:800; letter-spacing:-0.3px; margin-bottom:8px; }
+.radio-bio-text { font-size:14px; line-height:1.6; color:var(--text-secondary); display:-webkit-box; -webkit-line-clamp:4; line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:8px; }
+.radio-bio-link { font-size:13px; color:var(--lastfm-red-text); text-decoration:none; }
+.radio-bio-link:hover { text-decoration:underline; }

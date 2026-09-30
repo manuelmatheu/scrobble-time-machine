@@ -5,7 +5,7 @@ A living document tracking planned features, improvements, and ideas for future 
 ## v2.4 (current) ✅
 
 - [x] Library Radio: endless stream of random scrobbles from the whole Last.fm history
-- [x] Radio-first redesign: cover mosaic home, radio view with Up next, time travel as secondary
+- [x] Radio-first redesign: home with one Start radio button, radio view with Up next, artist bio and your play counts, time travel as secondary
 - [x] Contrast, shape, and reduced-motion pass; Phosphor icons
 
 ---

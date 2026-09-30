@@ -23,7 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sessionStorage.setItem("lastfm_username", user);
     }
     refreshYearsForUser();
-    refreshHomeMeta(); loadMosaic();
+    refreshHomeMeta();
   });
   $("usernameInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("radioBtn").disabled) startRadio(); });
 

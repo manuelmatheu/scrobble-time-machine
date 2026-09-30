@@ -149,7 +149,6 @@ function updateSpotifyUI(c) {
   $("radioBtn").style.display = c ? "" : "none";
   $("timeTravel").style.display = c ? "" : "none";
   updateGoButton();
-  if (c) loadMosaic();
 }
 function updateGoButton() {
   const user = $("usernameInput").value.trim();

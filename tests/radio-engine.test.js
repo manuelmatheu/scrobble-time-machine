@@ -12,7 +12,7 @@ load("radio.js");
 load("spotify.js");
 
 function reset() {
-  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null;");
+  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
 }
 const song = n => [{ name: "Song " + n, artist: { "#text": "Artist" }, date: { uts: "1500000000" } }];
 const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
@@ -150,6 +150,37 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   run("spotifyToken = 'x'; radioActive = true;");
   run("disconnectSpotify()");
   assert.equal(resets, 1);
+
+  // 14. radioInfoFor composes bio + your play counts from Last.fm getInfo, using the scrobble's own names
+  reset();
+  run("trackMeta = { 0: { lfmArtist: 'Arcade Fire', lfmTrack: 'Ready To Start' }, 1: { lfmArtist: 'Arcade Fire', lfmTrack: 'Wake Up' }, 2: { lfmArtist: 'Broken', lfmTrack: 'Song' } };");
+  let artistCalls = 0, trackCalls = 0, failArtist = false;
+  global.getLastFmArtistInfo = async (user, artist) => {
+    artistCalls++;
+    if (failArtist) throw new Error("down");
+    return { artist: { bio: { summary: 'Indie band. <a href="https://l.fm/x">Read more on Last.fm</a>' }, stats: { userplaycount: "62" } } };
+  };
+  global.getLastFmTrackInfo = async (user, artist, track) => { trackCalls++; return { track: { userplaycount: track === "Ready To Start" ? "1" : "9" } }; };
+  assert.deepEqual(await run("radioInfoFor(0)"), { artist: "Arcade Fire", track: "Ready To Start", bioText: "Indie band.", bioUrl: "https://l.fm/x", plays: 62, trackPlays: 1 });
+  assert.equal(artistCalls, 1); assert.equal(trackCalls, 1);
+
+  // 15. results are cached per artist and per track
+  await run("radioInfoFor(0)");
+  assert.equal(artistCalls, 1); assert.equal(trackCalls, 1);
+  const second = await run("radioInfoFor(1)");
+  assert.equal(second.trackPlays, 9);
+  assert.equal(artistCalls, 1); assert.equal(trackCalls, 2);
+
+  // 16. a failing Last.fm call never throws, leaves those fields empty, and is retried next time
+  failArtist = true;
+  const failed = await run("radioInfoFor(2)");
+  assert.equal(failed.bioText, ""); assert.equal(failed.plays, null); assert.equal(failed.trackPlays, 9);
+  const callsAfterFail = artistCalls;
+  await run("radioInfoFor(2)");
+  assert.equal(artistCalls, callsAfterFail + 1);
+
+  // 17. an index with no metadata yields nothing
+  assert.equal(await run("radioInfoFor(99)"), null);
 
   console.log("radio engine: ok");
 })().catch(e => { console.error(e); process.exit(1); });

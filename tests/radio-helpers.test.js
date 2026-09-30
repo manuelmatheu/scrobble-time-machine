@@ -28,10 +28,6 @@ assert.deepEqual(r.radioScrobbleFromTracks([{ name: "N", artist: { name: "A" } }
 assert.equal(r.radioScrobbleFromTracks([{ name: "N", artist: {} }], 1), null);
 assert.equal(r.radioScrobbleFromTracks([{ artist: { "#text": "A" } }], 1), null);
 
-// radioFormatPage
-assert.equal(r.radioFormatPage(5019, 48213, 2017), "Page 5,019 of 48,213, 2017");
-assert.equal(r.radioFormatPage(5019, 48213, null), "Page 5,019 of 48,213");
-
 // radioRemaining / radioUrisFrom (matched is sparse and index-keyed)
 const matched = { 0: "a", 1: "b", 3: "c" };
 assert.equal(r.radioRemaining(matched, 4, "a"), 2);
@@ -65,5 +61,39 @@ assert.deepEqual(r.radioTransportRequest("toggle", true), { method: "PUT", path:
 assert.deepEqual(r.radioTransportRequest("next", false), { method: "POST", path: "/me/player/next" });
 assert.deepEqual(r.radioTransportRequest("prev", true), { method: "POST", path: "/me/player/previous" });
 assert.equal(r.radioTransportRequest("bogus", false), null);
+
+// radioParseBio: Last.fm bio summary (HTML) -> plain text + "Read more" url
+const readMore = '<a href="https://www.last.fm/music/Arcade+Fire">Read more on Last.fm</a>';
+assert.deepEqual(r.radioParseBio("Arcade Fire is an indie rock band &amp; more. " + readMore), { text: "Arcade Fire is an indie rock band & more.", url: "https://www.last.fm/music/Arcade+Fire" });
+assert.deepEqual(r.radioParseBio(""), { text: "", url: "" });
+assert.deepEqual(r.radioParseBio(undefined), { text: "", url: "" });
+assert.deepEqual(r.radioParseBio(readMore), { text: "", url: "https://www.last.fm/music/Arcade+Fire" });
+// only http(s) urls are accepted for the Read more link
+assert.deepEqual(r.radioParseBio('Text <a href="javascript:alert(1)">Read more on Last.fm</a>'), { text: "Text", url: "" });
+// inline links keep their words; other tags are stripped; entities decoded; whitespace collapsed
+assert.equal(r.radioParseBio('Founded by <a href="https://x">Win Butler</a> in 2001.').text, "Founded by Win Butler in 2001.");
+assert.equal(r.radioParseBio("Hello <b>world</b>&nbsp;it&#39;s  &quot;ok&quot;\n\nfine<br>next").text, "Hello world it's \"ok\" fine next");
+// long bios are cut at a word boundary with an ellipsis
+const longText = r.radioParseBio(("word ".repeat(200)).trim()).text;
+assert.ok(longText.length <= 603 && longText.endsWith("..."));
+
+// radioPlaysText / radioStatsHtml
+assert.equal(r.radioPlaysText(1), "1 time");
+assert.equal(r.radioPlaysText(62), "62 times");
+assert.equal(r.radioPlaysText(0), "0 times");
+assert.equal(r.radioPlaysText(1234), "1,234 times");
+assert.equal(r.radioStatsHtml("Arcade Fire", 62, "Ready To Start", 1), "You've listened to <strong>Arcade Fire</strong> 62 times and <strong>Ready To Start</strong> 1 time.");
+assert.equal(r.radioStatsHtml("Arcade Fire", 62, "Ready To Start", null), "You've listened to <strong>Arcade Fire</strong> 62 times.");
+assert.equal(r.radioStatsHtml("Arcade Fire", null, "Ready To Start", 1), "");
+assert.equal(r.radioStatsHtml("A<b>", 2, "T", 1, s => s.replace(/</g, "&lt;")), "You've listened to <strong>A&lt;b></strong> 2 times and <strong>T</strong> 1 time.");
+
+// radioArtistFromInfo / radioTrackPlaysFromInfo: Last.fm getInfo responses (userplaycount is a string)
+assert.deepEqual(r.radioArtistFromInfo({ artist: { bio: { summary: "S" }, stats: { userplaycount: "62" } } }), { bioHtml: "S", plays: 62 });
+assert.deepEqual(r.radioArtistFromInfo({ artist: { stats: { userplaycount: "0" } } }), { bioHtml: "", plays: 0 });
+assert.deepEqual(r.radioArtistFromInfo({ artist: {} }), { bioHtml: "", plays: null });
+assert.deepEqual(r.radioArtistFromInfo(null), { bioHtml: "", plays: null });
+assert.equal(r.radioTrackPlaysFromInfo({ track: { userplaycount: "1" } }), 1);
+assert.equal(r.radioTrackPlaysFromInfo({ track: {} }), null);
+assert.equal(r.radioTrackPlaysFromInfo(undefined), null);
 
 console.log("radio helpers: ok");

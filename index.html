@@ -80,12 +80,6 @@
   <div class="status-bar" id="statusBar" style="display:none"></div>
 
   <div id="homeView">
-    <div class="mosaic" id="mosaic" aria-hidden="true">
-      <div class="mosaic-tile" style="--h:5"></div><div class="mosaic-tile" style="--h:215"></div>
-      <div class="mosaic-tile" style="--h:95"></div><div class="mosaic-tile" style="--h:35"></div>
-      <div class="mosaic-tile" style="--h:275"></div><div class="mosaic-tile" style="--h:165"></div>
-      <div class="mosaic-tile" style="--h:330"></div><div class="mosaic-tile" style="--h:235"></div>
-    </div>
     <h2 class="home-headline">Your library, shuffled across every year.</h2>
     <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
     <div class="controls">
@@ -157,7 +151,6 @@
     <div class="radio-hero">
       <img id="radioArt" class="radio-art" alt="">
       <div class="radio-hero-text">
-        <div class="radio-page" id="radioPage"></div>
         <div class="radio-track" id="radioTrack">Tuning...</div>
         <div class="radio-artist" id="radioArtist"></div>
       </div>
@@ -173,6 +166,14 @@
       <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
       <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
       <span id="saveSlotRadio"></span>
+    </div>
+    <div class="radio-info" id="radioInfo" style="display:none">
+      <p class="radio-stats" id="radioStats"></p>
+      <div class="radio-bio" id="radioBio" style="display:none">
+        <h3 class="radio-bio-name" id="radioBioName"></h3>
+        <p class="radio-bio-text" id="radioBioText"></p>
+        <a class="radio-bio-link" id="radioBioLink" href="#" target="_blank" rel="noopener noreferrer">Read more on Last.fm</a>
+      </div>
     </div>
     <h3 class="radio-upnext-title">Up next</h3>
     <div class="radio-upnext" id="radioUpNext"></div>
