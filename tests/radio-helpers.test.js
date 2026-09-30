@@ -106,4 +106,14 @@ assert.equal(r.radioEraLabel(spread), monthLabel(1321640000));
 assert.equal(r.radioEraLabel([{ name: "no date" }]), "Random");
 assert.equal(r.radioEraLabel([]), "Random");
 
+// radioRateLimitText: how long until Spotify lets searches through again
+assert.equal(r.radioRateLimitText(0), "a moment");
+assert.equal(r.radioRateLimitText(1000), "1 second");
+assert.equal(r.radioRateLimitText(30000), "30 seconds");
+assert.equal(r.radioRateLimitText(60000), "60 seconds");
+assert.equal(r.radioRateLimitText(120000), "2 minutes");
+assert.equal(r.radioRateLimitText(61 * 60000), "61 minutes");
+assert.equal(r.radioRateLimitText(2 * 3600000), "2 hours");
+assert.equal(r.radioRateLimitText(5400000), "2 hours");
+
 console.log("radio helpers: ok");

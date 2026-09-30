@@ -12,6 +12,7 @@ load("radio.js");
 load("spotify.js");
 load("ui.js");
 load("player.js");
+const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
 
 function reset() {
   run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
@@ -300,6 +301,76 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(ttSearches, 10);
   assert.equal(run("skippedPlan.length"), 2);
   global.setTimeout = realSetTimeout;
+
+  // 27. a long Retry-After trips a cooldown: no sleeping, no retries, and later searches make no requests
+  let fetchCalls = 0;
+  global.fetch = async () => { fetchCalls++; return { status: 429, ok: false, headers: { get: () => "30" } }; };
+  run("spotifyBlockedUntil = 0; lastSearchError = null;");
+  assert.deepEqual(await run("runSpotifySearch('token', 'q')"), { rateLimited: true });
+  assert.equal(fetchCalls, 1);
+  assert.ok(run("spotifyBlockedFor()") > 25000);
+  assert.equal(run("lastSearchError"), "Rate limited (429)");
+  run("searchCache = {};");
+  assert.equal(await realSpotifySearch("token", "Some Artist", "Some Track"), null);
+  assert.equal(fetchCalls, 1, "a blocked search must not call Spotify");
+  // a short Retry-After is waited out once and retried
+  run("spotifyBlockedUntil = 0; searchCache = {};");
+  let shortCalls = 0;
+  global.fetch = async () => { shortCalls++; return shortCalls === 1 ? { status: 429, ok: false, headers: { get: () => "1" } } : { status: 200, ok: true, json: async () => ({ tracks: { items: [{ uri: "spotify:track:ok" }] } }) }; };
+  const realTimeout = global.setTimeout;
+  global.setTimeout = fn => realTimeout(fn, 0);
+  assert.deepEqual(await run("runSpotifySearch('token', 'q')"), { item: { uri: "spotify:track:ok" } });
+  global.setTimeout = realTimeout;
+  assert.equal(run("spotifyBlockedFor()"), 0);
+
+  // 28. time travel: a rate limit stops the batch, keeps the rest pending, and never marks tracks as not found
+  run("spotifyBlockedUntil = 0; searchCache = {}; skippedPlan = []; isContinuing = false; abortController = { signal: { aborted: false } };");
+  let blockSearches = 0;
+  const tstat = {};
+  global.setTrackStatus = (i, s) => { tstat[i] = s; };
+  global.spotifySearch = async (token, artist, track) => {
+    blockSearches++;
+    if (blockSearches === 2) { run("spotifyBlockedUntil = Date.now() + 60000; lastSearchError = 'Rate limited (429)'"); return null; }
+    return { uri: uriFor(track), name: track, album: { images: [] } };
+  };
+  global.setTimeout = fn => realTimeout(fn, 0);
+  await run("smartMatch(" + JSON.stringify(ttTracks) + ", 'token')");
+  assert.equal(blockSearches, 2);
+  assert.equal(run("totalMatched"), 1);
+  assert.equal(run("skippedPlan.length"), 11);
+  assert.equal(tstat[1], "skipped");
+  // continuing while blocked makes no searches and says why
+  blockSearches = 0;
+  const limitMessages = [];
+  global.showStatus = m => limitMessages.push(m);
+  await run("continueMatching()");
+  assert.equal(blockSearches, 0);
+  assert.ok(limitMessages.some(m => /Spotify is limiting searches/.test(m)));
+  // once the cooldown ends it resumes with the next batch
+  run("spotifyBlockedUntil = 0;");
+  global.spotifySearch = async (token, artist, track) => { blockSearches++; return { uri: uriFor(track), name: track, album: { images: [] } }; };
+  await run("continueMatching()");
+  assert.equal(blockSearches, 5);
+  global.setTimeout = realTimeout;
+
+  // 29. radio: a rate limit stops the fill, and a cooldown never marks the library exhausted
+  reset();
+  run("spotifyBlockedUntil = 0; lastSearchError = null;");
+  let radioSearches = 0, radioN = 0;
+  global.getLastFmScrobbleAt = async () => song(radioN++);
+  global.spotifySearch = async (token, artist, track) => {
+    radioSearches++;
+    if (radioSearches === 2) { run("spotifyBlockedUntil = Date.now() + 60000; lastSearchError = 'Rate limited (429)'"); return null; }
+    return { uri: uriFor(track), name: track, album: { images: [] } };
+  };
+  assert.equal(await run("radioFill(5)"), 1);
+  assert.equal(radioSearches, 2);
+  radioSearches = 0;
+  run("radioExhausted = false; radioRefilling = false; matchedUris = { 0: 'spotify:track:Song_0' }; allTrackCount = 1; radioCurrentUri = 'spotify:track:Song_0';");
+  await run("continueRadio()");
+  assert.equal(radioSearches, 0);
+  assert.equal(run("radioExhausted"), false);
+  run("spotifyBlockedUntil = 0;");
 
   global.document.getElementById = realGetElementById;
 

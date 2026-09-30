@@ -236,6 +236,8 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 
 10. **Disconnect button** -- `spotifyBadge` (in `index.html`) contains a `✕` button wired via inline `onclick="disconnectSpotify()"`, which clears the `localStorage` tokens and disconnects the SDK player, then calls `updateSpotifyUI(false)`. It does **not** auto re-trigger auth -- the user clicks "Connect Spotify" (`onclick="initiateSpotifyAuth()"`) again, which always passes `show_dialog: true` so Spotify shows the account picker instead of silently re-using the last session. Both buttons are wired via inline `onclick` in `index.html`, not `addEventListener` in `app.js`.
 
+11. **Spotify 429 cooldown** -- `runSpotifySearch()` waits out a `Retry-After` of 5 seconds or less (up to 2 retries); a longer one sets `spotifyBlockedUntil` instead of sleeping. While `spotifyBlockedFor() > 0`, `spotifySearch()` returns `null` without calling Spotify, `smartMatch`, `continueMatching` and `radioFill` stop their batch, and the unsearched tracks go back to `skippedPlan` with status "skipped" (never "not_found"). The status bar shows `spotifyLimitMessage()` ("Spotify is limiting searches. Try again in about N ..."), and `continueRadio()` does not treat a cooldown as an exhausted library. Matching starts with `BATCH_SIZE` (5) searches and loads more as you listen, to stay well under the limit.
+
 ---
 
 ## Current Version: v2.4

@@ -71,13 +71,16 @@ async function pollNowPlaying() {
 
 async function continueMatching() {
   if (isContinuing || skippedPlan.length === 0) return;
+  if (spotifyBlockedFor() > 0) { showStatus(spotifyLimitMessage(), "error"); return; }
   isContinuing = true;
   const token = await getSpotifyToken();
   if (!token) { isContinuing = false; return; }
 
   // Take the next batch from skippedPlan
   const batch = skippedPlan.splice(0, BATCH_SIZE);
-  let batchMatched = 0;
+  let batchMatched = 0, limited = false;
+  // Spotify is rate limiting us: put the unsearched tracks back for later instead of calling them missing
+  const requeue = from => { const rest = batch.slice(from); rest.forEach(q => setTrackStatus(q.i, "skipped")); skippedPlan.unshift(...rest); limited = true; };
 
   showStatus("Loading more tracks… (" + totalMatched + " matched so far)", "");
 
@@ -89,9 +92,11 @@ async function continueMatching() {
       else { setTrackStatus(p.i, "not_found"); }
       updateMatchCount(); continue;
     }
+    if (spotifyBlockedFor() > 0) { requeue(bi); break; }
     setTrackStatus(p.i, "searching");
     const result = await spotifySearch(token, p.artist, p.track);
     if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; batchMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, result); }
+    else if (spotifyBlockedFor() > 0) { requeue(bi); break; }
     else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
     if (bi < batch.length - 1) await new Promise(r => setTimeout(r, SEARCH_DELAY));
@@ -115,10 +120,12 @@ async function continueMatching() {
         remainingUris.forEach(u => sessionQueue.add(u));
       }
     }
-    showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched" + (skippedPlan.length > 0 ? " · more pending" : ""), "success");
+    if (limited) showStatus(spotifyLimitMessage(), "error");
+    else showStatus("▶ Playing · " + totalMatched + " of " + allTrackCount + " matched" + (skippedPlan.length > 0 ? " · more pending" : ""), "success");
     checkLikedTracks();
   } else {
-    showStatus("▶ Playing · " + totalMatched + " matched · couldn't find more", "success");
+    if (limited) showStatus(spotifyLimitMessage(), "error");
+    else showStatus("▶ Playing · " + totalMatched + " matched · couldn't find more", "success");
   }
   isContinuing = false;
 }
@@ -171,7 +178,7 @@ async function smartMatch(tracks, token) {
     }
 
     // Over budget → skip for later
-    if (searchesDone >= budget) { setTrackStatus(p.i, "skipped"); skippedPlan.push(p); continue; }
+    if (searchesDone >= budget || spotifyBlockedFor() > 0) { setTrackStatus(p.i, "skipped"); skippedPlan.push(p); continue; }
 
     // Search
     setTrackStatus(p.i, "searching");
@@ -179,9 +186,10 @@ async function smartMatch(tracks, token) {
     const result = await spotifySearch(token, p.artist, p.track);
     searchesDone++;
     if (result) { matchedUris[p.i] = result.uri; registerUri(result.uri, p.i); totalMatched++; setTrackStatus(p.i, "found"); updateTrackArt(p.i, result); }
+    else if (spotifyBlockedFor() > 0) { setTrackStatus(p.i, "skipped"); skippedPlan.push(p); }  // rate limited, not missing: try again later
     else { setTrackStatus(p.i, "not_found"); }
     updateMatchCount();
-    if (searchesDone < budget) await new Promise(r => setTimeout(r, SEARCH_DELAY));
+    if (searchesDone < budget && spotifyBlockedFor() === 0) await new Promise(r => setTimeout(r, SEARCH_DELAY));
   }
 
   // Resolve skipped tracks that may have been cached during this batch
@@ -240,7 +248,10 @@ async function matchAndPlay(tracks, page, tp, label) {
   $("trackList").innerHTML = tracks.map((t,i) => renderTrackRow(t,i)).join("");
   let token = await getSpotifyToken(); if (!token) throw new Error("Spotify expired. Reconnect.");
   const { matched } = await smartMatch(tracks, token);
-  if (!matched) { const d = lastSearchError ? " (" + lastSearchError + ")" : ""; throw new Error("No tracks matched" + d); }
+  if (!matched) {
+    if (spotifyBlockedFor() > 0) throw new Error(spotifyLimitMessage());
+    const d = lastSearchError ? " (" + lastSearchError + ")" : ""; throw new Error("No tracks matched" + d);
+  }
   const uris = []; for (let i = 0; i < tracks.length; i++) if (matchedUris[i]) uris.push(matchedUris[i]);
   sessionQueue = new Set(uris); sessionPaused = false;
   const eraLabel = label || radioEraLabel(tracks);
@@ -251,7 +262,7 @@ async function matchAndPlay(tracks, page, tp, label) {
   if (!ok) { const devs = await getSpotifyDevices(token); throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active."); }
   currentPhase = "done";
   const where = eraLabel === "Random" ? "" : eraLabel;
-  const pendingMsg = skippedPlan.length > 0 ? " · more will load as you listen" : "";
+  const pendingMsg = spotifyBlockedFor() > 0 ? " · " + spotifyLimitMessage() : (skippedPlan.length > 0 ? " · more will load as you listen" : "");
   showStatus("▶ Playing " + matched + " tracks" + (where ? " from " + where : "") + pendingMsg, "success");
   for (let i = 0; i < tracks.length; i++) { if (matchedUris[i]) { highlightNowPlaying(i); break; } }
   startPolling();

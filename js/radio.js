@@ -61,6 +61,17 @@ function radioTrackPlaysFromInfo(d) {
   return isNaN(n) ? null : n;
 }
 
+// How long until Spotify lets searches through again, as words ("30 seconds", "2 minutes", "2 hours")
+function radioRateLimitText(ms) {
+  if (ms <= 0) return "a moment";
+  const secs = Math.ceil(ms / 1000);
+  if (secs <= 90) return secs + (secs === 1 ? " second" : " seconds");
+  const mins = Math.ceil(secs / 60);
+  if (mins < 90) return mins + " minutes";
+  const hours = Math.ceil(mins / 60);
+  return hours + (hours === 1 ? " hour" : " hours");
+}
+
 // Label for a set of Last.fm tracks: the oldest date, to the day when all tracks share one
 function radioEraLabel(tracks) {
   const uts = (tracks || []).filter(t => t && t.date && t.date.uts).map(t => parseInt(t.date.uts, 10));
@@ -137,6 +148,7 @@ async function radioFill(want) {
   const sid = radioSession, user = radioUser;
   const token = await getSpotifyToken();
   if (!token || sid !== radioSession) return 0;
+  if (spotifyBlockedFor() > 0) { lastSearchError = "Rate limited (429)"; showStatus(spotifyLimitMessage(), "error"); return 0; }
   lastSearchError = null;
   let added = 0, attempts = 0;
   while (added < want && attempts < RADIO_MAX_ATTEMPTS) {
@@ -156,8 +168,10 @@ async function radioFill(want) {
       const key = radioTrackKey(p.artist, p.track);
       if (radioSeen.has(key)) continue;
       radioSeen.add(key);
+      if (spotifyBlockedFor() > 0) { showStatus(spotifyLimitMessage(), "error"); return added; }
       const hit = await spotifySearch(token, p.artist, p.track);
       if (sid !== radioSession) return added;
+      if (!hit && spotifyBlockedFor() > 0) { showStatus(spotifyLimitMessage(), "error"); return added; }
       if (hit && !uriToIndices[hit.uri]) {
         const idx = allTrackCount++;
         matchedUris[idx] = hit.uri; registerUri(hit.uri, idx); sessionQueue.add(hit.uri); totalMatched++;
@@ -194,7 +208,7 @@ async function startRadio() {
     showStatus("Tuning your library...");
     const added = await radioFill(RADIO_INITIAL);
     if (sid !== radioSession) return;
-    if (!added) throw new Error("No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : ""));
+    if (!added) throw new Error(spotifyBlockedFor() > 0 ? spotifyLimitMessage() : "No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : ""));
     radioRenderQueue();
     const token = await getSpotifyToken();
     if (!token) throw new Error("Spotify expired. Reconnect.");
@@ -449,5 +463,5 @@ async function leaveRadio() {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
 }

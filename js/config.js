@@ -65,4 +65,5 @@ let radioInfoIdx = -1;          // index whose bio/plays panel is showing (or lo
 let radioArtistCache = {}, radioTrackCache = {};  // Last.fm getInfo results (promises), by artist / artist||track
 let travelActive = false;       // the radio view is showing a time-travel session
 let radioHeroLive = false;      // the hero has a track from the current session (gates the progress bar)
+let spotifyBlockedUntil = 0;    // Spotify 429 cooldown: no search is sent before this timestamp (ms)
 let trackMeta = {};             // index -> { name, artist, album, page, year, art }

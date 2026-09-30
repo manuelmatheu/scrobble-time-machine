@@ -98,9 +98,12 @@ async function runSpotifySearch(token, q, retries) {
   try {
     const r = await fetch("https://api.spotify.com/v1/search?" + new URLSearchParams({ q, type: "track", limit: "1" }), { headers: { Authorization: "Bearer " + token } });
     if (r.status === 429) {
-      if (retries <= 0) { lastSearchError = "Rate limited (429)"; return { rateLimited: true }; }
-      const w = parseInt(r.headers.get("Retry-After") || "5"); await new Promise(x => setTimeout(x, (isNaN(w)?5:w) * 1000));
-      return runSpotifySearch(token, q, retries - 1);
+      const w = parseInt(r.headers.get("Retry-After") || "5"), secs = isNaN(w) ? 5 : w;
+      // A short hiccup is waited out; a long Retry-After trips a cooldown so nothing keeps hitting Spotify
+      if (secs <= 5 && retries > 0) { await new Promise(x => setTimeout(x, secs * 1000)); return runSpotifySearch(token, q, retries - 1); }
+      spotifyBlockedUntil = Date.now() + secs * 1000;
+      lastSearchError = "Rate limited (429)";
+      return { rateLimited: true };
     }
     if (!r.ok) { if (!lastSearchError) { try { const e = await r.json(); lastSearchError = r.status+": "+(e.error?e.error.message:r.statusText); } catch(e) { lastSearchError = r.status+": "+r.statusText; } } return { error: true }; }
     const d = await r.json();
@@ -108,9 +111,14 @@ async function runSpotifySearch(token, q, retries) {
   } catch (err) { if (!lastSearchError) lastSearchError = err.message; return { error: true }; }
 }
 
+// Milliseconds left of the cooldown after a Spotify 429 (0 when searches are allowed)
+function spotifyBlockedFor() { return Math.max(0, spotifyBlockedUntil - Date.now()); }
+function spotifyLimitMessage() { return "Spotify is limiting searches. Try again in about " + radioRateLimitText(spotifyBlockedFor()) + "."; }
+
 async function spotifySearch(token, artist, track) {
   const ck = (artist + "||" + track).toLowerCase();
   if (ck in searchCache) return searchCache[ck];
+  if (spotifyBlockedFor() > 0) return null;  // cooling down after a 429: send nothing
 
   // Field-qualified search first (precise, but brittle against punctuation/remaster
   // tags/apostrophes that differ between Last.fm and Spotify's catalog metadata)
