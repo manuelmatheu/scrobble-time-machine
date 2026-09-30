@@ -11,6 +11,7 @@ load("config.js");
 load("radio.js");
 load("spotify.js");
 load("ui.js");
+load("player.js");
 
 function reset() {
   run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
@@ -280,6 +281,25 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.ok(slotEls.radioStatusSlot.children.includes(slotEls.statusBar), "status bar should move into the radio view");
   run("hideRadioView()");
   assert.ok(slotEls.statusSlotHome.children.includes(slotEls.statusBar), "status bar should return to the home slot");
+
+  // 26. time travel searches BATCH_SIZE (5) tracks first and loads the rest in batches of 5
+  const ttTracks = Array.from({ length: 12 }, (_, i) => ({ name: "TT Song " + i, artist: { "#text": "TT Artist " + i } }));
+  reset();
+  run("searchCache = {}; skippedPlan = []; isContinuing = false; abortController = { signal: { aborted: false } };");
+  let ttSearches = 0;
+  global.spotifySearch = async (token, artist, track) => { ttSearches++; return { uri: uriFor(track), name: track, album: { images: [] } }; };
+  global.setTrackStatus = () => {}; global.updateTrackArt = () => {}; global.updateMatchCount = () => {};
+  global.showStatus = () => {}; global.checkLikedTracks = () => {};
+  global.spotifyPlay = async () => true;
+  const realSetTimeout = global.setTimeout;
+  global.setTimeout = fn => realSetTimeout(fn, 0);
+  await run("smartMatch(" + JSON.stringify(ttTracks) + ", 'token')");
+  assert.equal(ttSearches, 5);
+  assert.equal(run("skippedPlan.length"), 7);
+  await run("continueMatching()");
+  assert.equal(ttSearches, 10);
+  assert.equal(run("skippedPlan.length"), 2);
+  global.setTimeout = realSetTimeout;
 
   global.document.getElementById = realGetElementById;
 

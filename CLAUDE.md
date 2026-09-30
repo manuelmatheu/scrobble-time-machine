@@ -225,7 +225,7 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 
 6. **`uriToIndices` reverse map supports duplicate URIs** -- maps `"spotify:track:xyz"` to an array of track indices. Used to find the correct row to highlight when the same track appears multiple times.
 
-7. **`skippedPlan` + auto-continuation** -- tracks that exceed `BATCH_SIZE` (15) in the first search are pushed to `skippedPlan`. `continueMatching()` loads them in batches of 15 as `pollNowPlaying()` / `onSDKStateChange()` detects < 2 tracks remaining in the queue.
+7. **`skippedPlan` + auto-continuation** -- tracks that exceed `BATCH_SIZE` (5) in the first search are pushed to `skippedPlan`. `continueMatching()` loads them in batches of 5 as `pollNowPlaying()` / `onSDKStateChange()` detects < 2 tracks remaining in the queue.
 
 8. **SDK race condition** -- the Spotify SDK script may fire `onSpotifyWebPlaybackSDKReady` before or after PKCE auth completes. Both code paths check and call `initSDKPlayer()` if conditions are met.
 
