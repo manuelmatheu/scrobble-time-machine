@@ -133,7 +133,14 @@ function setMode(mode) {
   if (mode === "streak") $("streakInput").focus();
 }
 
-function updateSpotifyUI(c) { $("spotifyConnectBtn").style.display = c ? "none" : ""; $("spotifyBadge").style.display = c ? "" : "none"; if (c) $("modeSelector").style.display = ""; updateGoButton(); }
+function updateSpotifyUI(c) {
+  $("spotifyConnectBtn").style.display = c ? "none" : "";
+  $("spotifyBadge").style.display = c ? "" : "none";
+  $("radioBtn").style.display = c ? "" : "none";
+  $("timeTravel").style.display = c ? "" : "none";
+  updateGoButton();
+  if (c) loadMosaic();
+}
 function updateGoButton() {
   const user = $("usernameInput").value.trim();
   const base = user && spotifyToken && LASTFM_API_KEY !== "YOUR_LASTFM_API_KEY" && (currentPhase==="idle"||currentPhase==="done"||currentPhase==="error");

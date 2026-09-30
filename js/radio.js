@@ -199,6 +199,80 @@ function radioStop() {
   radioCurrentUri = null; radioLastPos = 0;
 }
 
+// =============================================================================
+// HOME: library meta line and cover mosaic
+// =============================================================================
+let mosaicUser = "";
+
+async function refreshHomeMeta() {
+  const user = $("usernameInput").value.trim();
+  const el = $("homeMeta");
+  if (!user) { el.textContent = "Enter your Last.fm username to start."; return; }
+  try {
+    const { totalScrobbles } = await getLastFmTotalPages(user);
+    if ($("usernameInput").value.trim() !== user) return;
+    el.textContent = user + " · " + totalScrobbles.toLocaleString("en-US") + " scrobbles";
+  } catch (e) {
+    if ($("usernameInput").value.trim() === user) el.textContent = "Could not load a library for " + user;
+  }
+}
+
+function renderMosaic(urls) {
+  document.querySelectorAll("#mosaic .mosaic-tile").forEach((tile, i) => {
+    const old = tile.querySelector("img");
+    if (old) old.remove();
+    if (!urls[i]) return;
+    const img = new Image();
+    img.className = "mosaic-img"; img.alt = "";
+    img.onload = () => { tile.appendChild(img); requestAnimationFrame(() => img.classList.add("loaded")); };
+    img.src = urls[i];
+  });
+}
+
+// Fill the mosaic with Spotify covers of random scrobbles. Purely decorative: any failure
+// leaves the placeholder tiles, and it yields to a radio or time-travel session.
+async function loadMosaic() {
+  const user = $("usernameInput").value.trim();
+  if (!user || !spotifyToken || mosaicUser === user) return;
+  mosaicUser = user;
+  const cacheKey = "stm_mosaic:" + user.toLowerCase();
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+    if (cached && cached.length) { renderMosaic(cached); return; }
+  } catch (e) {}
+  try {
+    const { totalScrobbles } = await getLastFmTotalPages(user);
+    if (!totalScrobbles) { mosaicUser = ""; return; }
+    const token = await getSpotifyToken();
+    if (!token) { mosaicUser = ""; return; }
+    const urls = [], seen = new Set();
+    let tries = 0;
+    while (urls.length < 8 && tries < 16) {
+      const batch = await Promise.allSettled(Array.from({ length: 4 }, () => {
+        const p = radioPickPage(totalScrobbles);
+        return getLastFmScrobbleAt(user, p).then(list => radioScrobbleFromTracks(list, p));
+      }));
+      tries += 4;
+      for (const s of batch) {
+        if (urls.length >= 8) break;
+        if (s.status !== "fulfilled" || !s.value) continue;
+        const key = radioTrackKey(s.value.artist, s.value.track);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (radioActive || currentPhase === "working" || $("usernameInput").value.trim() !== user) { mosaicUser = ""; return; }
+        const hit = await spotifySearch(token, s.value.artist, s.value.track);
+        const url = hit ? radioCoverUrl(hit, "medium") : "";
+        if (url && !urls.includes(url)) urls.push(url);
+        await radioSleep(SEARCH_DELAY);
+      }
+    }
+    if (urls.length) {
+      renderMosaic(urls);
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(urls)); } catch (e) {}
+    } else { mosaicUser = ""; }
+  } catch (e) { mosaicUser = ""; }
+}
+
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioFormatPage, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl };
