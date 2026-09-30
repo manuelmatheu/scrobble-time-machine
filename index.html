@@ -77,7 +77,7 @@
     <code>LASTFM_API_KEY</code> &rarr; <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api</a><br>
     <code>SPOTIFY_CLIENT_ID</code> &rarr; <a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Dashboard</a>
     (set redirect URI to <code id="currentUrl"></code>)</div>
-  <div class="status-bar" id="statusBar" style="display:none"></div>
+  <div id="statusSlotHome"><div class="status-bar" id="statusBar" style="display:none"></div></div>
 
   <div id="homeView">
     <h2 class="home-headline">Your library, shuffled across every year.</h2>
@@ -171,6 +171,7 @@
         <a class="radio-bio-link" id="radioBioLink" href="#" target="_blank" rel="noopener noreferrer">Read more on Last.fm</a>
       </div>
     </div>
+    <div id="radioStatusSlot"></div>
     <div id="radioUpNextBlock">
       <h3 class="radio-upnext-title">Up next</h3>
       <div class="radio-upnext" id="radioUpNext"></div>

@@ -243,7 +243,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   let rowScrolls = 0;
   const fakeRow = { classList: { add() {}, remove() {} }, scrollIntoView() { rowScrolls++; } };
   const travelEls = {};
-  global.document.getElementById = id => id === "track-2" ? fakeRow : (travelEls[id] || (travelEls[id] = { style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", classList: { add() {}, remove() {} }, removeAttribute() {} }));
+  global.document.getElementById = id => id === "track-2" ? fakeRow : (travelEls[id] || (travelEls[id] = { style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild() {} }));
   global.document.querySelectorAll = () => [];
   global.document.body = { classList: { add() {}, remove() {} } };
   run("travelActive = true; nowPlayingIndex = -1;"); run("highlightNowPlaying(2)");
@@ -272,6 +272,14 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   run("radioActive = false;");
   await run("radioPlayFrom(1)");
   assert.equal(played.length, 1);
+
+  // 25. the status bar sits between the bio and the list in the radio view, and goes back home with it
+  const slotEls = {};
+  global.document.getElementById = id => slotEls[id] || (slotEls[id] = { id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
+  run('showRadioView("travel")');
+  assert.ok(slotEls.radioStatusSlot.children.includes(slotEls.statusBar), "status bar should move into the radio view");
+  run("hideRadioView()");
+  assert.ok(slotEls.statusSlotHome.children.includes(slotEls.statusBar), "status bar should return to the home slot");
 
   global.document.getElementById = realGetElementById;
 

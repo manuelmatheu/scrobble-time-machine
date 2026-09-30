@@ -286,3 +286,4 @@ body.radio-mode.has-player { padding-bottom:0; }
 .btn-text:disabled { opacity:0.4; cursor:not-allowed; }
 .radio-row-play { cursor:pointer; transition:background 0.15s; }
 .radio-row-play:hover { background:var(--bg-tertiary); }
+.radio-view .status-bar { text-align:left; margin-bottom:16px; }

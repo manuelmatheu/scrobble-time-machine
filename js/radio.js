@@ -311,6 +311,7 @@ function showRadioView(mode) {
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   document.body.classList.add("radio-mode");
+  $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
   $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
   $("radioAgainBtn").style.display = travel ? "" : "none";
   $("radioUpNextBlock").style.display = travel ? "none" : "";
@@ -321,6 +322,7 @@ function showRadioView(mode) {
 
 function hideRadioView() {
   travelActive = false;
+  $("statusSlotHome").appendChild($("statusBar"));  // back to the home view's slot
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   document.body.classList.remove("radio-mode");
