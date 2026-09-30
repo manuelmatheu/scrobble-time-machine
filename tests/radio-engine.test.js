@@ -10,6 +10,7 @@ const run = code => vm.runInThisContext(code);
 load("config.js");
 load("radio.js");
 load("spotify.js");
+load("ui.js");
 
 function reset() {
   run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
@@ -202,7 +203,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   global.document.getElementById = id => els[id] || (els[id] = { style: {}, textContent: "", innerHTML: "", value: id === "usernameInput" ? "tester" : "" });
   global.escHtml = s => s;
   reset();
-  run("radioUser = ''; trackMeta = {}; nowPlayingIndex = 0; radioInfoIdx = -1; currentTracks = [{ name: 'Ready To Start', artist: { '#text': 'Arcade Fire' } }];");
+  run("radioUser = ''; travelActive = true; trackMeta = {}; nowPlayingIndex = 0; radioInfoIdx = -1; currentTracks = [{ name: 'Ready To Start', artist: { '#text': 'Arcade Fire' } }];");
   let seenUser = null;
   global.getLastFmArtistInfo = async (user, artist) => { seenUser = user; return { artist: { bio: { summary: "Indie band." }, stats: { userplaycount: "62" } } }; };
   global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "1" } });
@@ -211,6 +212,52 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(seenUser, "tester");
   assert.match(els.radioStats.innerHTML, /You've listened to/);
   assert.equal(els.radioInfo.style.display, "");
+  // 20. time travel uses the username field, never a stale radioUser, and the info caches are per user
+  reset();
+  run("radioUser = 'stale'; travelActive = true; trackMeta = {}; currentTracks = [{ name: 'Song A', artist: { '#text': 'Band A' } }];");
+  const infoUsers = [];
+  global.getLastFmArtistInfo = async user => { infoUsers.push(user); return { artist: { bio: { summary: "b" }, stats: { userplaycount: "5" } } }; };
+  global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "2" } });
+  els.usernameInput.value = "tester";
+  await run("radioInfoFor(0)");
+  els.usernameInput.value = "other";
+  await run("radioInfoFor(0)");
+  assert.deepEqual(infoUsers, ["tester", "other"]);
+
+  // 21. stale radio trackMeta must not outrank the time-travel tracks when the radio is not running
+  reset();
+  run("radioActive = false; travelActive = true; trackMeta = { 0: { lfmArtist: 'Stale Radio Artist', lfmTrack: 'Stale Song' } }; currentTracks = [{ name: 'Song A', artist: { '#text': 'Band A' } }];");
+  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Band A", track: "Song A" });
+  run("radioActive = true; travelActive = false;");
+  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Stale Radio Artist", track: "Stale Song" });
+
+  // 22. Again is ignored while a session is still loading
+  let goCalls = 0;
+  global.handleGo = () => { goCalls++; };
+  run("currentPhase = 'working'"); run("travelAgain()");
+  assert.equal(goCalls, 0);
+  run("currentPhase = 'done'"); run("travelAgain()");
+  assert.equal(goCalls, 1);
+
+  // 23. time travel: following the playing row must not scroll the page away from the hero
+  let rowScrolls = 0;
+  const fakeRow = { classList: { add() {}, remove() {} }, scrollIntoView() { rowScrolls++; } };
+  const travelEls = {};
+  global.document.getElementById = id => id === "track-2" ? fakeRow : (travelEls[id] || (travelEls[id] = { style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", classList: { add() {}, remove() {} }, removeAttribute() {} }));
+  global.document.querySelectorAll = () => [];
+  global.document.body = { classList: { add() {}, remove() {} } };
+  run("travelActive = true; nowPlayingIndex = -1;"); run("highlightNowPlaying(2)");
+  assert.equal(rowScrolls, 0);
+  run("travelActive = false; nowPlayingIndex = -1;"); run("highlightNowPlaying(2)");
+  assert.equal(rowScrolls, 1);
+  // ...and opening the view starts at the top, once (not on every refresh)
+  const windowScrolls = [];
+  global.window.scrollTo = (x, y) => windowScrolls.push([x, y]);
+  run('showRadioView("travel")');
+  assert.deepEqual(windowScrolls, [[0, 0]]);
+  run('showRadioView("travel")');
+  assert.deepEqual(windowScrolls, [[0, 0]]);
+
   global.document.getElementById = realGetElementById;
 
   console.log("radio engine: ok");

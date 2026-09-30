@@ -46,7 +46,7 @@ function setTrackStatus(i, s) {
 function highlightNowPlaying(index) {
   if (index === nowPlayingIndex) return;
   document.querySelectorAll(".track-row.now-playing").forEach(r => r.classList.remove("now-playing"));
-  if (index >= 0) { const row = $("track-" + index); if (row) { row.classList.add("now-playing"); row.scrollIntoView({behavior:"smooth", block:"nearest"}); } }
+  if (index >= 0) { const row = $("track-" + index); if (row) { row.classList.add("now-playing"); if (!travelActive) row.scrollIntoView({behavior:"smooth", block:"nearest"}); } }
   nowPlayingIndex = index;
 }
 
@@ -143,6 +143,7 @@ function updateGoButton() {
   const user = $("usernameInput").value.trim();
   const base = user && spotifyToken && LASTFM_API_KEY !== "YOUR_LASTFM_API_KEY" && (currentPhase==="idle"||currentPhase==="done"||currentPhase==="error");
   $("radioBtn").disabled = !base;
+  $("radioAgainBtn").disabled = currentPhase === "working";
   let ok = base;
   if (searchMode === "date") ok = base && $("dateYear").value;
   else if (searchMode === "artist") ok = base && $("artistInput").value.trim();

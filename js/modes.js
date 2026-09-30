@@ -72,7 +72,7 @@ async function handleGoDate() {
     let tracks;
     if (result.totalPages > 1) {
       const rndPage = Math.floor(Math.random() * result.totalPages) + 1;
-      showStatus("Found " + result.total.toLocaleString() + " scrobbles in " + label + " · loading page " + rndPage + "…");
+      showStatus("Found " + result.total.toLocaleString() + " scrobbles in " + label + " · loading a moment…");
       const r2 = await getLastFmPageByDate(user, from, to);
       // Actually fetch the random page
       const r3 = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(from), to:String(to), page:String(rndPage) }));
@@ -284,7 +284,7 @@ async function handleGoDecade() {
     let tracks;
     if (result.totalPages > 1) {
       const rndPage = Math.floor(Math.random() * result.totalPages) + 1;
-      showStatus("Found " + result.total.toLocaleString() + " scrobbles in the " + label + " - loading page " + rndPage + "...");
+      showStatus("Found " + result.total.toLocaleString() + " scrobbles in the " + label + " - loading a moment...");
       const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"50", from:String(from), to:String(to), page:String(rndPage) }));
       if (!r.ok) throw new Error("Last.fm API error");
       const d = await r.json(); if (d.error) throw new Error(d.message);

@@ -306,6 +306,7 @@ function radioResetHero() {
 // mode "radio" (default) shows Up next; "travel" shows the era panel and the full track list
 function showRadioView(mode) {
   const travel = mode === "travel";
+  const wasHidden = $("radioView").style.display === "none";
   travelActive = travel;
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
@@ -315,6 +316,7 @@ function showRadioView(mode) {
   $("radioUpNextBlock").style.display = travel ? "none" : "";
   radioResetHero();
   if (!travel) radioRenderQueue();
+  if (wasHidden) window.scrollTo(0, 0);  // the home view may have been scrolled; open the new view at its top
 }
 
 function hideRadioView() {
@@ -327,12 +329,16 @@ function hideRadioView() {
 }
 
 // Repeat the last Time Travel mode with the same inputs
-function travelAgain() { handleGo(); }
+function travelAgain() {
+  if (currentPhase === "working") return;  // a session is still loading: starting another would run two at once
+  handleGo();
+}
 
 // Last.fm names for the track at idx: the radio's scrobble names, or the time-travel track objects
 function radioInfoSource(idx) {
   const m = trackMeta[idx];
-  if (m && m.lfmArtist) return { artist: m.lfmArtist, track: m.lfmTrack };
+  // trackMeta can be left over from a radio session that failed to start: only trust it while the radio runs
+  if (radioActive && m && m.lfmArtist) return { artist: m.lfmArtist, track: m.lfmTrack };
   const t = currentTracks[idx];
   if (!t) return null;
   const artist = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
@@ -344,9 +350,10 @@ function radioInfoSource(idx) {
 async function radioInfoFor(idx) {
   const src = radioInfoSource(idx);
   if (!src) return null;
-  // radioUser is only set by the radio; time travel reads the username field
-  const user = radioUser || $("usernameInput").value.trim();
-  const aKey = src.artist.toLowerCase(), tKey = radioTrackKey(src.artist, src.track);
+  // radioUser belongs to the radio and can be stale; time travel reads the username field
+  const user = travelActive ? $("usernameInput").value.trim() : radioUser;
+  const uKey = user.toLowerCase();
+  const aKey = uKey + "|" + src.artist.toLowerCase(), tKey = uKey + "|" + radioTrackKey(src.artist, src.track);
   if (!(aKey in radioArtistCache)) radioArtistCache[aKey] = getLastFmArtistInfo(user, src.artist).then(radioArtistFromInfo, () => null);
   if (!(tKey in radioTrackCache)) radioTrackCache[tKey] = getLastFmTrackInfo(user, src.artist, src.track).then(radioTrackPlaysFromInfo, () => null);
   const [artist, trackPlays] = await Promise.all([radioArtistCache[aKey], radioTrackCache[tKey]]);

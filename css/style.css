@@ -307,3 +307,4 @@ body.radio-mode.has-player { padding-bottom:0; }
 .radio-top-left { display:flex; align-items:center; gap:16px; }
 .radio-view .era-panel { margin-bottom:24px; }
 .radio-view .track-list-wrapper { margin-bottom:24px; }
+.btn-text:disabled { opacity:0.4; cursor:not-allowed; }
