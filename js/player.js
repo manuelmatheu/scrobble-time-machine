@@ -209,7 +209,6 @@ async function fetchAndPlay(user, page, tp) {
     const raw = await getLastFmPage(user, page);
     const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
     if (!tracks.length) throw new Error("No tracks found for that moment");
-    updateEraInfo(tracks, page, tp);
     await matchAndPlay(tracks, page, tp);
   } catch(err) {
     if (!abortController.signal.aborted) { radioStop(); currentPhase = "error"; showStatus(err.message, "error"); }

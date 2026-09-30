@@ -30,7 +30,6 @@ async function handleGoRandom() {
     const raw = await getLastFmPage(user, page);
     const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
     if (!tracks.length) throw new Error("No tracks found for that moment");
-    renderEraPanel(tracks, page, totalPages);
     await fetchAndPlay(user, page, totalPages);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
@@ -85,18 +84,6 @@ async function handleGoDate() {
 
     if (!tracks.length) throw new Error("No tracks found for " + label);
 
-    // Build era panel from the tracks we got
-    const oldest = tracks[tracks.length-1], newest = tracks[0];
-    if (oldest && oldest.date && newest && newest.date) {
-      // Get total pages for the slider context
-      const { totalPages } = await getLastFmTotalPages(user);
-      cachedTotalPages = totalPages;
-      // Estimate what page this falls on: use the timestamp to guess
-      const midUts = parseInt(oldest.date.uts);
-      // We don't know the exact page, so render era panel without slider interaction
-      renderEraPanelFromTracks(tracks, label, totalPages);
-    }
-
     showStatus("Found " + result.total.toLocaleString() + " scrobbles in " + label);
     await fetchAndPlayDirect(tracks, label);
   } catch(err) {
@@ -126,7 +113,6 @@ async function handleGoArtist() {
     const dateStr = oldest && oldest.date ? new Date(parseInt(oldest.date.uts) * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long" }) : "";
     const label = artist + (dateStr ? " · " + dateStr : "");
 
-    renderEraPanelFromTracks(tracks, label, totalPages);
     showStatus("Found " + (result.matchCount || "some") + " " + artist + " tracks" + (dateStr ? " from " + dateStr : "") + " (attempt " + result.attempt + ")");
     await fetchAndPlayDirect(tracks, label);
   } catch(err) {
@@ -181,7 +167,6 @@ async function handleGoMood() {
     const dateStr = oldest && oldest.date ? new Date(parseInt(oldest.date.uts) * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long" }) : "";
     const label = moodLabel + (dateStr ? " · " + dateStr : "");
 
-    renderEraPanelFromTracks(bestTracks, label, totalPages);
     showStatus("Found " + bestCount + " " + moodLabel + " tracks");
     await fetchAndPlayDirect(bestTracks, label);
   } catch(err) {
@@ -254,9 +239,6 @@ async function handleGoOnThisDay() {
     const yearsAgo = currentYear - foundYear;
     const yearsAgoStr = yearsAgo === 1 ? "1 year ago" : yearsAgo + " years ago";
 
-    const { totalPages } = await getLastFmTotalPages(user);
-    cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(foundTracks, label, totalPages);
     showStatus("On this day " + yearsAgoStr + " · " + label + " · " + foundTracks.length + " scrobbles", "success");
     await fetchAndPlayDirect(foundTracks, "On this day · " + label);
   } catch(err) {
@@ -294,9 +276,6 @@ async function handleGoDecade() {
     }
     if (!tracks.length) throw new Error("No tracks found in the " + label);
 
-    const { totalPages } = await getLastFmTotalPages(user);
-    cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(tracks, "The " + label, totalPages);
     showStatus("The " + label + " - " + result.total.toLocaleString() + " scrobbles from this era", "success");
     await fetchAndPlayDirect(tracks, "The " + label);
   } catch(err) {
@@ -379,7 +358,6 @@ async function handleGoAlbum() {
 
     const { totalPages } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(bestTracks, label, totalPages);
     showStatus("Found " + bestCount + " tracks from " + album + (dateStr ? " - " + dateStr : ""), "success");
     await fetchAndPlayDirect(bestTracks, label);
   } catch(err) {
@@ -486,7 +464,6 @@ async function handleGoDiscovery() {
 
     const { totalPages } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(tracks, label, totalPages);
     showStatus("You discovered " + artist + " on " + dateStr + agoStr, "success");
     await fetchAndPlayDirect(tracks, label);
   } catch(err) {
@@ -566,7 +543,6 @@ async function handleGoStreak() {
 
     const { totalPages } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages;
-    renderEraPanelFromTracks(slice, label, totalPages);
 
     let msg = bestStreak + " consecutive " + artist + " tracks";
     if (dateStr) msg += " - " + dateStr;
@@ -583,7 +559,6 @@ function beginSession() {
   radioStop();
   abortController = new AbortController(); currentPhase = "working"; updateGoButton();
   $("goBtn").style.display = "none"; $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
-  $("eraPanel").style.display = "none";
   $("trackListWrapper").style.display = "none"; $("trackList").innerHTML = ""; $("matchCount").textContent = "";
   searchCache = {}; sessionQueue = new Set(); sessionPaused = false; stopPolling(); hideStatus();
   $("savePlaylistBtn").style.display = "none";

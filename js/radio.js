@@ -421,13 +421,22 @@ function radioRenderQueue() {
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
     const m = trackMeta[i];
     if (!m) continue;
-    html += '<div class="radio-row"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div></div>';
+    html += '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + i + ')"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div></div>';
     shown++;
   }
   if (radioRefilling) {
     html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
   }
   box.innerHTML = html;
+}
+
+// Play the radio from a queued track onward (the Up next rows call this)
+async function radioPlayFrom(idx) {
+  if (!radioActive || !matchedUris[idx]) return;
+  const token = await getSpotifyToken();
+  if (!token) return;
+  const ok = await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, matchedUris[idx]));
+  if (!ok) showStatus("Playback failed. Is Spotify active?", "error");
 }
 
 // Back: pause playback and return to the home view

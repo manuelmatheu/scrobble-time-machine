@@ -258,6 +258,21 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   run('showRadioView("travel")');
   assert.deepEqual(windowScrolls, [[0, 0]]);
 
+  // 24. the radio's Up next rows play from the clicked track onward
+  reset(); played = [];
+  run("matchedUris = { 0: 'a', 1: 'b', 2: 'c', 3: 'd' }; allTrackCount = 4; trackMeta = { 1: { name: 'B', artist: 'x' }, 2: { name: 'C', artist: 'y' }, 3: { name: 'D', artist: 'z' } }; nowPlayingIndex = 0; radioRefilling = false;");
+  run("radioRenderQueue()");
+  assert.match(travelEls.radioUpNext.innerHTML, /radioPlayFrom\(2\)/);
+  assert.match(travelEls.radioUpNext.innerHTML, /radioPlayFrom\(3\)/);
+  assert.doesNotMatch(travelEls.radioUpNext.innerHTML, /radioPlayFrom\(0\)/);
+  await run("radioPlayFrom(1)");
+  assert.deepEqual(played, [["b", "c", "d"]]);
+  await run("radioPlayFrom(9)");
+  assert.equal(played.length, 1);
+  run("radioActive = false;");
+  await run("radioPlayFrom(1)");
+  assert.equal(played.length, 1);
+
   global.document.getElementById = realGetElementById;
 
   console.log("radio engine: ok");
