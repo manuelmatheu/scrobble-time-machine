@@ -47,6 +47,7 @@ async function pollNowPlaying() {
     }
     highlightNowPlaying(best);
   }
+  if (radioActive) radioRenderNow(data.item, !data.is_playing);
   radioMaybeRefill(playingUri, data.progress_ms);
 
   // Auto-continue: check if we're near the end of matched tracks and have skipped ones
@@ -307,6 +308,7 @@ function onSDKStateChange(state) {
     for (const idx of candidates) { if (idx >= nowPlayingIndex) { best = idx; break; } }
     highlightNowPlaying(best);
   }
+  if (radioActive) radioRenderNow(track, state.paused);
 
   // Check liked status and auto-continue whenever the track changes
   if (track.uri !== _sdkCurrentUri) {
@@ -330,12 +332,15 @@ function onSDKStateChange(state) {
 }
 
 function updateProgressBar(position, duration) {
-  const fill = $("pb-fill");
-  const elapsed = $("pb-elapsed");
-  const dur = $("pb-duration");
-  if (fill && duration > 0) fill.style.width = (position / duration * 100) + "%";
+  const pct = duration > 0 ? (position / duration * 100) + "%" : null;
+  const fill = $("pb-fill"), elapsed = $("pb-elapsed"), dur = $("pb-duration");
+  if (fill && pct) fill.style.width = pct;
   if (elapsed) elapsed.textContent = fmtMs(position);
   if (dur) dur.textContent = fmtMs(duration);
+  const rf = $("radioFill"), re = $("radioElapsed"), rd = $("radioDuration");
+  if (rf && pct) rf.style.width = pct;
+  if (re) re.textContent = fmtMs(position);
+  if (rd) rd.textContent = fmtMs(duration);
 }
 
 function fmtMs(ms) {
@@ -356,9 +361,10 @@ async function setVolume(val) {
   if (window._stmPlayer && sdkReady) window._stmPlayer.setVolume(val / 100);
 }
 function seekTo(e) {
-  const bar = $("pb-bar");
+  const bar = e.currentTarget;
   if (!bar || !window._stmPlayer || !_sdkDurationMs) return;
-  const pct = e.offsetX / bar.offsetWidth;
+  const rect = bar.getBoundingClientRect();
+  const pct = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
   const posMs = Math.floor(pct * _sdkDurationMs);
   _sdkPositionMs = posMs;
   window._stmPlayer.seek(posMs);
@@ -439,5 +445,8 @@ function updatePlayerBarHeart() {
   const btn = $("pb-heart");
   if (!btn || nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
   const id = matchedUris[nowPlayingIndex].split(":").pop();
-  btn.classList.toggle("liked", likedSet.has(id));
+  const liked = likedSet.has(id);
+  btn.classList.toggle("liked", liked);
+  const rh = $("radioHeart");
+  if (rh) { rh.classList.toggle("liked", liked); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart"></i>'; }
 }

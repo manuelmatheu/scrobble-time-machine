@@ -148,7 +148,34 @@
         <div class="track-list" id="trackList"></div></div>
     </section>
   </div>
-  <!-- RADIO VIEW -->
+  <section id="radioView" class="radio-view" style="display:none" aria-label="Library radio">
+    <div class="radio-top">
+      <button class="btn-text" onclick="leaveRadio()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
+      <h2 class="radio-title">Library radio</h2>
+    </div>
+    <div class="radio-hero">
+      <img id="radioArt" class="radio-art" src="" alt="">
+      <div class="radio-hero-text">
+        <div class="radio-page" id="radioPage"></div>
+        <div class="radio-track" id="radioTrack">Tuning...</div>
+        <div class="radio-artist" id="radioArtist"></div>
+      </div>
+    </div>
+    <div class="radio-progress">
+      <span id="radioElapsed">0:00</span>
+      <div id="radioBar" onclick="seekTo(event)"><div id="radioFill"></div></div>
+      <span id="radioDuration">0:00</span>
+    </div>
+    <div class="radio-controls">
+      <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
+      <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
+      <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
+      <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
+      <span id="saveSlotRadio"></span>
+    </div>
+    <h3 class="radio-upnext-title">Up next</h3>
+    <div class="radio-upnext" id="radioUpNext"></div>
+  </section>
 </div>
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>

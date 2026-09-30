@@ -271,3 +271,39 @@
 .go-row { display:flex; justify-content:flex-start; margin-bottom:20px; }
 .mode-pill i, .mood-btn i { margin-right:2px; vertical-align:-1px; }
 @media (max-width:520px) { .app-brand h1 { font-size:16px; } .mosaic { gap:4px; } }
+
+/* Library radio view */
+.radio-view { width:100%; padding-bottom:48px; }
+.radio-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.radio-title { font-size:18px; font-weight:800; letter-spacing:-0.3px; }
+.btn-text { background:none; border:none; color:var(--text-secondary); font-family:inherit; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:8px 0; }
+.btn-text:hover { color:var(--text-primary); }
+.radio-hero { display:flex; gap:16px; align-items:center; margin-bottom:16px; }
+.radio-art { width:110px; height:110px; border-radius:8px; object-fit:cover; background:var(--bg-tertiary); flex-shrink:0; }
+.radio-hero-text { min-width:0; }
+.radio-page { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lastfm-red-text); min-height:16px; }
+.radio-track { font-size:22px; font-weight:800; line-height:1.15; margin-top:6px; overflow-wrap:anywhere; }
+.radio-artist { font-size:14px; color:var(--text-secondary); margin-top:4px; }
+.radio-progress { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.radio-progress span { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-tertiary); flex-shrink:0; }
+#radioBar { flex:1; height:4px; background:var(--bg-tertiary); border-radius:999px; cursor:pointer; }
+#radioFill { height:100%; width:0; background:var(--lastfm-red); border-radius:999px; transition:width 0.25s linear; }
+.radio-controls { display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:28px; flex-wrap:wrap; }
+.radio-btn { background:none; border:none; color:var(--text-primary); font-size:22px; cursor:pointer; width:44px; height:44px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, transform 0.1s; }
+.radio-btn:hover { background:var(--bg-tertiary); }
+.radio-btn:active { transform:scale(0.96); }
+.radio-play { background:var(--text-primary); color:var(--bg-primary); border-radius:999px; }
+.radio-play:hover { background:var(--text-secondary); }
+.radio-btn.liked { color:var(--lastfm-red-text); }
+.radio-upnext-title { font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:8px; }
+.radio-upnext { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:8px; overflow:hidden; }
+.radio-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 16px; }
+.radio-row:not(:last-child) { border-bottom:1px solid var(--border-subtle); }
+.radio-row-text { min-width:0; }
+.radio-row-title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.radio-row-artist { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.radio-row-page { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lastfm-red-text); flex-shrink:0; }
+.radio-row-tuning .radio-row-title { color:var(--text-secondary); font-weight:500; }
+body.radio-mode #player-bar { display:none !important; }
+body.radio-mode.has-player { padding-bottom:0; }
+@media (max-width:520px) { .radio-art { width:88px; height:88px; } .radio-track { font-size:18px; } }

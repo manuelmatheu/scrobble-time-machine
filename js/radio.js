@@ -138,10 +138,12 @@ async function startRadio() {
     if (sid !== radioSession) return;
     if (!totalScrobbles) throw new Error("No scrobbles found");
     radioTotal = totalScrobbles;
+    showRadioView();
     showStatus("Tuning your library...");
     const added = await radioFill(RADIO_INITIAL);
     if (sid !== radioSession) return;
     if (!added) throw new Error("No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : ""));
+    radioRenderQueue();
     const token = await getSpotifyToken();
     if (!token) throw new Error("Spotify expired. Reconnect.");
     showStatus("Starting playback...");
@@ -169,7 +171,7 @@ async function startRadio() {
 async function continueRadio() {
   if (!radioActive || radioRefilling || radioExhausted) return;
   const sid = radioSession;
-  radioRefilling = true;
+  radioRefilling = true; radioRenderQueue();
   try {
     const added = await radioFill(RADIO_REFILL);
     if (sid !== radioSession) return;
@@ -183,7 +185,7 @@ async function continueRadio() {
     await spotifyPlay(token, uris, sdkReady ? _sdkPositionMs : radioLastPos);
     checkLikedTracks();
   } finally {
-    if (sid === radioSession) radioRefilling = false;
+    if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
   }
 }
 
@@ -197,6 +199,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false;
   radioCurrentUri = null; radioLastPos = 0;
+  hideRadioView();
 }
 
 // =============================================================================
@@ -271,6 +274,88 @@ async function loadMosaic() {
       try { sessionStorage.setItem(cacheKey, JSON.stringify(urls)); } catch (e) {}
     } else { mosaicUser = ""; }
   } catch (e) { mosaicUser = ""; }
+}
+
+// =============================================================================
+// RADIO VIEW
+// =============================================================================
+let radioTuneTimer = null;
+
+function radioReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function startTuningRoll() {
+  stopTuningRoll();
+  if (radioReducedMotion()) return;
+  radioTuneTimer = setInterval(() => {
+    const el = $("radioTuningPage");
+    if (el && radioTotal) el.textContent = "p." + radioPickPage(radioTotal).toLocaleString("en-US");
+  }, 70);
+}
+function stopTuningRoll() {
+  if (radioTuneTimer) { clearInterval(radioTuneTimer); radioTuneTimer = null; }
+}
+
+function showRadioView() {
+  $("homeView").style.display = "none";
+  $("radioView").style.display = "";
+  document.body.classList.add("radio-mode");
+  $("saveSlotRadio").appendChild($("savePlaylistBtn"));
+  radioRenderQueue();
+}
+
+function hideRadioView() {
+  stopTuningRoll();
+  $("radioView").style.display = "none";
+  $("homeView").style.display = "";
+  document.body.classList.remove("radio-mode");
+  $("saveSlotTrackList").appendChild($("savePlaylistBtn"));
+  $("radioTrack").textContent = "Tuning...";
+  $("radioArtist").textContent = ""; $("radioPage").textContent = "";
+  $("radioArt").removeAttribute("src");
+  $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
+  $("radioUpNext").innerHTML = "";
+}
+
+// Hero: the playing track (SDK track object or Spotify currently-playing item)
+function radioRenderNow(track, paused) {
+  const meta = trackMeta[nowPlayingIndex];
+  const img = track.album && track.album.images && track.album.images[0];
+  $("radioArt").src = img ? img.url : (meta && meta.art) || "";
+  $("radioTrack").textContent = track.name || (meta && meta.name) || "";
+  const artists = (track.artists || []).map(a => a.name).join(", ");
+  const album = track.album && track.album.name;
+  $("radioArtist").textContent = artists + (album ? " · " + album : "");
+  $("radioPage").textContent = meta ? radioFormatPage(meta.page, radioTotal, meta.year) : "";
+  $("radioPlay").innerHTML = '<i class="ph-fill ph-' + (paused ? "play" : "pause") + '"></i>';
+  radioRenderQueue();
+}
+
+// Up next: the matched tracks after the current one, plus a Tuning row while a top-up runs
+function radioRenderQueue() {
+  const box = $("radioUpNext");
+  if (!box) return;
+  let html = "", shown = 0;
+  for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
+    const m = trackMeta[i];
+    if (!m) continue;
+    html += '<div class="radio-row"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div><span class="radio-row-page">p.' + m.page.toLocaleString("en-US") + '</span></div>';
+    shown++;
+  }
+  if (radioRefilling) {
+    html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div><span class="radio-row-page" id="radioTuningPage">p.???</span></div>';
+    if (!radioTuneTimer) startTuningRoll();
+  } else {
+    stopTuningRoll();
+  }
+  box.innerHTML = html;
+}
+
+// Back: pause playback and return to the home view
+async function leaveRadio() {
+  try { await spPut("/me/player/pause", null); } catch (e) {}
+  handleReset();
 }
 
 // ===== node test exports (no-op in browsers) =====
