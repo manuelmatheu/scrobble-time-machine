@@ -23,15 +23,13 @@ async function handleGoRandom() {
     const { totalPages, totalScrobbles } = await getLastFmTotalPages(user);
     cachedTotalPages = totalPages; cachedTotalScrobbles = totalScrobbles;
     if (!totalPages) throw new Error("No scrobbles found");
-    $("pagePicker").style.display = ""; $("pageTotal").textContent = "of " + totalPages.toLocaleString() + " pages · " + totalScrobbles.toLocaleString() + " scrobbles";
-    showStatus("Spinning the wheel…");
+    showStatus("Picking a random moment…");
     const page = Math.floor(Math.random() * totalPages) + 1;
-    await animatePagePick(page, totalPages);
     if (abortController.signal.aborted) return;
-    showStatus("Loading page " + page.toLocaleString() + "…");
+    showStatus("Loading that moment…");
     const raw = await getLastFmPage(user, page);
     const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
-    if (!tracks.length) throw new Error("No tracks on this page");
+    if (!tracks.length) throw new Error("No tracks found for that moment");
     renderEraPanel(tracks, page, totalPages);
     await fetchAndPlay(user, page, totalPages);
   } catch(err) {
@@ -184,7 +182,7 @@ async function handleGoMood() {
     const label = moodLabel + (dateStr ? " · " + dateStr : "");
 
     renderEraPanelFromTracks(bestTracks, label, totalPages);
-    showStatus("Found " + bestCount + " " + moodLabel + " tracks on page " + bestPage.toLocaleString());
+    showStatus("Found " + bestCount + " " + moodLabel + " tracks");
     await fetchAndPlayDirect(bestTracks, label);
   } catch(err) {
     if (!abortController.signal.aborted) { currentPhase = "error"; showStatus(err.message, "error"); }
@@ -585,7 +583,7 @@ function beginSession() {
   radioStop();
   abortController = new AbortController(); currentPhase = "working"; updateGoButton();
   $("goBtn").style.display = "none"; $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
-  $("pagePicker").style.display = "none"; $("eraPanel").style.display = "none";
+  $("eraPanel").style.display = "none";
   $("trackListWrapper").style.display = "none"; $("trackList").innerHTML = ""; $("matchCount").textContent = "";
   searchCache = {}; sessionQueue = new Set(); sessionPaused = false; stopPolling(); hideStatus();
   $("savePlaylistBtn").style.display = "none";

@@ -39,14 +39,6 @@
     .spotify-badge { padding:11px 16px; background:rgba(29,185,84,0.08); border:1px solid rgba(29,185,84,0.25); border-radius:8px; color:var(--spotify-green); font-size:13px; font-weight:600; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
     .btn-disconnect { background:none; border:none; cursor:pointer; color:var(--spotify-green); opacity:0.6; font-size:12px; padding:0 2px; line-height:1; }
     .btn-disconnect:hover { opacity:1; }
-    .page-picker { text-align:center; margin-bottom:24px; }
-    .page-picker-card { display:inline-flex; flex-direction:column; align-items:center; gap:8px; padding:28px 56px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; position:relative; overflow:hidden; }
-    .page-picker-card::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at center,var(--lastfm-red-subtle) 0%,transparent 70%); pointer-events:none; }
-    .page-picker-label { font-size:11px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:3px; font-weight:600; }
-    .page-picker-number { font-family:'JetBrains Mono',monospace; font-size:52px; font-weight:700; color:var(--lastfm-red-text); line-height:1; min-width:180px; position:relative; z-index:1; }
-    .page-picker-number.spinning { animation:spin-num 0.12s ease-in-out infinite; }
-    .page-picker-total { font-size:12px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; }
-    @keyframes spin-num { 0%{transform:translateY(-3px);opacity:0.6} 50%{transform:translateY(3px);opacity:1} 100%{transform:translateY(-3px);opacity:0.6} }
     .status-bar { text-align:center; margin-bottom:20px; font-size:13px; color:var(--text-secondary); animation:fade-up 0.3s ease-out; }
     .status-bar.error { color:var(--error); } .status-bar.success { color:var(--success); }
     .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--lastfm-red); border-top-color:transparent; border-radius:50%; animation:spin 0.5s linear infinite; vertical-align:middle; margin-right:8px; }
@@ -127,7 +119,7 @@
     .footer a:hover { color:var(--lastfm-red-text); }
     @media (max-width:520px) {
       .header h1 { font-size:22px; } .header p { margin-left:0; margin-top:12px; }
-      .page-picker-number { font-size:40px; min-width:140px; } .page-picker-card { padding:20px 36px; }
+     
       .track-date { display:none; } .era-headline .date { font-size:18px; }
       .era-stats { flex-direction:column; gap:8px; } .era-stat { flex-basis:auto; }
       .mode-selector { flex-wrap:wrap; }

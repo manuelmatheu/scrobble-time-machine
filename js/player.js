@@ -205,10 +205,10 @@ async function fetchAndPlay(user, page, tp) {
   $("trackListWrapper").style.display="none"; $("trackList").innerHTML=""; $("matchCount").textContent="";
   stopPolling();
   try {
-    showStatus("Loading page "+page.toLocaleString()+"…");
+    showStatus("Loading that moment…");
     const raw = await getLastFmPage(user, page);
     const tracks = raw.filter(t => !(t["@attr"] && t["@attr"].nowplaying));
-    if (!tracks.length) throw new Error("No tracks on this page");
+    if (!tracks.length) throw new Error("No tracks found for that moment");
     updateEraInfo(tracks, page, tp);
     await matchAndPlay(tracks, page, tp);
   } catch(err) {
@@ -243,13 +243,14 @@ async function matchAndPlay(tracks, page, tp, label) {
   if (!matched) { const d = lastSearchError ? " (" + lastSearchError + ")" : ""; throw new Error("No tracks matched" + d); }
   const uris = []; for (let i = 0; i < tracks.length; i++) if (matchedUris[i]) uris.push(matchedUris[i]);
   sessionQueue = new Set(uris); sessionPaused = false;
-  playlistLabel = label || (page ? "Page " + page.toLocaleString() : "Random");
+  const eraLabel = label || radioEraLabel(tracks);
+  playlistLabel = eraLabel;
   showStatus("Starting playback…");
   token = await getSpotifyToken();
   const ok = await spotifyPlay(token, uris);
   if (!ok) { const devs = await getSpotifyDevices(token); throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active."); }
   currentPhase = "done";
-  const where = label || (page ? "page " + page.toLocaleString() : "");
+  const where = eraLabel === "Random" ? "" : eraLabel;
   const pendingMsg = skippedPlan.length > 0 ? " · more will load as you listen" : "";
   showStatus("▶ Playing " + matched + " tracks" + (where ? " from " + where : "") + pendingMsg, "success");
   for (let i = 0; i < tracks.length; i++) { if (matchedUris[i]) { highlightNowPlaying(i); break; } }

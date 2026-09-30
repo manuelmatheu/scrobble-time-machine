@@ -63,17 +63,6 @@ async function playFromTrack(i) {
   } else { showStatus("Playback failed. Is Spotify active?", "error"); }
 }
 
-function animatePagePick(final, total) {
-  return new Promise(res => {
-    const el = $("pageNumber");
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = final.toLocaleString(); res(); return; }
-    let i = 0; el.classList.add("spinning");
-    const iv = setInterval(() => {
-      i++; el.textContent = (Math.floor(Math.random() * total) + 1).toLocaleString();
-      if (i >= 22) { clearInterval(iv); el.textContent = final.toLocaleString(); el.classList.remove("spinning"); res(); }
-    }, 70);
-  });
-}
 
 
 function populateYears(startYear) {
@@ -183,7 +172,7 @@ function renderEraPanel(tracks, page, totalPages) {
   panel.innerHTML='<div class="era-headline"><span class="label">Traveling back to</span><div class="date" id="eraDate">'+ds+'</div><div class="ago" id="eraAgo">'+timeAgo(oldest)+'</div></div>'
     +'<div class="era-timeline"><div class="era-timeline-labels"><span>Now</span><span>First scrobble</span></div>'
     +'<div class="era-timeline-slider-wrap"><input type="range" class="era-timeline-slider" id="timelineSlider" min="1" max="'+totalPages+'" value="'+page+'" style="--slider-pct:'+pct+'%"></div>'
-    +'<div class="era-timeline-pct" id="timelinePct">Page '+page.toLocaleString()+' of '+totalPages.toLocaleString()+' · '+pct+'%</div>'
+    +'<div class="era-timeline-pct" id="timelinePct">'+pct+'% back in time</div>'
     +'<div class="era-timeline-hint" id="timelineHint">Drag to scrub through time</div></div>'
     +'<div class="era-stats"><div class="era-stat"><div class="era-stat-label">Top artist</div><div class="era-stat-value" id="eraTop"><span class="accent">'+escHtml(top.name)+'</span></div>'
     +'<div class="era-stat-sub" id="eraTopSub">'+top.count+' of '+tracks.length+' · '+top.uniq+' artist'+(top.uniq>1?'s':'')+'</div></div>'
@@ -200,7 +189,7 @@ function updateEraInfo(tracks,page,tp) {
   const ds=same?newest.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):oldest.toLocaleDateString("en-US",{year:"numeric",month:"long"});
   const pct=Math.round((page/tp)*100),pace=calcPace(tracks,f,l),top=topArtist(tracks);
   const s=(id,v)=>{const e=$(id);if(e){if(typeof v==="object")e.innerHTML=v.h;else e.textContent=v;e.style.opacity="";}};
-  s("eraDate",ds);s("eraAgo",timeAgo(oldest));s("timelinePct","Page "+page.toLocaleString()+" of "+tp.toLocaleString()+" · "+pct+"%");
+  s("eraDate",ds);s("eraAgo",timeAgo(oldest));s("timelinePct",pct+"% back in time");
   s("eraTop",{h:'<span class="accent">'+escHtml(top.name)+'</span>'});s("eraTopSub",top.count+" of "+tracks.length+" · "+top.uniq+" artist"+(top.uniq>1?"s":""));
   s("eraPace",pace.s);s("eraPaceSub",pace.sub);
   const sl=$("timelineSlider"); if(sl&&!isDragging){sl.value=page;sl.style.setProperty("--slider-pct",pct+"%");}
@@ -211,7 +200,7 @@ function updateEraInfo(tracks,page,tp) {
 function onSliderInput(e) {
   isDragging=true; const pg=parseInt(e.target.value),pct=Math.round((pg/cachedTotalPages)*100);
   e.target.style.setProperty("--slider-pct",pct+"%");
-  const p=$("timelinePct"); if(p) p.textContent="Page "+pg.toLocaleString()+" of "+cachedTotalPages.toLocaleString()+" · "+pct+"%";
+  const p=$("timelinePct"); if(p) p.textContent=pct+"% back in time";
   const h=$("timelineHint"); if(h){h.textContent="Release to load";h.style.opacity="1";}
   const d=$("eraDate"),a=$("eraAgo"); if(d) d.style.opacity="0.3"; if(a){a.textContent="…";a.style.opacity="0.3";}
 }
@@ -257,7 +246,7 @@ function handleReset() {
   currentPhase = "idle"; matchedUris = {}; allTrackCount = 0; uriToIndices = {};
   skippedPlan = []; isContinuing = false; currentTracks = []; sessionQueue = new Set(); sessionPaused = false;
   endSessionUI();
-  $("pagePicker").style.display = "none"; $("eraPanel").style.display = "none";
+  $("eraPanel").style.display = "none";
   $("trackListWrapper").style.display = "none"; hideStatus();
 }
 
