@@ -4,7 +4,7 @@
 
 Scrobble Time Machine is a client-side web app that connects a user's Last.fm scrobble history with Spotify playback. Users enter their Last.fm username, connect Spotify via PKCE OAuth, then "time travel" by choosing a discovery mode (random page, date, artist, mood, decade, etc.). The app fetches matching tracks from Last.fm, matches them against Spotify's catalog, plays them in-browser via the Spotify Web Playback SDK, and lets users save the session as a Spotify playlist or like individual tracks.
 
-**Live URL:** https://scrobble-time-machine.vercel.app/
+**Live URL:** https://stm-lastfm.vercel.app/
 **Repo URL:** https://github.com/manuelmatheu/scrobble-time-machine
 
 ---
