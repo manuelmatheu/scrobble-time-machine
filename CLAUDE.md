@@ -28,7 +28,7 @@ No build step, no package manager, no linter -- there is nothing to install or c
 ### File Structure
 
 ```
-index.html          -- Page shell, player bar HTML, script load order
+index.html          -- Page shell, script load order
 css/
   style.css         -- All styles; single file; CSS custom properties for theming
 tests/              -- node test scripts (see Development)
@@ -140,12 +140,9 @@ When `sdkReady = false` (SDK not initialized, non-Premium, or SDK error):
 ### `onSDKStateChange(state)`
 
 Called by the SDK `player_state_changed` listener. Updates:
-- Player bar visibility + `body.has-player` class
-- Album art, track name, artist name
-- Play/pause button icon
-- Progress bar (position + duration)
+- Radio/travel hero, progress bar and Up next via `radioRenderNow()` (only for tracks of the current session)
 - Now-playing highlight in track list via `uriToIndices`
-- Player bar heart button via `updatePlayerBarHeart()`
+- The radio view's heart button via `updateNowPlayingHeart()`
 
 A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state events.
 
@@ -175,10 +172,10 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 | Save | `PUT /v1/me/library?uris=spotify:track:id` | no body, URIs in query string |
 | Remove | `DELETE /v1/me/library?uris=spotify:track:id` | no body, URIs in query string |
 
-- `checkLikedTracks()` -- called at end of `matchAndPlay()`. Batches up to 40 full URIs from `matchedUris[]`, calls `GET /me/library/contains`. Populates `likedSet` (Set of bare track IDs), then updates all heart buttons and the player bar heart.
+- `checkLikedTracks()` -- called at end of `matchAndPlay()`. Batches up to 40 full URIs from `matchedUris[]`, calls `GET /me/library/contains`. Populates `likedSet` (Set of bare track IDs), then updates all heart buttons and the radio view heart.
 - `toggleLikeTrack(idx)` -- optimistic UI update first, then `spPut`/`spDelete` on `/me/library?uris=`. Reverts on error.
 - `toggleLikeCurrentTrack()` -- delegates to `toggleLikeTrack(nowPlayingIndex)`.
-- `updatePlayerBarHeart()` -- syncs `#pb-heart` with `likedSet` for the track at `nowPlayingIndex`.
+- `updateNowPlayingHeart()` -- syncs `#radioHeart` with `likedSet` for the track at `nowPlayingIndex`.
 
 `likedSet` stores bare track IDs (not full URIs), e.g. `"4iV5W9uYEdYUVa79Axb7Rh"`.
 
@@ -206,11 +203,11 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 - **Engine (`radio.js`):** `radioFill(want)` fires `RADIO_CONCURRENCY` parallel single-scrobble requests per round, dedupes by `artist||track` (`radioSeen`) and by Spotify URI, matches with `spotifySearch()`, and appends to `matchedUris` / `allTrackCount` / `sessionQueue` / `trackMeta[index]`.
 - **Top-up:** `radioMaybeRefill()` runs on every track change (SDK state handler and polling fallback). When `RADIO_LOW_WATER` tracks remain it calls `continueRadio()`, which re-issues `spotifyPlay()` from the current track with the new tracks appended (same approach as `continueMatching`, avoids the persistent user queue).
 - **Stale work:** every start/stop bumps `radioSession`; in-flight fills compare against it and bail. `beginSession()` and `handleReset()` call `radioStop()`.
-- **Views:** `#homeView` (a `.radio-card` with the headline, username and Start radio, then `#timeTravel`: a grid of nine `.mode-card` buttons that `setMode()` toggles, each revealing its `.mode-inputs` block) and `#radioView` (its `.radio-now` card wraps the hero, progress bar and controls), which serves both Library Radio and every Time Travel mode via `showRadioView("radio" | "travel")`. Travel shows the full clickable `#trackList` instead of Up next (there is no context panel and no time slider), plus an Again button (`travelAgain()` re-runs `handleGo()`). `matchAndPlay()` opens the travel view; failures in `fetchAndPlay*` call `radioStop()` to return home (errors raised earlier, inside a mode handler, never left home). `body.radio-mode` hides the bottom player bar. There are no page numbers in the UI: moments are labelled by date (`radioEraLabel(tracks)`, which also names the saved playlist).
+- **Views:** `#homeView` (a `.radio-card` with the headline, username and Start radio, then `#timeTravel`: a grid of nine `.mode-card` buttons that `setMode()` toggles, each revealing its `.mode-inputs` block) and `#radioView` (its `.radio-now` card wraps the hero, progress bar and controls), which serves both Library Radio and every Time Travel mode via `showRadioView("radio" | "travel")`. Travel shows the full clickable `#trackList` instead of Up next (there is no context panel and no time slider), plus an Again button (`travelAgain()` re-runs `handleGo()`). `matchAndPlay()` opens the travel view; failures in `fetchAndPlay*` call `radioStop()` to return home (errors raised earlier, inside a mode handler, never left home). There are no page numbers in the UI: moments are labelled by date (`radioEraLabel(tracks)`, which also names the saved playlist).
 - **Session-only player events:** the hero, info panel and radio progress bar only follow tracks that belong to the current session (`uriToIndices[track.uri]`), and the progress bar is gated by `radioHeroLive`, so the previous session's song never shows while the next one loads.
 - **Artist info:** on every track change `radioSyncInfo()` calls `radioInfoFor(idx)`, which fetches `artist.getinfo` (bio summary + `stats.userplaycount`) and `track.getinfo` (`userplaycount`) with `username`, using the scrobble's own names (`radioInfoSource(idx)`: `trackMeta[idx].lfmArtist` / `lfmTrack` in the radio, the Last.fm track objects in `currentTracks` in time travel) and the username from `radioUser` or the username field. Results are cached per artist and per track as promises (`radioArtistCache` / `radioTrackCache`); a failed lookup is not cached and never throws. `radioParseBio()` strips the HTML and the trailing "Read more on Last.fm" link (http(s) only); the panel (`#radioInfo`) hides itself when there is nothing to show.
 - **Clickable Up next:** rows come from `radioQueueRowHtml()` (cover from `trackMeta.art`, https only, and the scrobble year) and each calls `radioPlayFrom(idx)`, which re-issues `spotifyPlay()` from that track onward (`radioUrisFrom`).
-- **Home and the player bar:** the Home button calls `radioMinimize()`, which only swaps views (`radioMinimized = true`); the session, the music and the refills keep running and the hero/queue keep updating while hidden. On the home view the bottom `#player-bar` is the way back: its `#pb-open` button calls `radioReopen()`. `leaveRadio()` (the bar's X) is the real Stop: `handleReset()`, pause, and hide the bar. `onSDKStateChange` only shows the bar while a session exists (`radioActive || travelActive || sessionQueue.size`), so a stray state event after Stop does not bring it back. Starting any new session goes through `beginSession()` -> `radioStop()` -> `hideRadioView()`, which clears `radioMinimized`.
+- **Home and Back to radio:** the Home button calls `radioMinimize()`, which only swaps views (`radioMinimized = true`); the session, the music and the refills keep running and the hero/queue keep updating while hidden. `radioSyncHome()` then turns the home card into "Playing now · track · artist" (`#radioPlaying`), a primary `#radioBackBtn` ("Back to radio", calls `radioReopen()`) and a secondary "Start a new radio" (`#radioBtn`). There is no bottom player bar any more: while the session runs behind the home view, play/pause and skipping live in the radio view. Starting any new session goes through `beginSession()` -> `radioStop()` -> `hideRadioView()`, which clears `radioMinimized` and restores the card.
 - **Icons:** Phosphor web font from jsDelivr (regular and fill stylesheets in `index.html`).
 
 ---

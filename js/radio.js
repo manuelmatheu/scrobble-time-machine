@@ -307,8 +307,24 @@ async function refreshHomeMeta() {
 // =============================================================================
 // RADIO VIEW
 // =============================================================================
+// Home card: while a session runs behind the home view it shows what is playing and leads back to it
+let radioNowLabel = "", radioNowPaused = false;
+function radioSyncHome() {
+  const on = radioMinimized;
+  const box = $("radioPlaying"), back = $("radioBackBtn"), again = $("radioBtn");
+  if (back) back.style.display = on ? "" : "none";
+  if (box) box.style.display = on ? "" : "none";
+  if (again) {
+    again.className = "btn btn-radio " + (on ? "btn-ghost" : "btn-primary");
+    again.innerHTML = on ? "Start a new radio" : '<i class="ph-fill ph-play" aria-hidden="true"></i> Start radio';
+  }
+  const state = $("radioPlayingState"), track = $("radioPlayingTrack");
+  if (state) state.textContent = radioNowPaused ? "Paused" : "Playing now";
+  if (track) track.textContent = radioNowLabel || "Tuning...";
+}
+
 function radioResetHero() {
-  radioHeroLive = false;
+  radioHeroLive = false; radioNowLabel = ""; radioNowPaused = false;
   $("radioTrack").textContent = "Tuning...";
   $("radioArtist").textContent = "";
   $("radioArt").removeAttribute("src");
@@ -321,10 +337,9 @@ function radioResetHero() {
 function showRadioView(mode) {
   const travel = mode === "travel";
   const wasHidden = $("radioView").style.display === "none";
-  travelActive = travel; radioMinimized = false;
+  travelActive = travel; radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
-  document.body.classList.add("radio-mode");
   $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
   $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
   $("radioAgainBtn").style.display = travel ? "" : "none";
@@ -335,32 +350,29 @@ function showRadioView(mode) {
 }
 
 function hideRadioView() {
-  travelActive = false; radioMinimized = false;
+  travelActive = false; radioMinimized = false; radioSyncHome();
   $("statusSlotHome").appendChild($("statusBar"));  // back to the home view's slot
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
-  document.body.classList.remove("radio-mode");
   $("radioUpNext").innerHTML = "";
   radioResetHero();
 }
 
-// Home button: show the home view again but keep the session and the music going; the player bar leads back
+// Home button: show the home view again but keep the session and the music going; the home card leads back
 function radioMinimize() {
   if (!(radioActive || travelActive) || $("radioView").style.display === "none") return;
-  radioMinimized = true;
+  radioMinimized = true; radioSyncHome();
   $("statusSlotHome").appendChild($("statusBar"));
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
-  document.body.classList.remove("radio-mode");
 }
 
-// Player bar: back to the session that is still running (the hero and queue kept updating while hidden)
+// Back to radio: return to the session that is still running (the hero and queue kept updating while hidden)
 function radioReopen() {
   if (!radioMinimized) return;
-  radioMinimized = false;
+  radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
-  document.body.classList.add("radio-mode");
   $("radioStatusSlot").appendChild($("statusBar"));
   window.scrollTo(0, 0);
 }
@@ -446,6 +458,9 @@ function radioRenderNow(track, paused) {
   const album = track.album && track.album.name;
   $("radioArtist").textContent = artists + (album ? " · " + album : "");
   $("radioPlay").innerHTML = '<i class="ph-fill ph-' + (paused ? "play" : "pause") + '"></i>';
+  radioNowLabel = (track.name || (meta && meta.name) || "") + (artists ? " \u00b7 " + artists : "");
+  radioNowPaused = !!paused;
+  if (radioMinimized) radioSyncHome();
   radioSyncInfo();
   radioRenderQueue();
 }
@@ -484,14 +499,6 @@ async function radioPlayFrom(idx) {
   if (!token) return;
   const ok = await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, matchedUris[idx]));
   if (!ok) showStatus("Playback failed. Is Spotify active?", "error");
-}
-
-// Stop: end the session, pause playback and drop the player bar (the bar's X)
-async function leaveRadio() {
-  handleReset();
-  const bar = $("player-bar");
-  if (bar) { bar.style.display = "none"; document.body.classList.remove("has-player"); }
-  try { await spPut("/me/player/pause", null); } catch (e) {}
 }
 
 // ===== node test exports (no-op in browsers) =====

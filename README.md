@@ -26,8 +26,7 @@ Scrobble Time Machine connects your Last.fm scrobble history with Spotify playba
 - **First Listen** - discover the exact date you first scrobbled an artist
 - **Streak finder** - surface your longest consecutive listening run for an artist
 - **Embedded player** - Spotify Web Playback SDK streams audio in-browser; no external device required
-- **Player bar** - persistent bottom bar with album art, track info, prev/play-pause/next, seekable progress, and volume control
-- **Liked songs** - heart button on each track row and in the player bar; saves/removes tracks from Spotify Liked Songs with one click
+- **Liked songs** - heart button on each track row and in the radio view; saves/removes tracks from Spotify Liked Songs with one click
 - **Save as Playlist** - one-click, auto-named (includes mode context: date, artist, etc.), opens result in Spotify
 
 ## How it works

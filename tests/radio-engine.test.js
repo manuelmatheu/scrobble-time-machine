@@ -138,13 +138,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   await run("continueRadio()");
   assert.equal(played.length, 1);
 
-  // 12. leaving the radio invalidates the session before it pauses playback
-  const order = [];
-  global.handleReset = () => order.push("reset");
-  global.spPut = async () => { order.push("pause"); };
-  await run("leaveRadio()");
-  assert.deepEqual(order, ["reset", "pause"]);
-
   // 13. disconnecting Spotify tears the session down
   let resets = 0;
   global.handleReset = () => { resets++; };
@@ -372,30 +365,44 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioExhausted"), false);
   run("spotifyBlockedUntil = 0;");
 
-  // 28. Home keeps the session running; the player bar brings the view back; Stop ends it for good
+  // 28. Home keeps the session running; the home card leads back to it
   {
-    const els = {}, bodyClasses = new Set();
-    const mk = id => ({ id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
+    const els = {};
+    const mk = id => ({ id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", className: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
     global.document.getElementById = id => els[id] || (els[id] = mk(id));
-    global.document.body = { classList: { add: c => bodyClasses.add(c), remove: c => bodyClasses.delete(c) } };
     global.window.scrollTo = () => {};
     reset();
     run("radioActive = true; travelActive = false;");
-    run('showRadioView()');
-    assert.ok(bodyClasses.has("radio-mode"));
+    run("showRadioView()");
+    assert.equal(els.radioBackBtn.style.display, "none", "no Back to radio while the radio view is showing");
     run("radioMinimize()");
     assert.equal(els.radioView.style.display, "none");
     assert.equal(els.homeView.style.display, "");
-    assert.ok(!bodyClasses.has("radio-mode"), "the player bar must be visible on the home view");
     assert.equal(run("radioActive"), true, "minimizing must not stop the radio");
     assert.equal(run("radioMinimized"), true);
     assert.ok(els.statusSlotHome.children.includes(els.statusBar));
+    // the home card: Back to radio + Playing now + a secondary Start a new radio
+    assert.equal(els.radioBackBtn.style.display, "");
+    assert.equal(els.radioPlaying.style.display, "");
+    assert.equal(els.radioPlayingTrack.textContent, "Tuning...");
+    assert.match(els.radioBtn.className, /btn-ghost/);
+    assert.equal(els.radioBtn.innerHTML, "Start a new radio");
+    // a track change while hidden updates the line, and a pause says so
+    run("trackMeta = { 0: { name: 'Airbag', artist: 'Radiohead' } }; nowPlayingIndex = 0;");
+    run("radioRenderNow({ name: 'Airbag', artists: [{ name: 'Radiohead' }], album: { name: 'OK Computer', images: [] } }, false)");
+    assert.equal(els.radioPlayingTrack.textContent, "Airbag \u00b7 Radiohead");
+    assert.equal(els.radioPlayingState.textContent, "Playing now");
+    run("radioRenderNow({ name: 'Airbag', artists: [{ name: 'Radiohead' }], album: { name: 'OK Computer', images: [] } }, true)");
+    assert.equal(els.radioPlayingState.textContent, "Paused");
     run("radioReopen()");
     assert.equal(els.radioView.style.display, "");
     assert.equal(els.homeView.style.display, "none");
-    assert.ok(bodyClasses.has("radio-mode"));
     assert.equal(run("radioMinimized"), false);
     assert.ok(els.radioStatusSlot.children.includes(els.statusBar));
+    assert.equal(els.radioBackBtn.style.display, "none");
+    assert.equal(els.radioPlaying.style.display, "none");
+    assert.match(els.radioBtn.className, /btn-primary/);
+    assert.match(els.radioBtn.innerHTML, /Start radio/);
     // reopening with nothing minimized does nothing
     els.radioView.style.display = "none"; els.homeView.style.display = "";
     run("radioReopen()");
@@ -406,17 +413,14 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     run("radioActive = false; travelActive = false;"); els.radioView.style.display = "";
     run("radioMinimize()");
     assert.equal(run("radioMinimized"), false);
-    // a time travel session minimizes too, and stopping resets the flag
+    // a time travel session minimizes too, and ending the session clears the home card
     run("travelActive = true;"); run("radioMinimize()");
     assert.equal(run("radioMinimized"), true);
+    assert.equal(els.radioBackBtn.style.display, "");
     run("hideRadioView()");
     assert.equal(run("radioMinimized"), false);
-    // Stop drops the player bar
-    global.handleReset = () => {};
-    global.spPut = async () => {};
-    els["player-bar"] = mk("player-bar"); els["player-bar"].style.display = "";
-    await run("leaveRadio()");
-    assert.equal(els["player-bar"].style.display, "none");
+    assert.equal(els.radioBackBtn.style.display, "none");
+    assert.match(els.radioBtn.innerHTML, /Start radio/);
   }
 
   global.document.getElementById = realGetElementById;

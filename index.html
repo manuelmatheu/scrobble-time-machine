@@ -85,9 +85,11 @@
       <span class="eyebrow">Library radio</span>
       <h2 class="home-headline">Your library, shuffled across every year.</h2>
       <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
+      <div class="radio-playing" id="radioPlaying" style="display:none"><i class="ph-fill ph-equalizer" aria-hidden="true"></i><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
       <div class="controls">
         <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
         <button class="btn btn-spotify btn-radio" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
+        <button class="btn btn-primary btn-radio" id="radioBackBtn" onclick="radioReopen()" style="display:none"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to radio</button>
         <button class="btn btn-primary btn-radio" id="radioBtn" onclick="startRadio()" style="display:none" disabled><i class="ph-fill ph-play" aria-hidden="true"></i> Start radio</button>
         <button class="btn btn-ghost" id="cancelBtn" onclick="handleReset()" style="display:none">Cancel</button>
       </div>
@@ -198,32 +200,6 @@
     <button class="overlay-close" onclick="closeChangelog()">✕</button>
   </div>
   <iframe id="changelogFrame" class="overlay-frame" src="about:blank"></iframe>
-</div>
-
-<div id="player-bar" style="display:none">
-  <button id="pb-open" onclick="radioReopen()" title="Back to the radio" aria-label="Back to the radio">
-    <img id="pb-art" alt="">
-    <div id="pb-info">
-      <div id="pb-track"></div>
-      <div id="pb-artist"></div>
-    </div>
-  </button>
-  <button id="pb-heart" onclick="toggleLikeCurrentTrack()" title="Save to Liked Songs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-  <div id="pb-controls">
-    <button class="pb-btn" onclick="playerPrev()" title="Previous" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
-    <button class="pb-btn pb-play" id="pb-play" onclick="playerPlayPause()" title="Play/Pause" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
-    <button class="pb-btn" onclick="playerNext()" title="Next" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
-  </div>
-  <div id="pb-progress-wrap">
-    <span id="pb-elapsed">0:00</span>
-    <div id="pb-bar" onclick="seekTo(event)"><div id="pb-fill"></div></div>
-    <span id="pb-duration">0:00</span>
-  </div>
-  <div id="pb-volume-wrap">
-    <svg class="pb-vol-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 5h2.5L8 2v12L4.5 11H2a1 1 0 01-1-1V6a1 1 0 011-1zm9 .5a4.5 4.5 0 010 5M13 3.5a7.5 7.5 0 010 9"/></svg>
-    <input type="range" id="pb-volume" min="0" max="100" value="80" oninput="setVolume(this.value)">
-  </div>
-  <button class="pb-btn" id="pb-stop" onclick="leaveRadio()" title="Stop and close" aria-label="Stop and close the radio"><i class="ph ph-x"></i></button>
 </div>
 
 <script src="https://sdk.scdn.co/spotify-player.js"></script>

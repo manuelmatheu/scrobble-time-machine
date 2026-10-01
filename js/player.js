@@ -287,23 +287,6 @@ function onSDKStateChange(state) {
   const track = state.track_window && state.track_window.current_track;
   if (!track) return;
 
-  const bar = $("player-bar");
-  // the bar belongs to a running session: a stray state event after Stop must not bring it back
-  if (bar && (radioActive || travelActive || sessionQueue.size > 0)) {
-    bar.style.display = "";
-    document.body.classList.add("has-player");
-  }
-
-  const artEl = $("pb-art");
-  if (artEl) artEl.src = (track.album && track.album.images && track.album.images[0] && track.album.images[0].url) || "";
-  const trackEl = $("pb-track");
-  if (trackEl) trackEl.textContent = track.name || "";
-  const artistEl = $("pb-artist");
-  if (artistEl) artistEl.textContent = (track.artists || []).map(a => a.name).join(", ");
-
-  const playBtn = $("pb-play");
-  if (playBtn) playBtn.innerHTML = '<i class="ph-fill ph-' + (state.paused ? "play" : "pause") + '"></i>';
-
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
@@ -344,16 +327,12 @@ function onSDKStateChange(state) {
     }
     radioMaybeRefill(track.uri, state.position);
   } else {
-    updatePlayerBarHeart();
+    updateNowPlayingHeart();
   }
 }
 
 function updateProgressBar(position, duration) {
   const pct = duration > 0 ? (position / duration * 100) + "%" : null;
-  const fill = $("pb-fill"), elapsed = $("pb-elapsed"), dur = $("pb-duration");
-  if (fill && pct) fill.style.width = pct;
-  if (elapsed) elapsed.textContent = fmtMs(position);
-  if (dur) dur.textContent = fmtMs(duration);
   if (radioHeroLive) {
     const rf = $("radioFill"), re = $("radioElapsed"), rd = $("radioDuration");
     if (rf && pct) rf.style.width = pct;
@@ -387,9 +366,6 @@ async function playerNext() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
-async function setVolume(val) {
-  if (window._stmPlayer && sdkReady) window._stmPlayer.setVolume(val / 100);
-}
 function seekTo(e) {
   const bar = e.currentTarget;
   if (!bar || !window._stmPlayer || !_sdkDurationMs) return;
@@ -409,7 +385,7 @@ async function checkAndUpdateTrackLiked(uri) {
     const results = await spGet("/me/library/contains?uris=" + encodeURIComponent(uri));
     if (results[0]) likedSet.add(id); else likedSet.delete(id);
   } catch {}
-  updatePlayerBarHeart();
+  updateNowPlayingHeart();
 }
 
 async function checkLikedTracks() {
@@ -439,7 +415,7 @@ async function checkLikedTracks() {
       btn.innerHTML = liked ? HEART_FILLED : HEART_EMPTY;
     }
   }
-  updatePlayerBarHeart();
+  updateNowPlayingHeart();
 }
 
 async function toggleLikeTrack(idx) {
@@ -451,7 +427,7 @@ async function toggleLikeTrack(idx) {
   if (wasLiked) likedSet.delete(id); else likedSet.add(id);
   const btn = $("heart-" + idx);
   if (btn) { btn.classList.toggle("liked", !wasLiked); btn.innerHTML = !wasLiked ? HEART_FILLED : HEART_EMPTY; }
-  updatePlayerBarHeart();
+  updateNowPlayingHeart();
 
   try {
     const uri = encodeURIComponent("spotify:track:" + id);
@@ -462,7 +438,7 @@ async function toggleLikeTrack(idx) {
     // Revert on error
     if (wasLiked) likedSet.add(id); else likedSet.delete(id);
     if (btn) { btn.classList.toggle("liked", wasLiked); btn.innerHTML = wasLiked ? HEART_FILLED : HEART_EMPTY; }
-    updatePlayerBarHeart();
+    updateNowPlayingHeart();
     showStatus(e.status === 403 ? "Reconnect Spotify to enable Liked Songs" : "Could not update Liked Songs", "error");
   }
 }
@@ -471,12 +447,10 @@ async function toggleLikeCurrentTrack() {
   if (nowPlayingIndex >= 0) await toggleLikeTrack(nowPlayingIndex);
 }
 
-function updatePlayerBarHeart() {
-  const btn = $("pb-heart");
-  if (!btn || nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
+function updateNowPlayingHeart() {
+  if (nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
   const id = matchedUris[nowPlayingIndex].split(":").pop();
   const liked = likedSet.has(id);
-  btn.classList.toggle("liked", liked);
   const rh = $("radioHeart");
   if (rh) { rh.classList.toggle("liked", liked); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart"></i>'; }
 }

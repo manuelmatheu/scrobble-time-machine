@@ -116,88 +116,6 @@
     .overlay-close:hover { background:var(--bg-secondary); color:var(--text-primary); }
     .overlay-frame { flex:1; border:none; width:100%; }
 
-    /* Player Bar */
-    body.has-player { padding-bottom: 72px; }
-    #player-bar {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 16px; height: 64px;
-      background: var(--bg-elevated); border-top: 1px solid var(--border);
-    }
-    #pb-art {
-      width: 44px; height: 44px; border-radius:8px; object-fit: cover;
-      flex-shrink: 0; background: var(--bg-tertiary);
-    }
-    #pb-open {
-      display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
-      background: none; border: none; padding: 0; color: inherit; font-family: inherit;
-      text-align: left; cursor: pointer; border-radius: 8px;
-    }
-    #pb-open:hover #pb-track { text-decoration: underline; }
-    #pb-stop { flex-shrink: 0; font-size: 16px; min-width: 32px; min-height: 32px; }
-    #pb-info {
-      flex: 1; min-width: 0; overflow: hidden;
-    }
-    #pb-track {
-      font-size: 14px; font-weight: 500; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #pb-artist {
-      font-size: 12px; color: var(--text-tertiary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #pb-heart {
-      background: none; border: none; cursor: pointer;
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 6px; color: var(--text-primary); opacity: 0.7; flex-shrink: 0;
-      transition: opacity 100ms, color 120ms, transform 120ms;
-    }
-    #pb-heart svg { width: 14px; height: 14px; }
-    #pb-heart:hover { opacity: 1; }
-    #pb-heart.liked { color: var(--lastfm-red); opacity: 1; }
-    #pb-heart.liked:hover { transform: scale(1.15); }
-    #pb-controls {
-      display: flex; gap: 4px; align-items: center; flex-shrink: 0;
-    }
-    .pb-btn {
-      background: none; border: none; color: var(--text-primary); cursor: pointer;
-      font-size: 14px; padding: 6px; line-height: 1; opacity: 0.7;
-      transition: opacity 100ms;
-    }
-    .pb-btn:hover { opacity: 1; }
-    .pb-play { font-size: 20px; opacity: 1; }
-    #pb-progress-wrap {
-      flex: 2; display: flex; align-items: center; gap: 8px; min-width: 0;
-    }
-    #pb-elapsed, #pb-duration {
-      font-size: 11px; font-family: 'JetBrains Mono', monospace;
-      color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
-    }
-    #pb-bar {
-      flex: 1; height: 3px; background: var(--bg-tertiary); border-radius: 2px;
-      cursor: pointer; position: relative; min-width: 0;
-    }
-    #pb-fill {
-      height: 100%; background: var(--lastfm-red); border-radius: 2px;
-      width: 0%; transition: width 0.25s linear;
-    }
-    #pb-volume-wrap {
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-    }
-    .pb-vol-icon { color: var(--text-primary); opacity: 0.5; flex-shrink: 0; }
-    #pb-volume {
-      -webkit-appearance: none; appearance: none;
-      width: 72px; height: 3px; background: var(--bg-tertiary);
-      border-radius: 2px; outline: none; cursor: pointer;
-    }
-    #pb-volume::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 12px; height: 12px;
-      background: var(--text-secondary); border-radius: 50%; cursor: pointer;
-    }
-    #pb-volume::-moz-range-thumb {
-      width: 12px; height: 12px; background: var(--text-secondary);
-      border-radius: 50%; border: none; cursor: pointer;
-    }
     /* Track row heart buttons */
     .heart-btn {
       background: none; border: none; font-size: 14px; cursor: pointer;
@@ -206,10 +124,6 @@
     }
     .heart-btn:hover { color: var(--text-primary); }
     .heart-btn.liked { color: var(--lastfm-red); }
-    @media (max-width: 580px) {
-      #pb-progress-wrap { display: none; }
-      #pb-volume-wrap { display: none; }
-    }
 
 /* Home view */
 .app-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:24px 0 20px; }
@@ -237,6 +151,10 @@
 .mode-card-name { font-size:15px; font-weight:700; }
 .mode-card-desc { font-size:13px; line-height:1.35; color:var(--text-secondary); }
 .radio-card .controls { align-items:stretch; }
+.radio-playing { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:12px 14px; border-radius:12px; background:var(--bg-tertiary); font-size:14px; color:var(--text-secondary); min-width:0; }
+.radio-playing i { color:var(--lastfm-red-text); font-size:18px; flex-shrink:0; }
+.radio-playing strong { color:var(--text-primary); }
+.radio-playing-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width:520px) { .mode-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .radio-card { padding:20px; } }
 .go-row { display:flex; justify-content:flex-start; margin-bottom:20px; }
 .mood-btn i { margin-right:2px; vertical-align:-1px; }
@@ -276,8 +194,6 @@
 .radio-row-title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-artist { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-tuning .radio-row-title { color:var(--text-secondary); font-weight:500; }
-body.radio-mode #player-bar { display:none !important; }
-body.radio-mode.has-player { padding-bottom:0; }
 @media (max-width:520px) {
   .radio-now { padding:20px; }
   .radio-hero { flex-direction:column; align-items:stretch; gap:16px; }
