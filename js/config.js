@@ -63,6 +63,7 @@ let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the 
 let radioPaused = false, radioPendingReissue = false;  // a top-up finished while paused: re-issue playback on resume
 let radioInfoIdx = -1;          // index whose bio/plays panel is showing (or loading)
 let radioArtistCache = {}, radioTrackCache = {};  // Last.fm getInfo results (promises), by artist / artist||track
+let radioMinimized = false;   // the radio/time-travel session keeps playing while the home view is showing
 let travelActive = false;       // the radio view is showing a time-travel session
 let radioHeroLive = false;      // the hero has a track from the current session (gates the progress bar)
 let spotifyBlockedUntil = 0;    // Spotify 429 cooldown: no search is sent before this timestamp (ms)

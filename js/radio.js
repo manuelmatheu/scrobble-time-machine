@@ -321,7 +321,7 @@ function radioResetHero() {
 function showRadioView(mode) {
   const travel = mode === "travel";
   const wasHidden = $("radioView").style.display === "none";
-  travelActive = travel;
+  travelActive = travel; radioMinimized = false;
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   document.body.classList.add("radio-mode");
@@ -335,13 +335,34 @@ function showRadioView(mode) {
 }
 
 function hideRadioView() {
-  travelActive = false;
+  travelActive = false; radioMinimized = false;
   $("statusSlotHome").appendChild($("statusBar"));  // back to the home view's slot
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   document.body.classList.remove("radio-mode");
   $("radioUpNext").innerHTML = "";
   radioResetHero();
+}
+
+// Home button: show the home view again but keep the session and the music going; the player bar leads back
+function radioMinimize() {
+  if (!(radioActive || travelActive) || $("radioView").style.display === "none") return;
+  radioMinimized = true;
+  $("statusSlotHome").appendChild($("statusBar"));
+  $("radioView").style.display = "none";
+  $("homeView").style.display = "";
+  document.body.classList.remove("radio-mode");
+}
+
+// Player bar: back to the session that is still running (the hero and queue kept updating while hidden)
+function radioReopen() {
+  if (!radioMinimized) return;
+  radioMinimized = false;
+  $("homeView").style.display = "none";
+  $("radioView").style.display = "";
+  document.body.classList.add("radio-mode");
+  $("radioStatusSlot").appendChild($("statusBar"));
+  window.scrollTo(0, 0);
 }
 
 // Repeat the last Time Travel mode with the same inputs
@@ -429,15 +450,14 @@ function radioRenderNow(track, paused) {
   radioRenderQueue();
 }
 
-// One Up next row: cover (https only, so the URL is safe in an attribute), title, artist, and the scrobble year when known
+// One Up next row: cover (https only, so the URL is safe in an attribute), title and artist
 function radioQueueRowHtml(idx, m, esc) {
   esc = esc || (s => s);
   const art = /^https:\/\/[^"'<>\s]+$/.test(m.art || "")
     ? '<img class="radio-row-art" src="' + m.art + '" alt="" loading="lazy">'
     : '<div class="radio-row-art"></div>';
-  const year = m.year ? '<span class="radio-row-year">' + esc(String(m.year)) + '</span>' : "";
   return '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + idx + ')">' + art
-    + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div>' + year + '</div>';
+    + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div></div>';
 }
 
 // Up next: the matched tracks after the current one, plus a Tuning row while a top-up runs
@@ -466,9 +486,11 @@ async function radioPlayFrom(idx) {
   if (!ok) showStatus("Playback failed. Is Spotify active?", "error");
 }
 
-// Back: pause playback and return to the home view
+// Stop: end the session, pause playback and drop the player bar (the bar's X)
 async function leaveRadio() {
   handleReset();
+  const bar = $("player-bar");
+  if (bar) { bar.style.display = "none"; document.body.classList.remove("has-player"); }
   try { await spPut("/me/player/pause", null); } catch (e) {}
 }
 

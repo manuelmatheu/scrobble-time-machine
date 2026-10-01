@@ -288,7 +288,8 @@ function onSDKStateChange(state) {
   if (!track) return;
 
   const bar = $("player-bar");
-  if (bar) {
+  // the bar belongs to a running session: a stray state event after Stop must not bring it back
+  if (bar && (radioActive || travelActive || sessionQueue.size > 0)) {
     bar.style.display = "";
     document.body.classList.add("has-player");
   }

@@ -372,6 +372,53 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioExhausted"), false);
   run("spotifyBlockedUntil = 0;");
 
+  // 28. Home keeps the session running; the player bar brings the view back; Stop ends it for good
+  {
+    const els = {}, bodyClasses = new Set();
+    const mk = id => ({ id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
+    global.document.getElementById = id => els[id] || (els[id] = mk(id));
+    global.document.body = { classList: { add: c => bodyClasses.add(c), remove: c => bodyClasses.delete(c) } };
+    global.window.scrollTo = () => {};
+    reset();
+    run("radioActive = true; travelActive = false;");
+    run('showRadioView()');
+    assert.ok(bodyClasses.has("radio-mode"));
+    run("radioMinimize()");
+    assert.equal(els.radioView.style.display, "none");
+    assert.equal(els.homeView.style.display, "");
+    assert.ok(!bodyClasses.has("radio-mode"), "the player bar must be visible on the home view");
+    assert.equal(run("radioActive"), true, "minimizing must not stop the radio");
+    assert.equal(run("radioMinimized"), true);
+    assert.ok(els.statusSlotHome.children.includes(els.statusBar));
+    run("radioReopen()");
+    assert.equal(els.radioView.style.display, "");
+    assert.equal(els.homeView.style.display, "none");
+    assert.ok(bodyClasses.has("radio-mode"));
+    assert.equal(run("radioMinimized"), false);
+    assert.ok(els.radioStatusSlot.children.includes(els.statusBar));
+    // reopening with nothing minimized does nothing
+    els.radioView.style.display = "none"; els.homeView.style.display = "";
+    run("radioReopen()");
+    assert.equal(els.radioView.style.display, "none");
+    // minimizing a view that is not showing, or with no session, does nothing
+    run("radioMinimize()");
+    assert.equal(run("radioMinimized"), false);
+    run("radioActive = false; travelActive = false;"); els.radioView.style.display = "";
+    run("radioMinimize()");
+    assert.equal(run("radioMinimized"), false);
+    // a time travel session minimizes too, and stopping resets the flag
+    run("travelActive = true;"); run("radioMinimize()");
+    assert.equal(run("radioMinimized"), true);
+    run("hideRadioView()");
+    assert.equal(run("radioMinimized"), false);
+    // Stop drops the player bar
+    global.handleReset = () => {};
+    global.spPut = async () => {};
+    els["player-bar"] = mk("player-bar"); els["player-bar"].style.display = "";
+    await run("leaveRadio()");
+    assert.equal(els["player-bar"].style.display, "none");
+  }
+
   global.document.getElementById = realGetElementById;
 
   console.log("radio engine: ok");
