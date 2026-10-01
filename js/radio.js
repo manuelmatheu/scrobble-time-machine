@@ -429,6 +429,17 @@ function radioRenderNow(track, paused) {
   radioRenderQueue();
 }
 
+// One Up next row: cover (https only, so the URL is safe in an attribute), title, artist, and the scrobble year when known
+function radioQueueRowHtml(idx, m, esc) {
+  esc = esc || (s => s);
+  const art = /^https:\/\/[^"'<>\s]+$/.test(m.art || "")
+    ? '<img class="radio-row-art" src="' + m.art + '" alt="" loading="lazy">'
+    : '<div class="radio-row-art"></div>';
+  const year = m.year ? '<span class="radio-row-year">' + esc(String(m.year)) + '</span>' : "";
+  return '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + idx + ')">' + art
+    + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div>' + year + '</div>';
+}
+
 // Up next: the matched tracks after the current one, plus a Tuning row while a top-up runs
 function radioRenderQueue() {
   const box = $("radioUpNext");
@@ -437,7 +448,7 @@ function radioRenderQueue() {
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
     const m = trackMeta[i];
     if (!m) continue;
-    html += '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + i + ')"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div></div>';
+    html += radioQueueRowHtml(i, m, escHtml);
     shown++;
   }
   if (radioRefilling) {
@@ -463,5 +474,5 @@ async function leaveRadio() {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest, radioQueueRowHtml };
 }

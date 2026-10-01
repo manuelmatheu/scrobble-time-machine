@@ -116,4 +116,18 @@ assert.equal(r.radioRateLimitText(61 * 60000), "61 minutes");
 assert.equal(r.radioRateLimitText(2 * 3600000), "2 hours");
 assert.equal(r.radioRateLimitText(5400000), "2 hours");
 
+// radioQueueRowHtml: Up next row with cover and year
+const row = r.radioQueueRowHtml(3, { name: "A <b>", artist: "X", art: "https://i.scdn.co/image/abc", year: 2014 }, s => s.replace(/</g, "&lt;"));
+assert.match(row, /radioPlayFrom\(3\)/);
+assert.match(row, /<img class="radio-row-art" src="https:\/\/i\.scdn\.co\/image\/abc"/);
+assert.match(row, /A &lt;b>/);
+assert.match(row, /<span class="radio-row-year">2014<\/span>/);
+// no cover, no year: placeholder tile, no year span
+const bare = r.radioQueueRowHtml(1, { name: "B", artist: "Y" });
+assert.match(bare, /<div class="radio-row-art"><\/div>/);
+assert.doesNotMatch(bare, /radio-row-year/);
+// a cover URL that is not plain https never reaches the attribute
+assert.doesNotMatch(r.radioQueueRowHtml(1, { name: "B", artist: "Y", art: 'javascript:alert(1)' }), /<img/);
+assert.doesNotMatch(r.radioQueueRowHtml(1, { name: "B", artist: "Y", art: 'https://x/" onerror="y' }), /<img/);
+
 console.log("radio helpers: ok");

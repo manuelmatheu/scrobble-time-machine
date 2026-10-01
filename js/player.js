@@ -256,6 +256,7 @@ async function matchAndPlay(tracks, page, tp, label) {
   sessionQueue = new Set(uris); sessionPaused = false;
   const eraLabel = label || radioEraLabel(tracks);
   playlistLabel = eraLabel;
+  if (eraLabel !== "Random") $("radioTitle").textContent = "Time travel \u00b7 " + eraLabel;
   showStatus("Starting playback…");
   token = await getSpotifyToken();
   const ok = await spotifyPlay(token, uris);
