@@ -244,7 +244,7 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 
 ---
 
-## Current Version: v2.4
+## Current Version: v2.5
 
 Version bumps touch three places: the version-history comment at the top of `index.html`, the footer link text in `index.html`, and the changelog opened by `openChangelog()` (`js/ui.js`; content in `changelog.html`). `ROADMAP.md` holds planned work; `docs/superpowers/` holds design notes.
 
