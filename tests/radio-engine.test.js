@@ -441,11 +441,9 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("radioMinimized"), false);
     assert.equal(els.radioBackBtn.style.display, "none");
     assert.match(els.radioBtn.innerHTML, /Start radio/);
-    // Save as Playlist sits in the header of whichever list is showing
-    run('showRadioView("travel")');
-    assert.ok(els.saveSlotTravel.children.includes(els.savePlaylistBtn));
-    run("showRadioView()");
-    assert.ok(els.saveSlotRadio.children.includes(els.savePlaylistBtn));
+    // Save as Playlist exists only in Time Travel: showing the radio view never touches it
+    run('showRadioView("travel")'); run("showRadioView()");
+    assert.equal(els.savePlaylistBtn, undefined, "the radio view does not create or show the save button");
   }
 
   global.document.getElementById = realGetElementById;

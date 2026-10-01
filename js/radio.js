@@ -219,12 +219,10 @@ async function startRadio() {
       const devs = await getSpotifyDevices(token);
       throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active.");
     }
-    currentPhase = "done"; playlistLabel = "Library Radio";
+    currentPhase = "done";
     showStatus("▶ Library radio" + (totalScrobbles < 200 ? " · small library, new tracks may run out" : ""), "success");
     startPolling();
     checkLikedTracks();
-    const btn = $("savePlaylistBtn");
-    btn.style.display = ""; btn.disabled = false; btn.textContent = "Save as Playlist"; btn.className = "btn-save-playlist"; btn.onclick = saveAsPlaylist;
     endSessionUI();
   } catch (err) {
     if (sid !== radioSession) return;
@@ -355,8 +353,6 @@ function showRadioView(mode) {
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
-  const saveSlot = $(travel ? "saveSlotTravel" : "saveSlotRadio"), saveBtn = $("savePlaylistBtn");
-  if (saveSlot && saveBtn) saveSlot.appendChild(saveBtn);  // Save as Playlist sits in the header of whichever list is showing
   $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
   $("radioAgainBtn").style.display = travel ? "" : "none";
   $("radioUpNextBlock").style.display = travel ? "none" : "";

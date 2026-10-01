@@ -183,8 +183,6 @@
 .radio-btn:active { transform:scale(0.96); }
 .radio-play { width:56px; height:56px; font-size:24px; background:var(--text-primary); color:var(--bg-primary); border-radius:999px; }
 .radio-view .btn-save-playlist { min-height:44px; padding:0 16px; font-size:13px; font-weight:700; border-width:1.5px; white-space:nowrap; }
-.radio-list-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
-.radio-list-head .radio-upnext-title { margin-bottom:0; }
 .list-head-right { display:flex; align-items:center; gap:12px; }
 .radio-volume { display:none; align-items:center; gap:8px; margin-left:12px; color:var(--text-secondary); }
 .radio-volume.sdk { display:flex; }
