@@ -96,26 +96,9 @@ function selectMood(btn) {
   updateGoButton();
 }
 
-function toggleMoreModes() {
-  const sec = $("modeSecondary");
-  const btn = $("modeMoreToggle");
-  const showing = sec.style.display !== "none";
-  sec.style.display = showing ? "none" : "";
-  btn.textContent = showing ? "More ▾" : "Less ▴";
-  btn.classList.toggle("open", !showing);
-}
-
-const SECONDARY_MODES = ["mood", "decade", "album", "discovery", "streak"];
-
 function setMode(mode) {
   searchMode = mode;
-  document.querySelectorAll(".mode-pill").forEach(p => p.classList.toggle("active", p.dataset.mode === mode));
-  // Auto-expand secondary row if a secondary mode is selected
-  if (SECONDARY_MODES.includes(mode)) {
-    $("modeSecondary").style.display = "";
-    $("modeMoreToggle").textContent = "Less ▴";
-    $("modeMoreToggle").classList.add("open");
-  }
+  document.querySelectorAll(".mode-card").forEach(p => p.classList.toggle("active", p.dataset.mode === mode));
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
   $("modeInputMood").style.display = mode === "mood" ? "" : "none";
