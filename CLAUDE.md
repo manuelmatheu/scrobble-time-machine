@@ -1,4 +1,8 @@
-# CLAUDE.md — Scrobble Time Machine
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# Scrobble Time Machine
 
 ## What is Scrobble Time Machine
 
@@ -11,7 +15,7 @@ Scrobble Time Machine is a client-side web app that connects a user's Last.fm sc
 
 ## Development
 
-No build step, no package manager, no linter -- there is nothing to install or compile. A few dependency-free Node scripts in `tests/` cover the pure radio helpers, the radio engine (network stubbed), and CSS contrast; run them with `node tests/radio-helpers.test.js`, `node tests/radio-engine.test.js`, `node tests/contrast.test.js`, and `node tests/no-page-numbers.test.js` (no page numbers in status or error messages), and `node tests/no-era-panel.test.js` (the era panel and slider stay removed). Edit the `.html`/`.css`/`.js` files directly.
+No build step, no package manager, no linter -- there is nothing to install or compile. A few dependency-free Node scripts in `tests/` cover the pure radio helpers, the radio engine (network stubbed), and CSS contrast; run one with e.g. `node tests/radio-helpers.test.js`, or all of them with `for t in tests/*.test.js; do node $t || exit 1; done` (each prints `<name>: ok` on success; the full set: `radio-helpers`, `node tests/radio-engine.test.js`, `node tests/contrast.test.js`, and `node tests/no-page-numbers.test.js` (no page numbers in status or error messages), and `node tests/no-era-panel.test.js` (the era panel and slider stay removed). Edit the `.html`/`.css`/`.js` files directly.
 
 - **Run locally:** serve the folder with any static file server (e.g. `npx serve`, `python -m http.server`) and open it in a browser. Opening `index.html` directly via `file://` will break Spotify PKCE auth, since `SPOTIFY_REDIRECT_URI` (`js/config.js`) is derived from `window.location.origin + window.location.pathname` and must exactly match a redirect URI registered on the Spotify app.
 - **Verify changes:** the node scripts above cover only the radio logic and contrast tokens; everything else is manual. Exercise the flow in a browser -- connect Spotify, run a mode, confirm playback/highlighting/save-playlist still work.
@@ -52,7 +56,7 @@ js/
 <script src="js/ui.js"></script>         <!-- uses showStatus, $ from config -->
 <script src="js/player.js"></script>     <!-- uses spotify.js + ui.js functions -->
 <script src="js/radio.js"></script>      <!-- uses player.js + spotify.js; before modes.js -->
-<script src="js/modes.js"></script>      -- uses player.js functions -->
+<script src="js/modes.js"></script>      <!-- uses player.js functions -->
 <script src="js/app.js"></script>        <!-- wires up all event listeners -->
 ```
 
@@ -241,6 +245,8 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 ---
 
 ## Current Version: v2.4
+
+Version bumps touch three places: the version-history comment at the top of `index.html`, the footer link text in `index.html`, and the changelog opened by `openChangelog()` (`js/ui.js`; content in `changelog.html`). `ROADMAP.md` holds planned work; `docs/superpowers/` holds design notes.
 
 ---
 
