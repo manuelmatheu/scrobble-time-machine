@@ -43,10 +43,18 @@ function setTrackStatus(i, s) {
   else if(s==="not_found"||s==="skipped"){row.classList.add("not-matched");row.classList.remove("playable");}
 }
 
+// Wide desktop: the Time Travel list scrolls inside its panel; keep the playing row in view without moving the page
+function scrollTrackListTo(row) {
+  const box = $("trackList");
+  if (!box || box.scrollHeight <= box.clientHeight + 1) return;
+  const top = row.offsetTop, bottom = top + row.offsetHeight;
+  if (top < box.scrollTop || bottom > box.scrollTop + box.clientHeight) box.scrollTop = Math.max(top - 8, 0);
+}
+
 function highlightNowPlaying(index) {
   if (index === nowPlayingIndex) return;
   document.querySelectorAll(".track-row.now-playing").forEach(r => r.classList.remove("now-playing"));
-  if (index >= 0) { const row = $("track-" + index); if (row) { row.classList.add("now-playing"); if (!travelActive) row.scrollIntoView({behavior:"smooth", block:"nearest"}); } }
+  if (index >= 0) { const row = $("track-" + index); if (row) { row.classList.add("now-playing"); if (!travelActive) row.scrollIntoView({behavior:"smooth", block:"nearest"}); else scrollTrackListTo(row); } }
   nowPlayingIndex = index;
 }
 

@@ -319,6 +319,12 @@ function radioSyncVolume() {
   }).catch(() => { radioVolumeSynced = false; });
 }
 
+// Wide desktop layout of the radio / Time Travel views (see the min-width:1100px block in style.css)
+function radioSetWide(on) {
+  const cl = typeof document !== "undefined" && document.body && document.body.classList;
+  if (cl) { if (on) cl.add("radio-wide"); else cl.remove("radio-wide"); }
+}
+
 // Home card: while a session runs behind the home view it shows what is playing and leads back to it
 let radioNowLabel = "", radioNowPaused = false;
 function radioSyncHome() {
@@ -349,7 +355,7 @@ function radioResetHero() {
 function showRadioView(mode) {
   const travel = mode === "travel";
   const wasHidden = $("radioView").style.display === "none";
-  travelActive = travel; radioMinimized = false; radioSyncHome();
+  travelActive = travel; radioMinimized = false; radioSyncHome(); radioSetWide(true);
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
@@ -362,7 +368,7 @@ function showRadioView(mode) {
 }
 
 function hideRadioView() {
-  travelActive = false; radioMinimized = false; radioSyncHome();
+  travelActive = false; radioMinimized = false; radioSyncHome(); radioSetWide(false);
   $("statusSlotHome").appendChild($("statusBar"));  // back to the home view's slot
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
@@ -373,7 +379,7 @@ function hideRadioView() {
 // Home button: show the home view again but keep the session and the music going; the home card leads back
 function radioMinimize() {
   if (!(radioActive || travelActive) || $("radioView").style.display === "none") return;
-  radioMinimized = true; radioSyncHome();
+  radioMinimized = true; radioSyncHome(); radioSetWide(false);
   $("statusSlotHome").appendChild($("statusBar"));
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
@@ -382,7 +388,7 @@ function radioMinimize() {
 // Back to radio: return to the session that is still running (the hero and queue kept updating while hidden)
 function radioReopen() {
   if (!radioMinimized) return;
-  radioMinimized = false; radioSyncHome();
+  radioMinimized = false; radioSyncHome(); radioSetWide(true);
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   $("radioStatusSlot").appendChild($("statusBar"));
