@@ -145,25 +145,28 @@
       </div>
       <h2 class="radio-title" id="radioTitle">Library radio</h2>
     </div>
-    <div class="radio-hero">
-      <img id="radioArt" class="radio-art" alt="">
-      <div class="radio-hero-text">
-        <div class="radio-track" id="radioTrack">Tuning...</div>
-        <div class="radio-artist" id="radioArtist"></div>
+    <section class="radio-now" aria-label="Now playing">
+      <div class="radio-hero">
+        <img id="radioArt" class="radio-art" alt="">
+        <div class="radio-hero-text">
+          <span class="eyebrow">Now playing</span>
+          <div class="radio-track" id="radioTrack">Tuning...</div>
+          <div class="radio-artist" id="radioArtist"></div>
+        </div>
       </div>
-    </div>
-    <div class="radio-progress">
-      <span id="radioElapsed">0:00</span>
-      <div id="radioBar" onclick="seekTo(event)"><div id="radioFill"></div></div>
-      <span id="radioDuration">0:00</span>
-    </div>
-    <div class="radio-controls">
-      <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
-      <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
-      <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
-      <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
-      <span id="saveSlotRadio"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span>
-    </div>
+      <div class="radio-progress">
+        <span id="radioElapsed">0:00</span>
+        <div id="radioBar" onclick="seekTo(event)"><div id="radioFill"></div></div>
+        <span id="radioDuration">0:00</span>
+      </div>
+      <div class="radio-controls">
+        <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
+        <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
+        <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
+        <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
+        <span id="saveSlotRadio"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span>
+      </div>
+    </section>
     <div class="radio-info" id="radioInfo" style="display:none">
       <p class="radio-stats" id="radioStats"></p>
       <div class="radio-bio" id="radioBio" style="display:none">
