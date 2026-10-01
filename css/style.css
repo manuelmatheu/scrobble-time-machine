@@ -182,7 +182,20 @@
 .radio-btn:hover { background:var(--bg-tertiary); }
 .radio-btn:active { transform:scale(0.96); }
 .radio-play { width:56px; height:56px; font-size:24px; background:var(--text-primary); color:var(--bg-primary); border-radius:999px; }
-.radio-view .btn-save-playlist { min-height:44px; padding:0 16px; margin-left:8px; font-size:13px; font-weight:700; border-width:1.5px; }
+.radio-view .btn-save-playlist { min-height:44px; padding:0 16px; font-size:13px; font-weight:700; border-width:1.5px; white-space:nowrap; }
+.radio-list-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
+.radio-list-head .radio-upnext-title { margin-bottom:0; }
+.list-head-right { display:flex; align-items:center; gap:12px; }
+.radio-volume { display:none; align-items:center; gap:8px; margin-left:12px; color:var(--text-secondary); }
+.radio-volume.sdk { display:flex; }
+.radio-volume i { font-size:20px; }
+#radioVolume { -webkit-appearance:none; appearance:none; width:140px; height:44px; background:transparent; cursor:pointer; --vol:80%; }
+#radioVolume::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:linear-gradient(to right, var(--text-secondary) var(--vol), var(--border) var(--vol)); }
+#radioVolume::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; margin-top:-5px; border:none; border-radius:50%; background:var(--text-primary); }
+#radioVolume::-moz-range-track { height:4px; border-radius:2px; background:var(--border); }
+#radioVolume::-moz-range-progress { height:4px; border-radius:2px; background:var(--text-secondary); }
+#radioVolume::-moz-range-thumb { width:14px; height:14px; border:none; border-radius:50%; background:var(--text-primary); }
+#radioVolume:focus-visible { outline:2px solid var(--lastfm-red-text); outline-offset:2px; border-radius:4px; }
 .radio-play:hover { background:var(--text-secondary); }
 .radio-btn.liked { color:var(--lastfm-red-text); }
 .radio-upnext-title { font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:10px; }
@@ -199,9 +212,9 @@
   .radio-hero { flex-direction:column; align-items:stretch; gap:16px; }
   .radio-art { width:100%; height:auto; aspect-ratio:1/1; }
   .radio-track { font-size:26px; }
-  #saveSlotRadio { flex:1 1 100%; }
-  .radio-view .btn-save-playlist { width:100%; margin-left:0; font-size:14px; }
 }
+
+@media (max-width:720px) { .radio-volume.sdk { display:none; } }
 
 /* Reduced motion: everything collapses to static */
 @media (prefers-reduced-motion: reduce) {

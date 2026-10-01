@@ -366,6 +366,12 @@ async function playerNext() {
   if (window._stmPlayer && sdkReady) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
+// Volume slider (desktop only): the SDK player's own volume, so only while the SDK device is the active player
+async function setVolume(el) {
+  const v = Math.min(Math.max(parseInt(el.value, 10) || 0, 0), 100);
+  el.style.setProperty("--vol", v + "%");
+  if (window._stmPlayer && sdkReady) window._stmPlayer.setVolume(v / 100);
+}
 function seekTo(e) {
   const bar = e.currentTarget;
   if (!bar || !window._stmPlayer || !_sdkDurationMs) return;

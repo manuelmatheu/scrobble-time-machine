@@ -307,6 +307,20 @@ async function refreshHomeMeta() {
 // =============================================================================
 // RADIO VIEW
 // =============================================================================
+// Volume slider: shown (on wide screens, via CSS) only while the SDK device plays; it starts from the player's real volume
+let radioVolumeSynced = false;
+function radioSyncVolume() {
+  const wrap = $("radioVolumeWrap");
+  if (!wrap) return;
+  wrap.classList.toggle("sdk", !!sdkReady);
+  if (!sdkReady || radioVolumeSynced || !window._stmPlayer || !window._stmPlayer.getVolume) return;
+  radioVolumeSynced = true;
+  Promise.resolve(window._stmPlayer.getVolume()).then(v => {
+    const el = $("radioVolume");
+    if (el && typeof v === "number") { el.value = Math.round(v * 100); el.style.setProperty("--vol", el.value + "%"); }
+  }).catch(() => { radioVolumeSynced = false; });
+}
+
 // Home card: while a session runs behind the home view it shows what is playing and leads back to it
 let radioNowLabel = "", radioNowPaused = false;
 function radioSyncHome() {
@@ -341,6 +355,8 @@ function showRadioView(mode) {
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
+  const saveSlot = $(travel ? "saveSlotTravel" : "saveSlotRadio"), saveBtn = $("savePlaylistBtn");
+  if (saveSlot && saveBtn) saveSlot.appendChild(saveBtn);  // Save as Playlist sits in the header of whichever list is showing
   $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
   $("radioAgainBtn").style.display = travel ? "" : "none";
   $("radioUpNextBlock").style.display = travel ? "none" : "";
@@ -460,6 +476,7 @@ function radioRenderNow(track, paused) {
   $("radioPlay").innerHTML = '<i class="ph-fill ph-' + (paused ? "play" : "pause") + '"></i>';
   radioNowLabel = (track.name || (meta && meta.name) || "") + (artists ? " \u00b7 " + artists : "");
   radioNowPaused = !!paused;
+  radioSyncVolume();
   if (radioMinimized) radioSyncHome();
   radioSyncInfo();
   radioRenderQueue();

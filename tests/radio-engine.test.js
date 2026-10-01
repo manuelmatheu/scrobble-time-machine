@@ -368,7 +368,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 28. Home keeps the session running; the home card leads back to it
   {
     const els = {};
-    const mk = id => ({ id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", className: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
+    const mk = id => { const cl = new Set(); return { id, style: id === "radioView" ? { display: "none" } : { setProperty(k, v) { this[k] = v; } }, textContent: "", innerHTML: "", className: "", value: "80", children: [], cl, classList: { add: c => cl.add(c), remove: c => cl.delete(c), toggle: (c, on) => (on ? cl.add(c) : cl.delete(c)) }, removeAttribute() {}, appendChild(c) { this.children.push(c); } }; };
     global.document.getElementById = id => els[id] || (els[id] = mk(id));
     global.window.scrollTo = () => {};
     reset();
@@ -394,6 +394,26 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(els.radioPlayingState.textContent, "Playing now");
     run("radioRenderNow({ name: 'Airbag', artists: [{ name: 'Radiohead' }], album: { name: 'OK Computer', images: [] } }, true)");
     assert.equal(els.radioPlayingState.textContent, "Paused");
+    // the volume slider shows only while the SDK device plays
+    assert.ok(!els.radioVolumeWrap.cl.has("sdk"), "no slider without the SDK");
+    run("sdkReady = true; window._stmPlayer = { getVolume: async () => 0.35, setVolume() {} };");
+    run("radioRenderNow({ name: 'Airbag', artists: [], album: { images: [] } }, false)");
+    assert.ok(els.radioVolumeWrap.cl.has("sdk"));
+    await new Promise(r => setImmediate(r));
+    assert.equal(els.radioVolume.value, 35, "the slider starts from the player's real volume");
+    const vols = [];
+    run("window._stmPlayer.setVolume = v => globalThis.__vols.push(v);"); global.__vols = vols;
+    await run("setVolume({ value: '60', style: { setProperty(k, v) { globalThis.__prop = [k, v]; } } })");
+    assert.deepEqual(vols, [0.6]);
+    assert.deepEqual(global.__prop, ["--vol", "60%"]);
+    await run("setVolume({ value: '999', style: { setProperty() {} } })");
+    assert.deepEqual(vols, [0.6, 1], "volume is clamped to 0-100");
+    run("sdkReady = false;");
+    await run("setVolume({ value: '10', style: { setProperty() {} } })");
+    assert.equal(vols.length, 2, "no SDK, no volume call");
+    run("radioRenderNow({ name: 'Airbag', artists: [], album: { images: [] } }, false)");
+    assert.ok(!els.radioVolumeWrap.cl.has("sdk"), "the slider hides again when the SDK drops");
+    run("window._stmPlayer = undefined;");
     run("radioReopen()");
     assert.equal(els.radioView.style.display, "");
     assert.equal(els.homeView.style.display, "none");
@@ -421,6 +441,11 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("radioMinimized"), false);
     assert.equal(els.radioBackBtn.style.display, "none");
     assert.match(els.radioBtn.innerHTML, /Start radio/);
+    // Save as Playlist sits in the header of whichever list is showing
+    run('showRadioView("travel")');
+    assert.ok(els.saveSlotTravel.children.includes(els.savePlaylistBtn));
+    run("showRadioView()");
+    assert.ok(els.saveSlotRadio.children.includes(els.savePlaylistBtn));
   }
 
   global.document.getElementById = realGetElementById;
