@@ -13,6 +13,7 @@ load("spotify.js");
 load("ui.js");
 load("player.js");
 const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
+const realShowStatus = global.showStatus;
 
 function reset() {
   run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
@@ -444,6 +445,47 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     // Save as Playlist exists only in Time Travel: showing the radio view never touches it
     run('showRadioView("travel")'); run("showRadioView()");
     assert.equal(els.savePlaylistBtn, undefined, "the radio view does not create or show the save button");
+  }
+
+  // 29. the status bar only shows errors and warnings; progress and success messages clear it
+  {
+    const els = {};
+    global.document.getElementById = id => els[id] || (els[id] = { id, style: {}, className: "", innerHTML: "", textContent: "" });
+    const savedShow = global.showStatus; global.showStatus = realShowStatus;
+    global.showStatus("Reading your Last.fm library...", "");
+    assert.equal(els.statusBar.style.display, "none", "progress messages are not shown");
+    global.showStatus("Spotify is limiting searches.", "error");
+    assert.equal(els.statusBar.style.display, "");
+    assert.match(els.statusBar.className, /error/);
+    assert.equal(els.statusBar.innerHTML, "Spotify is limiting searches.");
+    global.showStatus("▶ Library radio", "success");
+    assert.equal(els.statusBar.style.display, "none", "a success message clears an old error");
+    global.showStatus("Playback moved to another session", "warn");
+    assert.equal(els.statusBar.style.display, "");
+    assert.match(els.statusBar.className, /warn/);
+    global.showStatus = savedShow;
+  }
+
+  // 30. Up next keeps a full list: top up as soon as fewer than RADIO_UPNEXT_ROWS tracks remain
+  {
+    assert.equal(run("RADIO_LOW_WATER"), run("RADIO_UPNEXT_ROWS") - 1);
+    const low = run("RADIO_LOW_WATER");
+    assert.equal(run("radioShouldRefill({ active: true, refilling: false, exhausted: false, remaining: " + (low + 1) + " }, RADIO_LOW_WATER)"), false);
+    assert.equal(run("radioShouldRefill({ active: true, refilling: false, exhausted: false, remaining: " + low + " }, RADIO_LOW_WATER)"), true);
+    // the Tuning row only takes a free slot, so the list never grows past its rows
+    const q = { id: "radioUpNext", style: { setProperty(k, v) { this[k] = v; } }, innerHTML: "" };
+    global.document.getElementById = id => (id === "radioUpNext" ? q : null);
+    const meta = {}; for (let i = 1; i <= 8; i++) meta[i] = { name: "T" + i, artist: "A" };
+    run("trackMeta = " + JSON.stringify(meta) + "; allTrackCount = 9; nowPlayingIndex = 0; radioRefilling = true;");
+    run("radioRenderQueue()");
+    assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, run("RADIO_UPNEXT_ROWS"));
+    assert.doesNotMatch(q.innerHTML, /Tuning/, "no Tuning row when the list is already full");
+    assert.equal(q.style["--upnext-rows"], run("RADIO_UPNEXT_ROWS"));
+    run("allTrackCount = 4;");
+    run("radioRenderQueue()");
+    assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 3);
+    assert.match(q.innerHTML, /Tuning/, "a Tuning row fills a free slot while topping up");
+    run("radioRefilling = false;");
   }
 
   global.document.getElementById = realGetElementById;

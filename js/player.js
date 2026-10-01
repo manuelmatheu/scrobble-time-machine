@@ -25,7 +25,7 @@ async function pollNowPlaying() {
     if (!sessionPaused) {
       sessionPaused = true;
       highlightNowPlaying(-1);
-      showStatus("Playback moved to another session - click a track to reclaim", "");
+      showStatus("Playback moved to another session - click a track to reclaim", "warn");
     }
     return;
   }
@@ -262,9 +262,7 @@ async function matchAndPlay(tracks, page, tp, label) {
   const ok = await spotifyPlay(token, uris);
   if (!ok) { const devs = await getSpotifyDevices(token); throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active."); }
   currentPhase = "done";
-  const where = eraLabel === "Random" ? "" : eraLabel;
-  const pendingMsg = spotifyBlockedFor() > 0 ? " · " + spotifyLimitMessage() : (skippedPlan.length > 0 ? " · more will load as you listen" : "");
-  showStatus("▶ Playing " + matched + " tracks" + (where ? " from " + where : "") + pendingMsg, "success");
+  if (spotifyBlockedFor() > 0) showStatus(spotifyLimitMessage(), "error");  // more tracks cannot load right now: say why
   for (let i = 0; i < tracks.length; i++) { if (matchedUris[i]) { highlightNowPlaying(i); break; } }
   startPolling();
   checkLikedTracks();

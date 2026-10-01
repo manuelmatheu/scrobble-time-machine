@@ -51,10 +51,10 @@ let likedSet = new Set();
 // Library Radio
 const RADIO_INITIAL = 8;        // tracks matched before playback starts
 const RADIO_REFILL = 8;         // tracks added per top-up
-const RADIO_LOW_WATER = 2;      // top up when this many tracks remain after the current one
 const RADIO_CONCURRENCY = 4;    // parallel Last.fm requests per round
 const RADIO_MAX_ATTEMPTS = 40;  // Last.fm fetches per fill before giving up
 const RADIO_UPNEXT_ROWS = 6;    // rows shown in the Up next list
+const RADIO_LOW_WATER = RADIO_UPNEXT_ROWS - 1;  // top up when fewer than a full Up next list remains after the current one
 let radioActive = false, radioUser = "", radioTotal = 0;
 let radioSession = 0;           // bumped on every start/stop; stale fills compare against it
 let radioSeen = new Set();      // artist||track keys already picked this session

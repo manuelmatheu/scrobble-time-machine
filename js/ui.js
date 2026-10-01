@@ -2,7 +2,12 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // UI HELPERS
 // ═════════════════════════════════════════════════════════════════════════════
-function showStatus(msg, type) { const e=$("statusBar"); e.style.display=""; e.className="status-bar "+(type||""); e.innerHTML = (!type && currentPhase==="working" ? '<span class="spinner"></span>' : "") + msg; }
+// Only errors and warnings are shown. Progress and success messages are dropped (the interface already shows that
+// state) and clear whatever message was up, so an old error does not linger once things move on.
+function showStatus(msg, type) {
+  if (type !== "error" && type !== "warn") { hideStatus(); return; }
+  const e = $("statusBar"); e.style.display = ""; e.className = "status-bar " + type; e.innerHTML = msg;
+}
 function hideStatus() { $("statusBar").style.display = "none"; }
 function escHtml(s) { const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
 function fmtDate(uts) { return new Date(parseInt(uts)*1000).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }

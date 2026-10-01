@@ -157,7 +157,6 @@ async function radioFill(want) {
     attempts += batch.total;
     if (batch.failed === batch.total) {
       radioFailures++;
-      if (radioFailures >= 3) showStatus("Last.fm is slow, retrying...", "");
       await radioSleep(Math.min(1000 * radioFailures, 8000));
       if (sid !== radioSession) return added;
       continue;
@@ -244,7 +243,7 @@ async function continueRadio() {
       // a failing search or a missing token is transient and must stay retryable
       const healthy = radioFailures === 0 && !lastSearchError && await getSpotifyToken();
       if (sid !== radioSession) return;
-      if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", ""); }
+      if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
     if (radioPaused) { radioPendingReissue = true; return; }  // do not resume what the user paused
@@ -492,6 +491,7 @@ function radioQueueRowHtml(idx, m, esc) {
 function radioRenderQueue() {
   const box = $("radioUpNext");
   if (!box) return;
+  if (box.style && box.style.setProperty) box.style.setProperty("--upnext-rows", RADIO_UPNEXT_ROWS);  // wide layout: every row is 1/N of the panel
   let html = "", shown = 0;
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
     const m = trackMeta[i];
@@ -499,7 +499,7 @@ function radioRenderQueue() {
     html += radioQueueRowHtml(i, m, escHtml);
     shown++;
   }
-  if (radioRefilling) {
+  if (radioRefilling && shown < RADIO_UPNEXT_ROWS) {  // the Tuning row only takes a free slot
     html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
   }
   box.innerHTML = html;
