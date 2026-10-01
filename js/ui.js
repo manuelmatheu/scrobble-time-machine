@@ -128,6 +128,7 @@ function updateSpotifyUI(c) {
   $("spotifyBadge").style.display = c ? "" : "none";
   $("radioBtn").style.display = c ? "" : "none";
   $("timeTravel").style.display = c ? "" : "none";
+  const home = $("homeView"); if (home && home.classList) home.classList.toggle("connected", !!c);  // wide desktop: two columns once the modes are visible
   updateGoButton();
 }
 function updateGoButton() {

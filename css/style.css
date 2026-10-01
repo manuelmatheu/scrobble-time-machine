@@ -239,10 +239,15 @@
 .radio-row-play:hover { background:var(--bg-tertiary); }
 .radio-view .status-bar { text-align:left; margin-bottom:16px; }
 
-/* Wide desktop: the radio / Time Travel views use a 1120px container, player + artist panel on the left (640px),
-   the list on the right as a panel of the same height (rows grow or scroll inside it). Narrower screens keep one column. */
+/* Wide desktop (1100px and up): a 1120px container. Home: the radio card on the left (420px), the Time Travel modes on the right.
+   Radio / Time Travel: player + artist panel on the left (640px), the list on the right as a panel of the same height
+   (rows grow or scroll inside it). Narrower screens keep one column. */
 @media (min-width:1100px) {
-  body.radio-wide .container { max-width:1120px; }
+  .container { max-width:1120px; }
+  #homeView.connected { display:grid; grid-template-columns:420px minmax(0,1fr); column-gap:40px; align-items:start; }
+  #homeView.connected .radio-card { margin-bottom:0; }
+  #homeView.connected .home-headline { font-size:40px; }
+  #homeView:not(.connected) .radio-card { max-width:680px; margin-left:auto; margin-right:auto; }
   .radio-cols { display:grid; grid-template-columns:640px minmax(0,1fr); grid-template-rows:minmax(468px,auto); gap:28px; align-items:stretch; }
   .radio-col-main { display:flex; flex-direction:column; gap:28px; min-width:0; }
   .radio-col-main .radio-now { margin-bottom:0; }
