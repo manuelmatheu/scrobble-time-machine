@@ -212,6 +212,7 @@
   .radio-art { width:100%; height:auto; aspect-ratio:1/1; }
   .radio-track { font-size:26px; white-space:normal; overflow-wrap:anywhere; }
   .radio-artist { white-space:normal; }
+  .radio-progress { align-self:stretch; }  /* in the stacked card the row must span the width, or the bar collapses to 0 */
   .radio-controls { justify-content:center; }
 }
 
