@@ -13,6 +13,7 @@ load("spotify.js");
 load("ui.js");
 load("player.js");
 const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
+const realShowStatus = global.showStatus;
 
 function reset() {
   run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
@@ -137,13 +138,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   reset(); played = []; n = 100; run(existing);
   await run("continueRadio()");
   assert.equal(played.length, 1);
-
-  // 12. leaving the radio invalidates the session before it pauses playback
-  const order = [];
-  global.handleReset = () => order.push("reset");
-  global.spPut = async () => { order.push("pause"); };
-  await run("leaveRadio()");
-  assert.deepEqual(order, ["reset", "pause"]);
 
   // 13. disconnecting Spotify tears the session down
   let resets = 0;
@@ -371,6 +365,135 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(radioSearches, 0);
   assert.equal(run("radioExhausted"), false);
   run("spotifyBlockedUntil = 0;");
+
+  // 28. Home keeps the session running; the home card leads back to it
+  {
+    const els = {};
+    const mk = id => { const cl = new Set(); return { id, style: id === "radioView" ? { display: "none" } : { setProperty(k, v) { this[k] = v; } }, textContent: "", innerHTML: "", className: "", value: "80", children: [], cl, classList: { add: c => cl.add(c), remove: c => cl.delete(c), toggle: (c, on) => (on ? cl.add(c) : cl.delete(c)) }, removeAttribute() {}, appendChild(c) { this.children.push(c); } }; };
+    global.document.getElementById = id => els[id] || (els[id] = mk(id));
+    global.window.scrollTo = () => {};
+    reset();
+    run("radioActive = true; travelActive = false;");
+    run("showRadioView()");
+    assert.equal(els.radioBackBtn.style.display, "none", "no Back to radio while the radio view is showing");
+    run("radioMinimize()");
+    assert.equal(els.radioView.style.display, "none");
+    assert.equal(els.homeView.style.display, "");
+    assert.equal(run("radioActive"), true, "minimizing must not stop the radio");
+    assert.equal(run("radioMinimized"), true);
+    assert.ok(els.statusSlotHome.children.includes(els.statusBar));
+    // the home card: Back to radio + Playing now + a secondary Start a new radio
+    assert.equal(els.radioBackBtn.style.display, "");
+    assert.equal(els.radioPlaying.style.display, "");
+    assert.equal(els.radioPlayingTrack.textContent, "Tuning...");
+    assert.match(els.radioBtn.className, /btn-ghost/);
+    assert.equal(els.radioBtn.innerHTML, "Start a new radio");
+    // a track change while hidden updates the line, and a pause says so
+    run("trackMeta = { 0: { name: 'Airbag', artist: 'Radiohead' } }; nowPlayingIndex = 0;");
+    run("radioRenderNow({ name: 'Airbag', artists: [{ name: 'Radiohead' }], album: { name: 'OK Computer', images: [] } }, false)");
+    assert.equal(els.radioPlayingTrack.textContent, "Airbag \u00b7 Radiohead");
+    assert.equal(els.radioPlayingState.textContent, "Playing now");
+    run("radioRenderNow({ name: 'Airbag', artists: [{ name: 'Radiohead' }], album: { name: 'OK Computer', images: [] } }, true)");
+    assert.equal(els.radioPlayingState.textContent, "Paused");
+    // the volume slider shows only while the SDK device plays
+    assert.ok(!els.radioVolumeWrap.cl.has("sdk"), "no slider without the SDK");
+    run("sdkReady = true; window._stmPlayer = { getVolume: async () => 0.35, setVolume() {} };");
+    run("radioRenderNow({ name: 'Airbag', artists: [], album: { images: [] } }, false)");
+    assert.ok(els.radioVolumeWrap.cl.has("sdk"));
+    await new Promise(r => setImmediate(r));
+    assert.equal(els.radioVolume.value, 35, "the slider starts from the player's real volume");
+    const vols = [];
+    run("window._stmPlayer.setVolume = v => globalThis.__vols.push(v);"); global.__vols = vols;
+    await run("setVolume({ value: '60', style: { setProperty(k, v) { globalThis.__prop = [k, v]; } } })");
+    assert.deepEqual(vols, [0.6]);
+    assert.deepEqual(global.__prop, ["--vol", "60%"]);
+    await run("setVolume({ value: '999', style: { setProperty() {} } })");
+    assert.deepEqual(vols, [0.6, 1], "volume is clamped to 0-100");
+    run("sdkReady = false;");
+    await run("setVolume({ value: '10', style: { setProperty() {} } })");
+    assert.equal(vols.length, 2, "no SDK, no volume call");
+    run("radioRenderNow({ name: 'Airbag', artists: [], album: { images: [] } }, false)");
+    assert.ok(!els.radioVolumeWrap.cl.has("sdk"), "the slider hides again when the SDK drops");
+    run("window._stmPlayer = undefined;");
+    run("radioReopen()");
+    assert.equal(els.radioView.style.display, "");
+    assert.equal(els.homeView.style.display, "none");
+    assert.equal(run("radioMinimized"), false);
+    assert.ok(els.radioStatusSlot.children.includes(els.statusBar));
+    assert.equal(els.radioBackBtn.style.display, "none");
+    assert.equal(els.radioPlaying.style.display, "none");
+    assert.match(els.radioBtn.className, /btn-primary/);
+    assert.match(els.radioBtn.innerHTML, /Start radio/);
+    // reopening with nothing minimized does nothing
+    els.radioView.style.display = "none"; els.homeView.style.display = "";
+    run("radioReopen()");
+    assert.equal(els.radioView.style.display, "none");
+    // minimizing a view that is not showing, or with no session, does nothing
+    run("radioMinimize()");
+    assert.equal(run("radioMinimized"), false);
+    run("radioActive = false; travelActive = false;"); els.radioView.style.display = "";
+    run("radioMinimize()");
+    assert.equal(run("radioMinimized"), false);
+    // a time travel session minimizes too, and ending the session clears the home card
+    run("travelActive = true;"); run("radioMinimize()");
+    assert.equal(run("radioMinimized"), true);
+    assert.equal(els.radioBackBtn.style.display, "");
+    run("hideRadioView()");
+    assert.equal(run("radioMinimized"), false);
+    assert.equal(els.radioBackBtn.style.display, "none");
+    assert.match(els.radioBtn.innerHTML, /Start radio/);
+    // the liked state shows on both hearts: the controls row (desktop) and the title row (phones)
+    run("matchedUris = { 0: 'spotify:track:abc' }; allTrackCount = 1; nowPlayingIndex = 0; likedSet = new Set(['abc']);");
+    run("updateNowPlayingHeart()");
+    assert.ok(els.radioHeart.cl.has("liked") && els.radioHeartTitle.cl.has("liked"));
+    assert.match(els.radioHeartTitle.innerHTML, /ph-fill/);
+    run("likedSet = new Set();"); run("updateNowPlayingHeart()");
+    assert.ok(!els.radioHeart.cl.has("liked") && !els.radioHeartTitle.cl.has("liked"));
+    // Save as Playlist exists only in Time Travel: showing the radio view never touches it
+    run('showRadioView("travel")'); run("showRadioView()");
+    assert.equal(els.savePlaylistBtn, undefined, "the radio view does not create or show the save button");
+  }
+
+  // 29. the status bar only shows errors and warnings; progress and success messages clear it
+  {
+    const els = {};
+    global.document.getElementById = id => els[id] || (els[id] = { id, style: {}, className: "", innerHTML: "", textContent: "" });
+    const savedShow = global.showStatus; global.showStatus = realShowStatus;
+    global.showStatus("Reading your Last.fm library...", "");
+    assert.equal(els.statusBar.style.display, "none", "progress messages are not shown");
+    global.showStatus("Spotify is limiting searches.", "error");
+    assert.equal(els.statusBar.style.display, "");
+    assert.match(els.statusBar.className, /error/);
+    assert.equal(els.statusBar.innerHTML, "Spotify is limiting searches.");
+    global.showStatus("▶ Library radio", "success");
+    assert.equal(els.statusBar.style.display, "none", "a success message clears an old error");
+    global.showStatus("Playback moved to another session", "warn");
+    assert.equal(els.statusBar.style.display, "");
+    assert.match(els.statusBar.className, /warn/);
+    global.showStatus = savedShow;
+  }
+
+  // 30. Up next keeps a full list: top up as soon as fewer than RADIO_UPNEXT_ROWS tracks remain
+  {
+    assert.equal(run("RADIO_LOW_WATER"), run("RADIO_UPNEXT_ROWS") - 1);
+    const low = run("RADIO_LOW_WATER");
+    assert.equal(run("radioShouldRefill({ active: true, refilling: false, exhausted: false, remaining: " + (low + 1) + " }, RADIO_LOW_WATER)"), false);
+    assert.equal(run("radioShouldRefill({ active: true, refilling: false, exhausted: false, remaining: " + low + " }, RADIO_LOW_WATER)"), true);
+    // the Tuning row only takes a free slot, so the list never grows past its rows
+    const q = { id: "radioUpNext", style: { setProperty(k, v) { this[k] = v; } }, innerHTML: "" };
+    global.document.getElementById = id => (id === "radioUpNext" ? q : null);
+    const meta = {}; for (let i = 1; i <= 8; i++) meta[i] = { name: "T" + i, artist: "A" };
+    run("trackMeta = " + JSON.stringify(meta) + "; allTrackCount = 9; nowPlayingIndex = 0; radioRefilling = true;");
+    run("radioRenderQueue()");
+    assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, run("RADIO_UPNEXT_ROWS"));
+    assert.doesNotMatch(q.innerHTML, /Tuning/, "no Tuning row when the list is already full");
+    assert.equal(q.style["--upnext-rows"], run("RADIO_UPNEXT_ROWS"));
+    run("allTrackCount = 4;");
+    run("radioRenderQueue()");
+    assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 3);
+    assert.match(q.innerHTML, /Tuning/, "a Tuning row fills a free slot while topping up");
+    run("radioRefilling = false;");
+  }
 
   global.document.getElementById = realGetElementById;
 

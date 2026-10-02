@@ -157,7 +157,6 @@ async function radioFill(want) {
     attempts += batch.total;
     if (batch.failed === batch.total) {
       radioFailures++;
-      if (radioFailures >= 3) showStatus("Last.fm is slow, retrying...", "");
       await radioSleep(Math.min(1000 * radioFailures, 8000));
       if (sid !== radioSession) return added;
       continue;
@@ -219,12 +218,10 @@ async function startRadio() {
       const devs = await getSpotifyDevices(token);
       throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active.");
     }
-    currentPhase = "done"; playlistLabel = "Library Radio";
+    currentPhase = "done";
     showStatus("▶ Library radio" + (totalScrobbles < 200 ? " · small library, new tracks may run out" : ""), "success");
     startPolling();
     checkLikedTracks();
-    const btn = $("savePlaylistBtn");
-    btn.style.display = ""; btn.disabled = false; btn.textContent = "Save as Playlist"; btn.className = "btn-save-playlist"; btn.onclick = saveAsPlaylist;
     endSessionUI();
   } catch (err) {
     if (sid !== radioSession) return;
@@ -246,7 +243,7 @@ async function continueRadio() {
       // a failing search or a missing token is transient and must stay retryable
       const healthy = radioFailures === 0 && !lastSearchError && await getSpotifyToken();
       if (sid !== radioSession) return;
-      if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", ""); }
+      if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
     if (radioPaused) { radioPendingReissue = true; return; }  // do not resume what the user paused
@@ -307,8 +304,38 @@ async function refreshHomeMeta() {
 // =============================================================================
 // RADIO VIEW
 // =============================================================================
+// Volume slider: shown (on wide screens, via CSS) only while the SDK device plays; it starts from the player's real volume
+let radioVolumeSynced = false;
+function radioSyncVolume() {
+  const wrap = $("radioVolumeWrap");
+  if (!wrap) return;
+  wrap.classList.toggle("sdk", !!sdkReady);
+  if (!sdkReady || radioVolumeSynced || !window._stmPlayer || !window._stmPlayer.getVolume) return;
+  radioVolumeSynced = true;
+  Promise.resolve(window._stmPlayer.getVolume()).then(v => {
+    const el = $("radioVolume");
+    if (el && typeof v === "number") { el.value = Math.round(v * 100); el.style.setProperty("--vol", el.value + "%"); }
+  }).catch(() => { radioVolumeSynced = false; });
+}
+
+// Home card: while a session runs behind the home view it shows what is playing and leads back to it
+let radioNowLabel = "", radioNowPaused = false;
+function radioSyncHome() {
+  const on = radioMinimized;
+  const box = $("radioPlaying"), back = $("radioBackBtn"), again = $("radioBtn");
+  if (back) back.style.display = on ? "" : "none";
+  if (box) box.style.display = on ? "" : "none";
+  if (again) {
+    again.className = "btn btn-radio " + (on ? "btn-ghost" : "btn-primary");
+    again.innerHTML = on ? "Start a new radio" : '<i class="ph-fill ph-play" aria-hidden="true"></i> Start radio';
+  }
+  const state = $("radioPlayingState"), track = $("radioPlayingTrack");
+  if (state) state.textContent = radioNowPaused ? "Paused" : "Playing now";
+  if (track) track.textContent = radioNowLabel || "Tuning...";
+}
+
 function radioResetHero() {
-  radioHeroLive = false;
+  radioHeroLive = false; radioNowLabel = ""; radioNowPaused = false;
   $("radioTrack").textContent = "Tuning...";
   $("radioArtist").textContent = "";
   $("radioArt").removeAttribute("src");
@@ -321,10 +348,9 @@ function radioResetHero() {
 function showRadioView(mode) {
   const travel = mode === "travel";
   const wasHidden = $("radioView").style.display === "none";
-  travelActive = travel;
+  travelActive = travel; radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
-  document.body.classList.add("radio-mode");
   $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
   $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
   $("radioAgainBtn").style.display = travel ? "" : "none";
@@ -335,13 +361,31 @@ function showRadioView(mode) {
 }
 
 function hideRadioView() {
-  travelActive = false;
+  travelActive = false; radioMinimized = false; radioSyncHome();
   $("statusSlotHome").appendChild($("statusBar"));  // back to the home view's slot
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
-  document.body.classList.remove("radio-mode");
   $("radioUpNext").innerHTML = "";
   radioResetHero();
+}
+
+// Home button: show the home view again but keep the session and the music going; the home card leads back
+function radioMinimize() {
+  if (!(radioActive || travelActive) || $("radioView").style.display === "none") return;
+  radioMinimized = true; radioSyncHome();
+  $("statusSlotHome").appendChild($("statusBar"));
+  $("radioView").style.display = "none";
+  $("homeView").style.display = "";
+}
+
+// Back to radio: return to the session that is still running (the hero and queue kept updating while hidden)
+function radioReopen() {
+  if (!radioMinimized) return;
+  radioMinimized = false; radioSyncHome();
+  $("homeView").style.display = "none";
+  $("radioView").style.display = "";
+  $("radioStatusSlot").appendChild($("statusBar"));
+  window.scrollTo(0, 0);
 }
 
 // Repeat the last Time Travel mode with the same inputs
@@ -425,22 +469,37 @@ function radioRenderNow(track, paused) {
   const album = track.album && track.album.name;
   $("radioArtist").textContent = artists + (album ? " · " + album : "");
   $("radioPlay").innerHTML = '<i class="ph-fill ph-' + (paused ? "play" : "pause") + '"></i>';
+  radioNowLabel = (track.name || (meta && meta.name) || "") + (artists ? " \u00b7 " + artists : "");
+  radioNowPaused = !!paused;
+  radioSyncVolume();
+  if (radioMinimized) radioSyncHome();
   radioSyncInfo();
   radioRenderQueue();
+}
+
+// One Up next row: cover (https only, so the URL is safe in an attribute), title and artist
+function radioQueueRowHtml(idx, m, esc) {
+  esc = esc || (s => s);
+  const art = /^https:\/\/[^"'<>\s]+$/.test(m.art || "")
+    ? '<img class="radio-row-art" src="' + m.art + '" alt="" loading="lazy">'
+    : '<div class="radio-row-art"></div>';
+  return '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + idx + ')">' + art
+    + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div></div>';
 }
 
 // Up next: the matched tracks after the current one, plus a Tuning row while a top-up runs
 function radioRenderQueue() {
   const box = $("radioUpNext");
   if (!box) return;
+  if (box.style && box.style.setProperty) box.style.setProperty("--upnext-rows", RADIO_UPNEXT_ROWS);  // wide layout: every row is 1/N of the panel
   let html = "", shown = 0;
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
     const m = trackMeta[i];
     if (!m) continue;
-    html += '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + i + ')"><div class="radio-row-text"><div class="radio-row-title">' + escHtml(m.name) + '</div><div class="radio-row-artist">' + escHtml(m.artist) + '</div></div></div>';
+    html += radioQueueRowHtml(i, m, escHtml);
     shown++;
   }
-  if (radioRefilling) {
+  if (radioRefilling && shown < RADIO_UPNEXT_ROWS) {  // the Tuning row only takes a free slot
     html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
   }
   box.innerHTML = html;
@@ -455,13 +514,7 @@ async function radioPlayFrom(idx) {
   if (!ok) showStatus("Playback failed. Is Spotify active?", "error");
 }
 
-// Back: pause playback and return to the home view
-async function leaveRadio() {
-  handleReset();
-  try { await spPut("/me/player/pause", null); } catch (e) {}
-}
-
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest, radioQueueRowHtml };
 }

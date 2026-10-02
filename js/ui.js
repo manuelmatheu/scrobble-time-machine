@@ -2,7 +2,12 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // UI HELPERS
 // ═════════════════════════════════════════════════════════════════════════════
-function showStatus(msg, type) { const e=$("statusBar"); e.style.display=""; e.className="status-bar "+(type||""); e.innerHTML = (!type && currentPhase==="working" ? '<span class="spinner"></span>' : "") + msg; }
+// Only errors and warnings are shown. Progress and success messages are dropped (the interface already shows that
+// state) and clear whatever message was up, so an old error does not linger once things move on.
+function showStatus(msg, type) {
+  if (type !== "error" && type !== "warn") { hideStatus(); return; }
+  const e = $("statusBar"); e.style.display = ""; e.className = "status-bar " + type; e.innerHTML = msg;
+}
 function hideStatus() { $("statusBar").style.display = "none"; }
 function escHtml(s) { const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
 function fmtDate(uts) { return new Date(parseInt(uts)*1000).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
@@ -43,10 +48,18 @@ function setTrackStatus(i, s) {
   else if(s==="not_found"||s==="skipped"){row.classList.add("not-matched");row.classList.remove("playable");}
 }
 
+// Wide desktop: the Time Travel list scrolls inside its panel; keep the playing row in view without moving the page
+function scrollTrackListTo(row) {
+  const box = $("trackList");
+  if (!box || box.scrollHeight <= box.clientHeight + 1) return;
+  const top = row.offsetTop, bottom = top + row.offsetHeight;
+  if (top < box.scrollTop || bottom > box.scrollTop + box.clientHeight) box.scrollTop = Math.max(top - 8, 0);
+}
+
 function highlightNowPlaying(index) {
   if (index === nowPlayingIndex) return;
   document.querySelectorAll(".track-row.now-playing").forEach(r => r.classList.remove("now-playing"));
-  if (index >= 0) { const row = $("track-" + index); if (row) { row.classList.add("now-playing"); if (!travelActive) row.scrollIntoView({behavior:"smooth", block:"nearest"}); } }
+  if (index >= 0) { const row = $("track-" + index); if (row) { row.classList.add("now-playing"); if (!travelActive) row.scrollIntoView({behavior:"smooth", block:"nearest"}); else scrollTrackListTo(row); } }
   nowPlayingIndex = index;
 }
 
@@ -96,26 +109,9 @@ function selectMood(btn) {
   updateGoButton();
 }
 
-function toggleMoreModes() {
-  const sec = $("modeSecondary");
-  const btn = $("modeMoreToggle");
-  const showing = sec.style.display !== "none";
-  sec.style.display = showing ? "none" : "";
-  btn.textContent = showing ? "More ▾" : "Less ▴";
-  btn.classList.toggle("open", !showing);
-}
-
-const SECONDARY_MODES = ["mood", "decade", "album", "discovery", "streak"];
-
 function setMode(mode) {
   searchMode = mode;
-  document.querySelectorAll(".mode-pill").forEach(p => p.classList.toggle("active", p.dataset.mode === mode));
-  // Auto-expand secondary row if a secondary mode is selected
-  if (SECONDARY_MODES.includes(mode)) {
-    $("modeSecondary").style.display = "";
-    $("modeMoreToggle").textContent = "Less ▴";
-    $("modeMoreToggle").classList.add("open");
-  }
+  document.querySelectorAll(".mode-card").forEach(p => p.classList.toggle("active", p.dataset.mode === mode));
   $("modeInputDate").style.display = mode === "date" ? "" : "none";
   $("modeInputArtist").style.display = mode === "artist" ? "" : "none";
   $("modeInputMood").style.display = mode === "mood" ? "" : "none";
@@ -137,6 +133,7 @@ function updateSpotifyUI(c) {
   $("spotifyBadge").style.display = c ? "" : "none";
   $("radioBtn").style.display = c ? "" : "none";
   $("timeTravel").style.display = c ? "" : "none";
+  const home = $("homeView"); if (home && home.classList) home.classList.toggle("connected", !!c);  // wide desktop: two columns once the modes are visible
   updateGoButton();
 }
 function updateGoButton() {

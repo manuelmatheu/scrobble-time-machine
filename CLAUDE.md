@@ -1,4 +1,8 @@
-# CLAUDE.md — Scrobble Time Machine
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# Scrobble Time Machine
 
 ## What is Scrobble Time Machine
 
@@ -11,7 +15,7 @@ Scrobble Time Machine is a client-side web app that connects a user's Last.fm sc
 
 ## Development
 
-No build step, no package manager, no linter -- there is nothing to install or compile. A few dependency-free Node scripts in `tests/` cover the pure radio helpers, the radio engine (network stubbed), and CSS contrast; run them with `node tests/radio-helpers.test.js`, `node tests/radio-engine.test.js`, `node tests/contrast.test.js`, and `node tests/no-page-numbers.test.js` (no page numbers in status or error messages), and `node tests/no-era-panel.test.js` (the era panel and slider stay removed). Edit the `.html`/`.css`/`.js` files directly.
+No build step, no package manager, no linter -- there is nothing to install or compile. A few dependency-free Node scripts in `tests/` cover the pure radio helpers, the radio engine (network stubbed), and CSS contrast; run one with e.g. `node tests/radio-helpers.test.js`, or all of them with `for t in tests/*.test.js; do node $t || exit 1; done` (each prints `<name>: ok` on success; the full set: `radio-helpers`, `node tests/radio-engine.test.js`, `node tests/contrast.test.js`, and `node tests/no-page-numbers.test.js` (no page numbers in status or error messages), and `node tests/no-era-panel.test.js` (the era panel and slider stay removed). Edit the `.html`/`.css`/`.js` files directly.
 
 - **Run locally:** serve the folder with any static file server (e.g. `npx serve`, `python -m http.server`) and open it in a browser. Opening `index.html` directly via `file://` will break Spotify PKCE auth, since `SPOTIFY_REDIRECT_URI` (`js/config.js`) is derived from `window.location.origin + window.location.pathname` and must exactly match a redirect URI registered on the Spotify app.
 - **Verify changes:** the node scripts above cover only the radio logic and contrast tokens; everything else is manual. Exercise the flow in a browser -- connect Spotify, run a mode, confirm playback/highlighting/save-playlist still work.
@@ -24,7 +28,7 @@ No build step, no package manager, no linter -- there is nothing to install or c
 ### File Structure
 
 ```
-index.html          -- Page shell, player bar HTML, script load order
+index.html          -- Page shell, script load order
 css/
   style.css         -- All styles; single file; CSS custom properties for theming
 tests/              -- node test scripts (see Development)
@@ -52,7 +56,7 @@ js/
 <script src="js/ui.js"></script>         <!-- uses showStatus, $ from config -->
 <script src="js/player.js"></script>     <!-- uses spotify.js + ui.js functions -->
 <script src="js/radio.js"></script>      <!-- uses player.js + spotify.js; before modes.js -->
-<script src="js/modes.js"></script>      -- uses player.js functions -->
+<script src="js/modes.js"></script>      <!-- uses player.js functions -->
 <script src="js/app.js"></script>        <!-- wires up all event listeners -->
 ```
 
@@ -136,12 +140,9 @@ When `sdkReady = false` (SDK not initialized, non-Premium, or SDK error):
 ### `onSDKStateChange(state)`
 
 Called by the SDK `player_state_changed` listener. Updates:
-- Player bar visibility + `body.has-player` class
-- Album art, track name, artist name
-- Play/pause button icon
-- Progress bar (position + duration)
+- Radio/travel hero, progress bar and Up next via `radioRenderNow()` (only for tracks of the current session)
 - Now-playing highlight in track list via `uriToIndices`
-- Player bar heart button via `updatePlayerBarHeart()`
+- The radio view's heart button via `updateNowPlayingHeart()`
 
 A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state events.
 
@@ -171,10 +172,10 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 | Save | `PUT /v1/me/library?uris=spotify:track:id` | no body, URIs in query string |
 | Remove | `DELETE /v1/me/library?uris=spotify:track:id` | no body, URIs in query string |
 
-- `checkLikedTracks()` -- called at end of `matchAndPlay()`. Batches up to 40 full URIs from `matchedUris[]`, calls `GET /me/library/contains`. Populates `likedSet` (Set of bare track IDs), then updates all heart buttons and the player bar heart.
+- `checkLikedTracks()` -- called at end of `matchAndPlay()`. Batches up to 40 full URIs from `matchedUris[]`, calls `GET /me/library/contains`. Populates `likedSet` (Set of bare track IDs), then updates all heart buttons and the radio view heart.
 - `toggleLikeTrack(idx)` -- optimistic UI update first, then `spPut`/`spDelete` on `/me/library?uris=`. Reverts on error.
 - `toggleLikeCurrentTrack()` -- delegates to `toggleLikeTrack(nowPlayingIndex)`.
-- `updatePlayerBarHeart()` -- syncs `#pb-heart` with `likedSet` for the track at `nowPlayingIndex`.
+- `updateNowPlayingHeart()` -- syncs `#radioHeart` with `likedSet` for the track at `nowPlayingIndex`.
 
 `likedSet` stores bare track IDs (not full URIs), e.g. `"4iV5W9uYEdYUVa79Axb7Rh"`.
 
@@ -190,7 +191,7 @@ A 250ms interval (`_sdkProgressTimer`) advances `_sdkPositionMs` between state e
 5. On success: button becomes "Saved! Open" with onclick to open playlist URL
 6. On error: button resets, error shown via `showStatus()`
 
-`playlistLabel` is set in `matchAndPlay()` as `label || radioEraLabel(tracks)` (the oldest scrobble date, falling back to "Random" when no track has one; the radio uses "Library Radio"). Each mode passes a descriptive label string (e.g., "January 15, 2014", "Radiohead - Jan 2015", "The 2010s").
+`playlistLabel` is set in `matchAndPlay()` as `label || radioEraLabel(tracks)` (the oldest scrobble date, falling back to "Random" when no track has one). Each mode passes a descriptive label string (e.g., "January 15, 2014", "Radiohead - Jan 2015", "The 2010s").
 
 ---
 
@@ -200,14 +201,21 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 
 - **Sampling:** `getLastFmScrobbleAt(user, page)` calls `user.getrecenttracks` with `limit=1`; with `limit=1`, `page` is an index into the scrobbles, so `radioPickPage(total)` is uniform over history. Songs played more often come up more often.
 - **Engine (`radio.js`):** `radioFill(want)` fires `RADIO_CONCURRENCY` parallel single-scrobble requests per round, dedupes by `artist||track` (`radioSeen`) and by Spotify URI, matches with `spotifySearch()`, and appends to `matchedUris` / `allTrackCount` / `sessionQueue` / `trackMeta[index]`.
-- **Top-up:** `radioMaybeRefill()` runs on every track change (SDK state handler and polling fallback). When `RADIO_LOW_WATER` tracks remain it calls `continueRadio()`, which re-issues `spotifyPlay()` from the current track with the new tracks appended (same approach as `continueMatching`, avoids the persistent user queue).
+- **Top-up:** `radioMaybeRefill()` runs on every track change (SDK state handler and polling fallback). When `RADIO_LOW_WATER` tracks remain (`RADIO_UPNEXT_ROWS - 1`, so the Up next list stays full: fewer than a full list triggers a top-up) it calls `continueRadio()`, which re-issues `spotifyPlay()` from the current track with the new tracks appended (same approach as `continueMatching`, avoids the persistent user queue).
 - **Stale work:** every start/stop bumps `radioSession`; in-flight fills compare against it and bail. `beginSession()` and `handleReset()` call `radioStop()`.
-- **Views:** `#homeView` (headline, Start radio, `#timeTravel` mode inputs) and `#radioView`, which serves both Library Radio and every Time Travel mode via `showRadioView("radio" | "travel")`. Travel shows the full clickable `#trackList` instead of Up next (there is no context panel and no time slider), plus an Again button (`travelAgain()` re-runs `handleGo()`). `matchAndPlay()` opens the travel view; failures in `fetchAndPlay*` call `radioStop()` to return home (errors raised earlier, inside a mode handler, never left home). `body.radio-mode` hides the bottom player bar. There are no page numbers in the UI: moments are labelled by date (`radioEraLabel(tracks)`, which also names the saved playlist).
+- **Views:** `#homeView` (a `.radio-card` with the headline, username and Start radio, then `#timeTravel`: a grid of nine `.mode-card` buttons that `setMode()` toggles, each revealing its `.mode-inputs` block; at 1100px and up, once Spotify is connected (`updateSpotifyUI` adds `.connected`), it is two columns: the card on the left at 420px and the modes on the right; before connecting, the card is centered at 680px) and `#radioView` (its `.radio-now` card, a fixed 224px grid on desktop, wraps the hero, progress bar and controls: cover on the left, text/progress/controls on the right, `.radio-hero` uses `display:contents`; on phones it stacks with a full-width cover and auto height, the like heart moves next to the title (`#radioHeartTitle`, while `#radioHeart` in the controls row is hidden) so prev / play / next stay centered; `updateNowPlayingHeart()` updates both), which serves both Library Radio and every Time Travel mode via `showRadioView("radio" | "travel")`. On screens of 1100px and wider the container grows to 1120px (the header and every view) and `.radio-cols` becomes two columns: `.radio-col-main` (the now-playing card + the artist panel `#radioInfo`, 640px) and `.radio-col-list` (Up next or the Tracks list as a panel pinned to the same height as the left column, `min 468px`; Up next rows grow to fill, the Tracks list scrolls inside it and `scrollTrackListTo()` keeps the playing row visible without moving the page). Below 1100px it stays one column. `#radioStatusSlot` sits above the columns. In the wide layout every Up next row is exactly 1/`RADIO_UPNEXT_ROWS` of its panel (`--upnext-rows`, set by `radioRenderQueue()`), so rows keep the same height even while fewer tracks are queued; the Tuning row only takes a free slot. Travel shows the full clickable `#trackList` instead of Up next (there is no context panel and no time slider), plus an Again button (`travelAgain()` re-runs `handleGo()`). `matchAndPlay()` opens the travel view; failures in `fetchAndPlay*` call `radioStop()` to return home (errors raised earlier, inside a mode handler, never left home). There are no page numbers in the UI: moments are labelled by date (`radioEraLabel(tracks)`, which also names the saved playlist).
 - **Session-only player events:** the hero, info panel and radio progress bar only follow tracks that belong to the current session (`uriToIndices[track.uri]`), and the progress bar is gated by `radioHeroLive`, so the previous session's song never shows while the next one loads.
 - **Artist info:** on every track change `radioSyncInfo()` calls `radioInfoFor(idx)`, which fetches `artist.getinfo` (bio summary + `stats.userplaycount`) and `track.getinfo` (`userplaycount`) with `username`, using the scrobble's own names (`radioInfoSource(idx)`: `trackMeta[idx].lfmArtist` / `lfmTrack` in the radio, the Last.fm track objects in `currentTracks` in time travel) and the username from `radioUser` or the username field. Results are cached per artist and per track as promises (`radioArtistCache` / `radioTrackCache`); a failed lookup is not cached and never throws. `radioParseBio()` strips the HTML and the trailing "Read more on Last.fm" link (http(s) only); the panel (`#radioInfo`) hides itself when there is nothing to show.
-- **Clickable Up next:** each row calls `radioPlayFrom(idx)`, which re-issues `spotifyPlay()` from that track onward (`radioUrisFrom`).
-- **Back:** `leaveRadio()` pauses Spotify and calls `handleReset()`.
+- **Clickable Up next:** rows come from `radioQueueRowHtml()` (cover from `trackMeta.art`, https only, and the scrobble year) and each calls `radioPlayFrom(idx)`, which re-issues `spotifyPlay()` from that track onward (`radioUrisFrom`).
+- **Home and Back to radio:** the Home button calls `radioMinimize()`, which only swaps views (`radioMinimized = true`); the session, the music and the refills keep running and the hero/queue keep updating while hidden. `radioSyncHome()` then turns the home card into "Playing now · track · artist" (`#radioPlaying`), a primary `#radioBackBtn` ("Back to radio", calls `radioReopen()`) and a secondary "Start a new radio" (`#radioBtn`). There is no bottom player bar any more: while the session runs behind the home view, play/pause and skipping live in the radio view. Starting any new session goes through `beginSession()` -> `radioStop()` -> `hideRadioView()`, which clears `radioMinimized` and restores the card.
+- **Volume:** `#radioVolume` (a native range input in the controls row, desktop only) calls `setVolume(el)`, which sets the SDK player's own volume and the `--vol` fill; it is shown only while `sdkReady` (`radioSyncVolume()` toggles the `.sdk` class on `#radioVolumeWrap` from `radioRenderNow`, and reads the real volume once with `getVolume()`), and hidden below 720px by CSS (phones cannot use the SDK). **Save as Playlist exists only in Time Travel:** `#savePlaylistBtn` lives in `#saveSlotTravel`, inside the Tracks header, so it is never visible in the Library Radio view (an endless random stream makes a poor playlist).
 - **Icons:** Phosphor web font from jsDelivr (regular and fill stylesheets in `index.html`).
+
+---
+
+## Status bar
+
+`showStatus(msg, type)` (ui.js) only displays `"error"` and `"warn"` messages (error in red, warn in the primary text color). Progress and success messages (`""`, `"success"`) are not shown: they just clear whatever message was up, so an old error does not linger. Keep using `showStatus` for failures, rate-limit notices (`spotifyLimitMessage()`, type `"error"`) and things the user must act on (type `"warn"`); the interface itself (hero "Tuning...", Cancel button, now-playing row) shows loading and success state.
 
 ---
 
@@ -240,7 +248,9 @@ Start radio plays an endless stream of random scrobbles from the user's whole hi
 
 ---
 
-## Current Version: v2.4
+## Current Version: v2.5
+
+Version bumps touch three places: the version-history comment at the top of `index.html`, the footer link text in `index.html`, and the changelog opened by `openChangelog()` (`js/ui.js`; content in `changelog.html`). `ROADMAP.md` holds planned work; `docs/superpowers/` holds design notes.
 
 ---
 

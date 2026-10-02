@@ -16,6 +16,7 @@
   v2.1  2025-03-09  Decade mode + Album mode + First Listen + Streak finder
   v2.2  2026-03-26  Spotify Web Playback SDK + player bar + liked songs + playlist UX
   v2.4  2026-09-30  Library Radio + radio-first redesign
+  v2.5  2026-10-01  Home redesign: radio card + time travel mode cards
 -->
 <html lang="en">
 <head>
@@ -80,30 +81,32 @@
   <div id="statusSlotHome"><div class="status-bar" id="statusBar" style="display:none"></div></div>
 
   <div id="homeView">
-    <h2 class="home-headline">Your library, shuffled across every year.</h2>
-    <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
-    <div class="controls">
-      <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
-      <button class="btn btn-spotify btn-radio" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
-      <button class="btn btn-primary btn-radio" id="radioBtn" onclick="startRadio()" style="display:none" disabled><i class="ph-fill ph-play" aria-hidden="true"></i> Start radio</button>
-      <button class="btn btn-ghost" id="cancelBtn" onclick="handleReset()" style="display:none">Cancel</button>
-    </div>
+    <section class="radio-card">
+      <span class="eyebrow">Library radio</span>
+      <h2 class="home-headline">Your library, shuffled across every year.</h2>
+      <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
+      <div class="radio-playing" id="radioPlaying" style="display:none"><i class="ph-fill ph-equalizer" aria-hidden="true"></i><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
+      <div class="controls">
+        <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
+        <button class="btn btn-spotify btn-radio" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
+        <button class="btn btn-primary btn-radio" id="radioBackBtn" onclick="radioReopen()" style="display:none"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to radio</button>
+        <button class="btn btn-primary btn-radio" id="radioBtn" onclick="startRadio()" style="display:none" disabled><i class="ph-fill ph-play" aria-hidden="true"></i> Start radio</button>
+        <button class="btn btn-ghost" id="cancelBtn" onclick="handleReset()" style="display:none">Cancel</button>
+      </div>
+    </section>
 
     <section class="time-travel" id="timeTravel" style="display:none">
-      <h3 class="section-heading">Time travel</h3>
-      <div class="mode-selector" id="modeSelector">
-        <button class="mode-pill active" data-mode="random" onclick="setMode('random')"><i class="ph ph-shuffle" aria-hidden="true"></i> Random</button>
-        <button class="mode-pill" data-mode="date" onclick="setMode('date')"><i class="ph ph-calendar-blank" aria-hidden="true"></i> Date</button>
-        <button class="mode-pill" data-mode="artist" onclick="setMode('artist')"><i class="ph ph-microphone-stage" aria-hidden="true"></i> Artist</button>
-        <button class="mode-pill" data-mode="onthisday" onclick="setMode('onthisday')"><i class="ph ph-calendar-star" aria-hidden="true"></i> On This Day</button>
-        <button class="mode-pill mode-more-toggle" id="modeMoreToggle" onclick="toggleMoreModes()">More &#9662;</button>
-      </div>
-      <div class="mode-selector mode-secondary" id="modeSecondary" style="display:none">
-        <button class="mode-pill" data-mode="mood" onclick="setMode('mood')"><i class="ph ph-smiley" aria-hidden="true"></i> Mood</button>
-        <button class="mode-pill" data-mode="decade" onclick="setMode('decade')"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i> Decade</button>
-        <button class="mode-pill" data-mode="album" onclick="setMode('album')"><i class="ph ph-vinyl-record" aria-hidden="true"></i> Album</button>
-        <button class="mode-pill" data-mode="discovery" onclick="setMode('discovery')"><i class="ph ph-magnifying-glass" aria-hidden="true"></i> First Listen</button>
-        <button class="mode-pill" data-mode="streak" onclick="setMode('streak')"><i class="ph ph-flame" aria-hidden="true"></i> Streak</button>
+      <h3 class="section-heading">Or time travel</h3>
+      <div class="mode-grid" id="modeSelector">
+        <button class="mode-card active" data-mode="random" onclick="setMode('random')"><i class="ph ph-shuffle" aria-hidden="true"></i><span class="mode-card-name">Random</span><span class="mode-card-desc">A random moment from your history</span></button>
+        <button class="mode-card" data-mode="date" onclick="setMode('date')"><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="mode-card-name">Date</span><span class="mode-card-desc">Jump to a year, month or day</span></button>
+        <button class="mode-card" data-mode="artist" onclick="setMode('artist')"><i class="ph ph-microphone-stage" aria-hidden="true"></i><span class="mode-card-name">Artist</span><span class="mode-card-desc">Where one artist shows up</span></button>
+        <button class="mode-card" data-mode="onthisday" onclick="setMode('onthisday')"><i class="ph ph-calendar-star" aria-hidden="true"></i><span class="mode-card-name">On this day</span><span class="mode-card-desc">Today's date, a random past year</span></button>
+        <button class="mode-card" data-mode="mood" onclick="setMode('mood')"><i class="ph ph-smiley" aria-hidden="true"></i><span class="mode-card-name">Mood</span><span class="mode-card-desc">Chill, raw, dreamy and more</span></button>
+        <button class="mode-card" data-mode="decade" onclick="setMode('decade')"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i><span class="mode-card-name">Decade</span><span class="mode-card-desc">My 2010s, the 2000s...</span></button>
+        <button class="mode-card" data-mode="album" onclick="setMode('album')"><i class="ph ph-vinyl-record" aria-hidden="true"></i><span class="mode-card-name">Album</span><span class="mode-card-desc">When you first played an album</span></button>
+        <button class="mode-card" data-mode="discovery" onclick="setMode('discovery')"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="mode-card-name">First listen</span><span class="mode-card-desc">The day you first scrobbled an artist</span></button>
+        <button class="mode-card" data-mode="streak" onclick="setMode('streak')"><i class="ph ph-flame" aria-hidden="true"></i><span class="mode-card-name">Streak</span><span class="mode-card-desc">Your longest run for an artist</span></button>
       </div>
       <div class="mode-inputs" id="modeInputDate" style="display:none">
         <select id="dateYear" class="mode-input-field" aria-label="Year"></select>
@@ -139,30 +142,37 @@
   <section id="radioView" class="radio-view" style="display:none" aria-label="Library radio">
     <div class="radio-top">
       <div class="radio-top-left">
-        <button class="btn-text" onclick="leaveRadio()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
+        <button class="btn-text" onclick="radioMinimize()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
         <button class="btn-text" id="radioAgainBtn" onclick="travelAgain()" style="display:none"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Again</button>
       </div>
       <h2 class="radio-title" id="radioTitle">Library radio</h2>
     </div>
-    <div class="radio-hero">
-      <img id="radioArt" class="radio-art" alt="">
-      <div class="radio-hero-text">
-        <div class="radio-track" id="radioTrack">Tuning...</div>
-        <div class="radio-artist" id="radioArtist"></div>
+    <div id="radioStatusSlot"></div>
+    <div class="radio-cols">
+    <div class="radio-col-main">
+    <section class="radio-now" aria-label="Now playing">
+      <div class="radio-hero">
+        <img id="radioArt" class="radio-art" alt="">
+        <div class="radio-hero-text">
+          <span class="eyebrow">Now playing</span>
+          <div class="radio-track" id="radioTrack">Tuning...</div>
+          <div class="radio-artist" id="radioArtist"></div>
+          <button class="radio-btn radio-heart-title" id="radioHeartTitle" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
+        </div>
       </div>
-    </div>
-    <div class="radio-progress">
-      <span id="radioElapsed">0:00</span>
-      <div id="radioBar" onclick="seekTo(event)"><div id="radioFill"></div></div>
-      <span id="radioDuration">0:00</span>
-    </div>
-    <div class="radio-controls">
-      <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
-      <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
-      <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
-      <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
-      <span id="saveSlotRadio"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span>
-    </div>
+      <div class="radio-progress">
+        <span id="radioElapsed">0:00</span>
+        <div id="radioBar" onclick="seekTo(event)"><div id="radioFill"></div></div>
+        <span id="radioDuration">0:00</span>
+      </div>
+      <div class="radio-controls">
+        <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
+        <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
+        <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
+        <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
+        <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" aria-hidden="true"></i><input type="range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
+      </div>
+    </section>
     <div class="radio-info" id="radioInfo" style="display:none">
       <p class="radio-stats" id="radioStats"></p>
       <div class="radio-bio" id="radioBio" style="display:none">
@@ -171,21 +181,24 @@
         <a class="radio-bio-link" id="radioBioLink" href="#" target="_blank" rel="noopener noreferrer">Read more on Last.fm</a>
       </div>
     </div>
-    <div id="radioStatusSlot"></div>
+    </div>
+    <div class="radio-col-list">
     <div id="radioUpNextBlock">
       <h3 class="radio-upnext-title">Up next</h3>
       <div class="radio-upnext" id="radioUpNext"></div>
     </div>
     <div class="track-list-wrapper" id="trackListWrapper" style="display:none">
-      <div class="track-list-header"><h3>Tracks</h3><span class="match-count" id="matchCount"></span></div>
+      <div class="track-list-header"><h3>Tracks</h3><span class="list-head-right"><span class="match-count" id="matchCount"></span><span id="saveSlotTravel"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span></span></div>
       <div class="track-list" id="trackList"></div>
+    </div>
+    </div>
     </div>
   </section>
 </div>
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.4</a></div>
+  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.5</a></div>
 </div>
 
 <div class="overlay" id="changelogOverlay" style="display:none">
@@ -194,29 +207,6 @@
     <button class="overlay-close" onclick="closeChangelog()">✕</button>
   </div>
   <iframe id="changelogFrame" class="overlay-frame" src="about:blank"></iframe>
-</div>
-
-<div id="player-bar" style="display:none">
-  <img id="pb-art" alt="">
-  <div id="pb-info">
-    <div id="pb-track"></div>
-    <div id="pb-artist"></div>
-  </div>
-  <button id="pb-heart" onclick="toggleLikeCurrentTrack()" title="Save to Liked Songs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-  <div id="pb-controls">
-    <button class="pb-btn" onclick="playerPrev()" title="Previous" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
-    <button class="pb-btn pb-play" id="pb-play" onclick="playerPlayPause()" title="Play/Pause" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
-    <button class="pb-btn" onclick="playerNext()" title="Next" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
-  </div>
-  <div id="pb-progress-wrap">
-    <span id="pb-elapsed">0:00</span>
-    <div id="pb-bar" onclick="seekTo(event)"><div id="pb-fill"></div></div>
-    <span id="pb-duration">0:00</span>
-  </div>
-  <div id="pb-volume-wrap">
-    <svg class="pb-vol-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 5h2.5L8 2v12L4.5 11H2a1 1 0 01-1-1V6a1 1 0 011-1zm9 .5a4.5 4.5 0 010 5M13 3.5a7.5 7.5 0 010 9"/></svg>
-    <input type="range" id="pb-volume" min="0" max="100" value="80" oninput="setVolume(this.value)">
-  </div>
 </div>
 
 <script src="https://sdk.scdn.co/spotify-player.js"></script>

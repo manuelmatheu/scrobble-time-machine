@@ -40,13 +40,13 @@
     .btn-disconnect { background:none; border:none; cursor:pointer; color:var(--spotify-green); opacity:0.6; font-size:12px; padding:0 2px; line-height:1; }
     .btn-disconnect:hover { opacity:1; }
     .status-bar { text-align:center; margin-bottom:20px; font-size:13px; color:var(--text-secondary); animation:fade-up 0.3s ease-out; }
-    .status-bar.error { color:var(--error); } .status-bar.success { color:var(--success); }
+    .status-bar.error { color:var(--error); } .status-bar.warn { color:var(--text-primary); }
     .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--lastfm-red); border-top-color:transparent; border-radius:50%; animation:spin 0.5s linear infinite; vertical-align:middle; margin-right:8px; }
     @keyframes spin { to{transform:rotate(360deg)} }
     @keyframes fade-up { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
     .track-list-wrapper { margin-bottom:48px; }
     .track-list-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 4px; }
-    .track-list-header h3 { font-size:13px; font-weight:600; color:var(--text-secondary); }
+    .track-list-header h3 { font-size:22px; font-weight:700; color:var(--text-primary); }
     .track-list-header .match-count { font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text-tertiary); }
     .btn-save-playlist { padding:5px 12px; border:1px solid var(--spotify-green); border-radius:8px; background:transparent; color:var(--spotify-green); font-size:11px; font-weight:600; font-family:inherit; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
     .btn-save-playlist:hover { background:rgba(29,185,84,0.1); }
@@ -74,14 +74,6 @@
     .track-date { font-size:11px; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
     .track-status { width:20px; text-align:center; font-size:14px; font-weight:700; flex-shrink:0; }
     .track-status.found { color:var(--success); } .track-status.not-found { color:var(--error); opacity:0.6; } .track-status.searching { color:var(--warning); } .track-status.skipped { color:var(--text-muted); }
-    .mode-selector { display:flex; gap:6px; margin-bottom:16px; justify-content:flex-start; flex-wrap:wrap; }
-    .mode-secondary { margin-top:-10px; }
-    .mode-more-toggle { opacity:0.5; font-size:12px; }
-    .mode-more-toggle:hover { opacity:0.8; }
-    .mode-more-toggle.open { opacity:0.8; }
-    .mode-pill { padding:8px 16px; border:1px solid var(--border); border-radius:999px; background:var(--bg-secondary); color:var(--text-tertiary); font-size:13px; font-weight:500; font-family:inherit; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
-    .mode-pill:hover { border-color:var(--text-muted); color:var(--text-secondary); }
-    .mode-pill.active { border-color:var(--lastfm-red); background:var(--lastfm-red-subtle); color:var(--lastfm-red-text); font-weight:600; }
     .mode-inputs { display:flex; gap:8px; margin-bottom:20px; justify-content:flex-start; flex-wrap:wrap; }
     .mood-grid { max-width:500px; }
     .mood-btn { padding:8px 14px; border:1px solid var(--border); border-radius:8px; background:var(--bg-secondary); color:var(--text-secondary); font-size:13px; font-family:inherit; cursor:pointer; transition:all 0.15s; }
@@ -99,8 +91,6 @@
       .header h1 { font-size:22px; } .header p { margin-left:0; margin-top:12px; }
      
       .track-date { display:none; }
-      .mode-selector { flex-wrap:wrap; }
-      .mode-pill { padding:7px 12px; font-size:12px; }
       .controls { flex-direction:column; }
       .input-username { flex:1 1 100%; }
       .btn { width:100%; text-align:center; }
@@ -126,81 +116,6 @@
     .overlay-close:hover { background:var(--bg-secondary); color:var(--text-primary); }
     .overlay-frame { flex:1; border:none; width:100%; }
 
-    /* Player Bar */
-    body.has-player { padding-bottom: 72px; }
-    #player-bar {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 16px; height: 64px;
-      background: var(--bg-elevated); border-top: 1px solid var(--border);
-    }
-    #pb-art {
-      width: 44px; height: 44px; border-radius:8px; object-fit: cover;
-      flex-shrink: 0; background: var(--bg-tertiary);
-    }
-    #pb-info {
-      flex: 1; min-width: 0; overflow: hidden;
-    }
-    #pb-track {
-      font-size: 14px; font-weight: 500; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #pb-artist {
-      font-size: 12px; color: var(--text-tertiary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #pb-heart {
-      background: none; border: none; cursor: pointer;
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 6px; color: var(--text-primary); opacity: 0.7; flex-shrink: 0;
-      transition: opacity 100ms, color 120ms, transform 120ms;
-    }
-    #pb-heart svg { width: 14px; height: 14px; }
-    #pb-heart:hover { opacity: 1; }
-    #pb-heart.liked { color: var(--lastfm-red); opacity: 1; }
-    #pb-heart.liked:hover { transform: scale(1.15); }
-    #pb-controls {
-      display: flex; gap: 4px; align-items: center; flex-shrink: 0;
-    }
-    .pb-btn {
-      background: none; border: none; color: var(--text-primary); cursor: pointer;
-      font-size: 14px; padding: 6px; line-height: 1; opacity: 0.7;
-      transition: opacity 100ms;
-    }
-    .pb-btn:hover { opacity: 1; }
-    .pb-play { font-size: 20px; opacity: 1; }
-    #pb-progress-wrap {
-      flex: 2; display: flex; align-items: center; gap: 8px; min-width: 0;
-    }
-    #pb-elapsed, #pb-duration {
-      font-size: 11px; font-family: 'JetBrains Mono', monospace;
-      color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
-    }
-    #pb-bar {
-      flex: 1; height: 3px; background: var(--bg-tertiary); border-radius: 2px;
-      cursor: pointer; position: relative; min-width: 0;
-    }
-    #pb-fill {
-      height: 100%; background: var(--lastfm-red); border-radius: 2px;
-      width: 0%; transition: width 0.25s linear;
-    }
-    #pb-volume-wrap {
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-    }
-    .pb-vol-icon { color: var(--text-primary); opacity: 0.5; flex-shrink: 0; }
-    #pb-volume {
-      -webkit-appearance: none; appearance: none;
-      width: 72px; height: 3px; background: var(--bg-tertiary);
-      border-radius: 2px; outline: none; cursor: pointer;
-    }
-    #pb-volume::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 12px; height: 12px;
-      background: var(--text-secondary); border-radius: 50%; cursor: pointer;
-    }
-    #pb-volume::-moz-range-thumb {
-      width: 12px; height: 12px; background: var(--text-secondary);
-      border-radius: 50%; border: none; cursor: pointer;
-    }
     /* Track row heart buttons */
     .heart-btn {
       background: none; border: none; font-size: 14px; cursor: pointer;
@@ -209,10 +124,6 @@
     }
     .heart-btn:hover { color: var(--text-primary); }
     .heart-btn.liked { color: var(--lastfm-red); }
-    @media (max-width: 580px) {
-      #pb-progress-wrap { display: none; }
-      #pb-volume-wrap { display: none; }
-    }
 
 /* Home view */
 .app-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:24px 0 20px; }
@@ -223,48 +134,93 @@
 .app-header .theme-toggle { position:static; }
 .spotify-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; }
 .status-dot { width:8px; height:8px; border-radius:50%; background:var(--spotify-green); display:inline-block; }
-.home-headline { font-size:clamp(24px,5vw,32px); font-weight:800; letter-spacing:-0.6px; line-height:1.15; margin-bottom:8px; }
+.radio-card { padding:28px; margin-bottom:32px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
+.radio-card .controls { margin-bottom:0; }
+.eyebrow { display:block; margin-bottom:12px; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--lastfm-red-text); }
+.home-headline { font-size:clamp(28px,6vw,44px); font-weight:800; letter-spacing:-1px; line-height:1.05; margin-bottom:12px; }
 .home-meta { color:var(--text-secondary); font-size:14px; margin-bottom:20px; }
-.btn-radio { flex:1 1 100%; padding:14px 20px; font-size:15px; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
-.section-heading { font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:12px; }
-.time-travel { margin-top:32px; border-top:1px solid var(--border-subtle); padding-top:24px; }
+.btn-radio { flex:1 1 100%; min-height:56px; padding:14px 28px; border-radius:12px; font-size:18px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.section-heading { font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:16px; }
+.time-travel { margin-top:0; }
+.mode-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
+.mode-card { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-height:44px; padding:14px 16px; text-align:left; font-family:inherit; color:var(--text-primary); background:var(--bg-secondary); border:1.5px solid var(--border); border-radius:12px; cursor:pointer; transition:border-color 0.15s, background 0.15s; }
+.mode-card:hover { border-color:var(--text-muted); }
+.mode-card.active { border-color:var(--lastfm-red); background:var(--lastfm-red-subtle); }
+.mode-card i { font-size:20px; color:var(--text-tertiary); }
+.mode-card.active i { color:var(--lastfm-red-text); }
+.mode-card-name { font-size:15px; font-weight:700; }
+.mode-card-desc { font-size:13px; line-height:1.35; color:var(--text-secondary); }
+.radio-card .controls { align-items:stretch; }
+.radio-playing { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:12px 14px; border-radius:12px; background:var(--bg-tertiary); font-size:14px; color:var(--text-secondary); min-width:0; }
+.radio-playing i { color:var(--lastfm-red-text); font-size:18px; flex-shrink:0; }
+.radio-playing strong { color:var(--text-primary); }
+.radio-playing-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:520px) { .mode-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .radio-card { padding:20px; } }
 .go-row { display:flex; justify-content:flex-start; margin-bottom:20px; }
-.mode-pill i, .mood-btn i { margin-right:2px; vertical-align:-1px; }
+.mood-btn i { margin-right:2px; vertical-align:-1px; }
 @media (max-width:520px) { .app-brand h1 { font-size:16px; } }
 
 /* Library radio view */
 .radio-view { width:100%; padding-bottom:48px; }
-.radio-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
-.radio-title { font-size:18px; font-weight:800; letter-spacing:-0.3px; }
-.btn-text { background:none; border:none; color:var(--text-secondary); font-family:inherit; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:8px 0; }
+.radio-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+.radio-title { text-align:right; font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--lastfm-red-text); }
+.btn-text { background:none; border:none; color:var(--text-secondary); font-family:inherit; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:0; min-height:44px; }
 .btn-text:hover { color:var(--text-primary); }
-.radio-hero { display:flex; gap:16px; align-items:center; margin-bottom:16px; }
-.radio-art { width:110px; height:110px; border-radius:8px; object-fit:cover; background:var(--bg-tertiary); flex-shrink:0; }
-.radio-hero-text { min-width:0; }
-.radio-track { font-size:22px; font-weight:800; line-height:1.15; margin-top:6px; overflow-wrap:anywhere; }
-.radio-artist { font-size:14px; color:var(--text-secondary); margin-top:4px; }
-.radio-progress { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
-.radio-progress span { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-tertiary); flex-shrink:0; }
-#radioBar { flex:1; height:4px; background:var(--bg-tertiary); border-radius:999px; cursor:pointer; }
+/* Now playing: a 224px card, cover on the left, text / progress / controls stacked on the right (phones: see the 520px query) */
+.radio-now { display:grid; grid-template-columns:192px minmax(0,1fr); grid-template-rows:auto 1fr auto; column-gap:24px; height:224px; box-sizing:border-box; padding:16px; margin-bottom:28px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
+.radio-hero { display:contents; }
+.radio-art { grid-column:1; grid-row:1 / span 3; width:192px; height:192px; border-radius:12px; object-fit:cover; background:var(--bg-tertiary); }
+.radio-hero-text { grid-column:2; grid-row:1; min-width:0; position:relative; }
+.radio-hero-text .radio-heart-title { display:none; }  /* phones only: the heart sits next to the title (see the 520px query) */
+.radio-hero-text .eyebrow { margin-bottom:0; }
+.radio-track { font-size:28px; font-weight:800; line-height:1.1; letter-spacing:-0.6px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.radio-artist { font-size:15px; color:var(--text-secondary); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.radio-progress { grid-column:2; grid-row:2; align-self:center; display:flex; align-items:center; gap:12px; }
+.radio-progress span { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-tertiary); flex-shrink:0; }
+#radioBar { flex:1; height:6px; background:var(--bg-tertiary); border-radius:999px; cursor:pointer; }
 #radioFill { height:100%; width:0; background:var(--lastfm-red); border-radius:999px; transition:width 0.25s linear; }
-.radio-controls { display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:28px; flex-wrap:wrap; }
+.radio-controls { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-start; gap:8px; }
 .radio-btn { background:none; border:none; color:var(--text-primary); font-size:22px; cursor:pointer; width:44px; height:44px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, transform 0.1s; }
 .radio-btn:hover { background:var(--bg-tertiary); }
 .radio-btn:active { transform:scale(0.96); }
-.radio-play { background:var(--text-primary); color:var(--bg-primary); border-radius:999px; }
+.radio-play { width:56px; height:56px; font-size:24px; background:var(--text-primary); color:var(--bg-primary); border-radius:999px; }
+.radio-view .btn-save-playlist { min-height:44px; padding:0 16px; font-size:13px; font-weight:700; border-width:1.5px; white-space:nowrap; }
+.list-head-right { display:flex; align-items:center; gap:12px; }
+.radio-volume { display:none; align-items:center; gap:8px; margin-left:auto; color:var(--text-secondary); }
+.radio-volume.sdk { display:flex; }
+.radio-volume i { font-size:20px; }
+#radioVolume { -webkit-appearance:none; appearance:none; width:140px; height:44px; background:transparent; cursor:pointer; --vol:80%; }
+#radioVolume::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:linear-gradient(to right, var(--text-secondary) var(--vol), var(--border) var(--vol)); }
+#radioVolume::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; margin-top:-5px; border:none; border-radius:50%; background:var(--text-primary); }
+#radioVolume::-moz-range-track { height:4px; border-radius:2px; background:var(--border); }
+#radioVolume::-moz-range-progress { height:4px; border-radius:2px; background:var(--text-secondary); }
+#radioVolume::-moz-range-thumb { width:14px; height:14px; border:none; border-radius:50%; background:var(--text-primary); }
+#radioVolume:focus-visible { outline:2px solid var(--lastfm-red-text); outline-offset:2px; border-radius:4px; }
 .radio-play:hover { background:var(--text-secondary); }
 .radio-btn.liked { color:var(--lastfm-red-text); }
-.radio-upnext-title { font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:8px; }
-.radio-upnext { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:8px; overflow:hidden; }
-.radio-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 16px; }
+.radio-upnext-title { font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:10px; }
+.radio-upnext { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:12px; overflow:hidden; }
+.radio-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 16px; min-height:44px; box-sizing:border-box; }
 .radio-row:not(:last-child) { border-bottom:1px solid var(--border-subtle); }
-.radio-row-text { min-width:0; }
+.radio-row-text { min-width:0; flex:1; }
+.radio-row-art { width:40px; height:40px; border-radius:6px; object-fit:cover; background:var(--bg-tertiary); flex-shrink:0; }
 .radio-row-title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-artist { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-tuning .radio-row-title { color:var(--text-secondary); font-weight:500; }
-body.radio-mode #player-bar { display:none !important; }
-body.radio-mode.has-player { padding-bottom:0; }
-@media (max-width:520px) { .radio-art { width:88px; height:88px; } .radio-track { font-size:18px; } }
+@media (max-width:520px) {
+  .radio-now { display:flex; flex-direction:column; gap:16px; height:auto; padding:20px; }
+  .radio-hero { display:flex; flex-direction:column; align-items:stretch; gap:16px; }
+  .radio-art { width:100%; height:auto; aspect-ratio:1/1; }
+  .radio-track { font-size:26px; white-space:normal; overflow-wrap:anywhere; }
+  .radio-artist { white-space:normal; }
+  .radio-progress { align-self:stretch; }  /* in the stacked card the row must span the width, or the bar collapses to 0 */
+  .radio-controls { justify-content:center; gap:20px; }
+  .radio-hero-text { padding-right:52px; }
+  .radio-hero-text .radio-heart-title { display:inline-flex; position:absolute; right:0; top:50%; transform:translateY(-50%); }
+  #radioHeart { display:none; }  /* the controls row keeps prev / play / next, centered */
+}
+
+@media (max-width:720px) { .radio-volume.sdk { display:none; } }
 
 /* Reduced motion: everything collapses to static */
 @media (prefers-reduced-motion: reduce) {
@@ -273,7 +229,7 @@ body.radio-mode.has-player { padding-bottom:0; }
 
 /* Radio: your play counts and artist bio */
 .radio-info { margin-bottom:28px; }
-.radio-stats { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:8px; padding:14px 16px; font-size:14px; line-height:1.5; color:var(--text-secondary); margin-bottom:16px; }
+.radio-stats { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:12px; padding:14px 16px; font-size:14px; line-height:1.5; color:var(--text-secondary); margin-bottom:16px; }
 .radio-stats strong { color:var(--text-primary); font-weight:700; }
 .radio-bio-name { font-size:18px; font-weight:800; letter-spacing:-0.3px; margin-bottom:8px; }
 .radio-bio-text { font-size:14px; line-height:1.6; color:var(--text-secondary); display:-webkit-box; -webkit-line-clamp:4; line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:8px; }
@@ -287,3 +243,26 @@ body.radio-mode.has-player { padding-bottom:0; }
 .radio-row-play { cursor:pointer; transition:background 0.15s; }
 .radio-row-play:hover { background:var(--bg-tertiary); }
 .radio-view .status-bar { text-align:left; margin-bottom:16px; }
+
+/* Wide desktop (1100px and up): a 1120px container. Home: the radio card on the left (420px), the Time Travel modes on the right.
+   Radio / Time Travel: player + artist panel on the left (640px), the list on the right as a panel of the same height
+   (rows grow or scroll inside it). Narrower screens keep one column. */
+@media (min-width:1100px) {
+  .container { max-width:1120px; }
+  #homeView.connected { display:grid; grid-template-columns:420px minmax(0,1fr); column-gap:40px; align-items:start; }
+  #homeView.connected .radio-card { margin-bottom:0; }
+  #homeView.connected .home-headline { font-size:40px; }
+  #homeView:not(.connected) .radio-card { max-width:680px; margin-left:auto; margin-right:auto; }
+  .radio-cols { display:grid; grid-template-columns:640px minmax(0,1fr); grid-template-rows:minmax(468px,auto); gap:28px; align-items:stretch; }
+  .radio-col-main { display:flex; flex-direction:column; gap:28px; min-width:0; }
+  .radio-col-main .radio-now { margin-bottom:0; }
+  .radio-col-main .radio-info { margin-bottom:0; padding:20px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
+  .radio-info .radio-stats { padding:0; border:none; background:none; }
+  .radio-col-list { position:relative; min-height:0; }
+  .radio-col-list > #radioUpNextBlock, .radio-col-list > .track-list-wrapper { position:absolute; inset:0; display:flex; flex-direction:column; margin:0; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); overflow:hidden; }
+  .radio-col-list .radio-upnext-title, .radio-col-list .track-list-header { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:64px; box-sizing:border-box; margin:0; padding:10px 16px 10px 20px; border-bottom:1px solid var(--border); }
+  .radio-col-list .radio-upnext, .radio-col-list .track-list { flex:1; min-height:0; margin:0; border:none; border-radius:0; background:none; }
+  .radio-col-list .radio-upnext { display:flex; flex-direction:column; }
+  .radio-col-list .radio-upnext .radio-row { flex:0 0 calc(100% / var(--upnext-rows, 6)); }  /* every row keeps the same height, even with fewer tracks queued */
+  .radio-col-list .track-list { position:relative; overflow-y:auto; }
+}

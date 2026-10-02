@@ -2,7 +2,14 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.4 (current) ✅
+## v2.5 (current) ✅
+
+- [x] Home redesign: radio card with a larger Start radio button
+- [x] Time Travel modes as a grid of nine cards with descriptions (replaces the pills and the More toggle)
+
+---
+
+## v2.4 ✅
 
 - [x] Library Radio: endless stream of random scrobbles from the whole Last.fm history
 - [x] Radio-first redesign: home with one Start radio button, radio view with Up next, artist bio and your play counts, time travel as secondary
