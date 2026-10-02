@@ -170,7 +170,8 @@
 .radio-now { display:grid; grid-template-columns:192px minmax(0,1fr); grid-template-rows:auto 1fr auto; column-gap:24px; height:224px; box-sizing:border-box; padding:16px; margin-bottom:28px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
 .radio-hero { display:contents; }
 .radio-art { grid-column:1; grid-row:1 / span 3; width:192px; height:192px; border-radius:12px; object-fit:cover; background:var(--bg-tertiary); }
-.radio-hero-text { grid-column:2; grid-row:1; min-width:0; }
+.radio-hero-text { grid-column:2; grid-row:1; min-width:0; position:relative; }
+.radio-hero-text .radio-heart-title { display:none; }  /* phones only: the heart sits next to the title (see the 520px query) */
 .radio-hero-text .eyebrow { margin-bottom:0; }
 .radio-track { font-size:28px; font-weight:800; line-height:1.1; letter-spacing:-0.6px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-artist { font-size:15px; color:var(--text-secondary); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -213,7 +214,10 @@
   .radio-track { font-size:26px; white-space:normal; overflow-wrap:anywhere; }
   .radio-artist { white-space:normal; }
   .radio-progress { align-self:stretch; }  /* in the stacked card the row must span the width, or the bar collapses to 0 */
-  .radio-controls { justify-content:center; }
+  .radio-controls { justify-content:center; gap:20px; }
+  .radio-hero-text { padding-right:52px; }
+  .radio-hero-text .radio-heart-title { display:inline-flex; position:absolute; right:0; top:50%; transform:translateY(-50%); }
+  #radioHeart { display:none; }  /* the controls row keeps prev / play / next, centered */
 }
 
 @media (max-width:720px) { .radio-volume.sdk { display:none; } }

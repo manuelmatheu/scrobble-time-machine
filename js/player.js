@@ -455,6 +455,8 @@ function updateNowPlayingHeart() {
   if (nowPlayingIndex < 0 || !matchedUris[nowPlayingIndex]) return;
   const id = matchedUris[nowPlayingIndex].split(":").pop();
   const liked = likedSet.has(id);
-  const rh = $("radioHeart");
-  if (rh) { rh.classList.toggle("liked", liked); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart"></i>'; }
+  for (const id of ["radioHeart", "radioHeartTitle"]) {  // the controls row (desktop) and the title row (phones)
+    const rh = $(id);
+    if (rh) { rh.classList.toggle("liked", liked); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart"></i>'; }
+  }
 }

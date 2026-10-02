@@ -442,6 +442,13 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("radioMinimized"), false);
     assert.equal(els.radioBackBtn.style.display, "none");
     assert.match(els.radioBtn.innerHTML, /Start radio/);
+    // the liked state shows on both hearts: the controls row (desktop) and the title row (phones)
+    run("matchedUris = { 0: 'spotify:track:abc' }; allTrackCount = 1; nowPlayingIndex = 0; likedSet = new Set(['abc']);");
+    run("updateNowPlayingHeart()");
+    assert.ok(els.radioHeart.cl.has("liked") && els.radioHeartTitle.cl.has("liked"));
+    assert.match(els.radioHeartTitle.innerHTML, /ph-fill/);
+    run("likedSet = new Set();"); run("updateNowPlayingHeart()");
+    assert.ok(!els.radioHeart.cl.has("liked") && !els.radioHeartTitle.cl.has("liked"));
     // Save as Playlist exists only in Time Travel: showing the radio view never touches it
     run('showRadioView("travel")'); run("showRadioView()");
     assert.equal(els.savePlaylistBtn, undefined, "the radio view does not create or show the save button");
