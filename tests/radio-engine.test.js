@@ -369,7 +369,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 28. Home keeps the session running; the home card leads back to it
   {
     const els = {};
-    const mk = id => { const cl = new Set(); return { id, style: id === "radioView" ? { display: "none" } : { setProperty(k, v) { this[k] = v; } }, textContent: "", innerHTML: "", className: "", value: "80", children: [], cl, classList: { add: c => cl.add(c), remove: c => cl.delete(c), toggle: (c, on) => (on ? cl.add(c) : cl.delete(c)) }, removeAttribute() {}, appendChild(c) { this.children.push(c); } }; };
+    const mk = id => { const cl = new Set(); return { id, style: id === "radioView" ? { display: "none" } : { setProperty(k, v) { this[k] = v; } }, textContent: "", innerHTML: "", className: "", value: "80", children: [], cl, classList: { add: c => cl.add(c), remove: c => cl.delete(c), toggle: (c, on) => (on ? cl.add(c) : cl.delete(c)) }, getAttribute(k) { return this[k] === undefined ? null : this[k]; }, removeAttribute(k) { delete this[k]; }, appendChild(c) { this.children.push(c); } }; };
     global.document.getElementById = id => els[id] || (els[id] = mk(id));
     global.window.scrollTo = () => {};
     reset();
@@ -493,6 +493,49 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 3);
     assert.match(q.innerHTML, /Tuning/, "a Tuning row fills a free slot while topping up");
     run("radioRefilling = false;");
+  }
+
+  // 31. the artist photo comes from Spotify, once per artist, and only for the artist that is playing
+  {
+    const els = {};
+    const mk = id => ({ id, style: {}, innerHTML: "", textContent: "", getAttribute(k) { return this[k] === undefined ? null : this[k]; }, removeAttribute(k) { delete this[k]; } });
+    global.document.getElementById = id => els[id] || (els[id] = mk(id));
+    global.window.matchMedia = () => ({ matches: true });
+    const idA = "1dfeR4HaWDbWqFHLkxsg1d", idB = "4Z8W4fKeB5YxbusRsdQVPb";
+    const calls = []; const waiting = {};
+    global.spGet = path => { calls.push(path); return new Promise((res, rej) => { waiting[path] = { res, rej }; }); };
+    const trackOf = id => ({ artists: [{ name: "X", uri: "spotify:artist:" + id }] });
+    run("radioPhotoCache = {}; radioPhotoId = '';");
+    run("radioSyncArtistPhoto(" + JSON.stringify(trackOf(idA)) + ")");
+    run("radioSyncArtistPhoto(" + JSON.stringify(trackOf(idA)) + ")");  // the same artist again: no second request
+    assert.deepEqual(calls, ["/artists/" + idA]);
+    // the artist changes before the first answer arrives: the late answer must not show
+    run("radioSyncArtistPhoto(" + JSON.stringify(trackOf(idB)) + ")");
+    waiting["/artists/" + idA].res({ images: [{ url: "https://i.scdn.co/a", width: 640 }] });
+    await new Promise(r => setImmediate(r));
+    assert.equal(els.radioArtistImg.src, undefined, "a late answer for the previous artist is ignored");
+    waiting["/artists/" + idB].res({ images: [{ url: "https://i.scdn.co/b-big", width: 640 }, { url: "https://i.scdn.co/b-mid", width: 320 }, { url: "https://i.scdn.co/b-small", width: 160 }], external_urls: { spotify: "https://open.spotify.com/artist/" + idB } });
+    await new Promise(r => setImmediate(r));
+    assert.equal(els.radioArtistImg.src, "https://i.scdn.co/b-mid");
+    assert.equal(els.radioArtistImg.style.display, "");
+    assert.equal(els.radioArtistPhoto.href, "https://open.spotify.com/artist/" + idB);
+    // an artist with no photo, and a failed request (not cached, retried next time)
+    run("radioSyncArtistPhoto(" + JSON.stringify(trackOf(idA)) + ")");
+    await new Promise(r => setImmediate(r));
+    assert.equal(els.radioArtistImg.src, "https://i.scdn.co/a", "the cached answer for A shows without a new request");
+    assert.equal(calls.length, 2);
+    run("radioPhotoCache = {}; radioPhotoId = '';");
+    run("radioSyncArtistPhoto(" + JSON.stringify(trackOf(idA)) + ")");
+    waiting["/artists/" + idA].rej(new Error("boom"));
+    await new Promise(r => setImmediate(r));
+    assert.equal(els.radioArtistImg.src, undefined, "a failed lookup shows no photo");
+    assert.equal(run("Object.keys(radioPhotoCache).length"), 0, "a failed lookup is not cached");
+    // narrow screens (phones) never request the photo
+    global.window.matchMedia = () => ({ matches: false });
+    const before = calls.length;
+    run("radioPhotoId = '';"); run("radioSyncArtistPhoto(" + JSON.stringify(trackOf(idB)) + ")");
+    assert.equal(calls.length, before);
+    delete global.window.matchMedia;
   }
 
   global.document.getElementById = realGetElementById;

@@ -129,4 +129,21 @@ assert.match(bare, /<div class="radio-row-art"><\/div>/);
 assert.doesNotMatch(r.radioQueueRowHtml(1, { name: "B", artist: "Y", art: 'javascript:alert(1)' }), /<img/);
 assert.doesNotMatch(r.radioQueueRowHtml(1, { name: "B", artist: "Y", art: 'https://x/" onerror="y' }), /<img/);
 
+// radioArtistPhotoFromSpotify: smallest https image that is at least 296px wide, else the largest
+const imgs = [{ url: "https://i.scdn.co/640", width: 640, height: 640 }, { url: "https://i.scdn.co/320", width: 320, height: 320 }, { url: "https://i.scdn.co/160", width: 160, height: 160 }];
+assert.deepEqual(r.radioArtistPhotoFromSpotify({ images: imgs, external_urls: { spotify: "https://open.spotify.com/artist/abc" } }), { url: "https://i.scdn.co/320", link: "https://open.spotify.com/artist/abc" });
+assert.equal(r.radioArtistPhotoFromSpotify({ images: [imgs[2]] }).url, "https://i.scdn.co/160");
+assert.equal(r.radioArtistPhotoFromSpotify({ images: [] }), null);
+assert.equal(r.radioArtistPhotoFromSpotify({}), null);
+assert.equal(r.radioArtistPhotoFromSpotify(null), null);
+// only plain https URLs reach the page; the Spotify link must be an open.spotify.com page
+assert.equal(r.radioArtistPhotoFromSpotify({ images: [{ url: "javascript:alert(1)", width: 640 }, { url: 'https://x/" onerror="y', width: 640 }] }), null);
+assert.equal(r.radioArtistPhotoFromSpotify({ images: [imgs[1]], external_urls: { spotify: "https://evil.example/x" } }).link, "");
+// radioArtistId: first artist, from the SDK uri or the Web API id
+assert.equal(r.radioArtistId({ artists: [{ name: "A", uri: "spotify:artist:1dfeR4HaWDbWqFHLkxsg1d" }] }), "1dfeR4HaWDbWqFHLkxsg1d");
+assert.equal(r.radioArtistId({ artists: [{ id: "4Z8W4fKeB5YxbusRsdQVPb", name: "B" }] }), "4Z8W4fKeB5YxbusRsdQVPb");
+assert.equal(r.radioArtistId({ artists: [] }), "");
+assert.equal(r.radioArtistId({ artists: [{ name: "local", uri: "spotify:local:a:b" }] }), "");
+assert.equal(r.radioArtistId(null), "");
+
 console.log("radio helpers: ok");
