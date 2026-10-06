@@ -2,10 +2,21 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.5 (current) ✅
+## v2.6 (current) ✅
+
+- [x] Artist photo (from Spotify) in the artist panel on wide desktop, linking to the artist on Spotify
+
+---
+
+## v2.5 ✅
+
 
 - [x] Home redesign: radio card with a larger Start radio button
 - [x] Time Travel modes as a grid of nine cards with descriptions (replaces the pills and the More toggle)
+- [x] Wide desktop layout: two-column home, radio and Time Travel views
+- [x] Back to radio: Home keeps the session playing; no more bottom player bar; volume slider
+- [x] Quieter status bar (errors and warnings only) and a steady Up next list
+- [x] Phone polish: like heart next to the title, centered controls, full-width progress bar
 
 ---
 
