@@ -17,6 +17,7 @@
   v2.2  2026-03-26  Spotify Web Playback SDK + player bar + liked songs + playlist UX
   v2.4  2026-09-30  Library Radio + radio-first redesign
   v2.5  2026-10-01  Home redesign: radio card + time travel mode cards
+  v2.6  2026-10-06  Artist photo (from Spotify) on wide desktop
 -->
 <html lang="en">
 <head>
@@ -174,11 +175,14 @@
       </div>
     </section>
     <div class="radio-info" id="radioInfo" style="display:none">
-      <p class="radio-stats" id="radioStats"></p>
-      <div class="radio-bio" id="radioBio" style="display:none">
-        <h3 class="radio-bio-name" id="radioBioName"></h3>
-        <p class="radio-bio-text" id="radioBioText"></p>
-        <a class="radio-bio-link" id="radioBioLink" href="#" target="_blank" rel="noopener noreferrer">Read more on Last.fm</a>
+      <a class="radio-artist-photo" id="radioArtistPhoto" target="_blank" rel="noopener noreferrer" title="Open the artist on Spotify" aria-label="Open the artist on Spotify"><i class="ph ph-microphone-stage" aria-hidden="true"></i><img id="radioArtistImg" alt="" style="display:none"></a>
+      <div class="radio-info-body">
+        <p class="radio-stats" id="radioStats"></p>
+        <div class="radio-bio" id="radioBio" style="display:none">
+          <h3 class="radio-bio-name" id="radioBioName"></h3>
+          <p class="radio-bio-text" id="radioBioText"></p>
+          <a class="radio-bio-link" id="radioBioLink" href="#" target="_blank" rel="noopener noreferrer">Read more on Last.fm</a>
+        </div>
       </div>
     </div>
     </div>
@@ -198,7 +202,7 @@
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.5</a></div>
+  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.6</a></div>
 </div>
 
 <div class="overlay" id="changelogOverlay" style="display:none">

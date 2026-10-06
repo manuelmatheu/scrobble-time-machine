@@ -342,6 +342,7 @@ function radioResetHero() {
   $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
   $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioInfoIdx = -1; radioHideInfo();
+  radioPhotoId = ""; radioShowArtistPhoto(null);
 }
 
 // mode "radio" (default) shows Up next; "travel" shows the era panel and the full track list
@@ -444,6 +445,52 @@ function radioRenderInfo(info) {
   $("radioInfo").style.display = (stats || hasBio) ? "" : "none";
 }
 
+// ===== Artist photo (Spotify) =====
+// Last.fm no longer serves artist photos through its API, so the photo comes from Spotify (GET /artists/{id}).
+// Pure: the smallest https image that is at least 2x the 148px slot (retina), else the largest; plus the artist's Spotify page.
+function radioArtistPhotoFromSpotify(d) {
+  const imgs = (d && Array.isArray(d.images) ? d.images : []).filter(i => i && typeof i.url === "string" && /^https:\/\/[^"'<>\s]+$/.test(i.url));
+  if (!imgs.length) return null;
+  const sorted = imgs.slice().sort((a, b) => (a.width || 0) - (b.width || 0));
+  const pick = sorted.find(i => (i.width || 0) >= 296) || sorted[sorted.length - 1];
+  const page = d.external_urls && d.external_urls.spotify;
+  return { url: pick.url, link: typeof page === "string" && /^https:\/\/open\.spotify\.com\/[^"'<>\s]+$/.test(page) ? page : "" };
+}
+
+// Spotify id of the first artist of a playing track (SDK track: artists[].uri; Web API item: artists[].id)
+function radioArtistId(track) {
+  const a = track && track.artists && track.artists[0];
+  if (!a) return "";
+  const id = a.id || String(a.uri || "").split(":").pop();
+  return /^[A-Za-z0-9]{10,}$/.test(id) ? id : "";
+}
+
+let radioPhotoCache = {};  // artist id -> promise of { url, link } | null (a failed request is never kept)
+let radioPhotoId = "";     // artist whose photo is showing (or loading)
+function radioArtistPhoto(id) {
+  if (!(id in radioPhotoCache)) radioPhotoCache[id] = spGet("/artists/" + id).then(radioArtistPhotoFromSpotify, () => undefined);
+  return radioPhotoCache[id].then(p => { if (p === undefined) delete radioPhotoCache[id]; return p || null; });
+}
+
+function radioShowArtistPhoto(p) {
+  const box = $("radioArtistPhoto"), img = $("radioArtistImg");
+  if (!box || !img) return;
+  if (p) { img.src = p.url; img.style.display = ""; } else { img.removeAttribute("src"); img.style.display = "none"; }
+  if (p && p.link) box.href = p.link; else box.removeAttribute("href");
+}
+
+// Called on every player event: loads the photo when the playing artist changes (wide desktop only: phones never show it)
+function radioSyncArtistPhoto(track) {
+  const img = $("radioArtistImg");
+  if (!img) return;
+  const id = radioArtistId(track);
+  const wide = typeof window === "undefined" || !window.matchMedia || window.matchMedia("(min-width:1100px)").matches;
+  if (id === radioPhotoId && (!wide || img.getAttribute("src"))) return;
+  if (id !== radioPhotoId) { radioPhotoId = id; radioShowArtistPhoto(null); }
+  if (!id || !wide) return;
+  radioArtistPhoto(id).then(p => { if (id === radioPhotoId) radioShowArtistPhoto(p); });
+}
+
 // Load the panel when the playing track changes (radioRenderNow runs on every player event)
 function radioSyncInfo() {
   if (nowPlayingIndex === radioInfoIdx) return;
@@ -474,6 +521,7 @@ function radioRenderNow(track, paused) {
   radioSyncVolume();
   if (radioMinimized) radioSyncHome();
   radioSyncInfo();
+  radioSyncArtistPhoto(track);
   radioRenderQueue();
 }
 
@@ -516,5 +564,5 @@ async function radioPlayFrom(idx) {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest, radioQueueRowHtml };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId };
 }

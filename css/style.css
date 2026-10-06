@@ -235,6 +235,8 @@
 .radio-bio-text { font-size:14px; line-height:1.6; color:var(--text-secondary); display:-webkit-box; -webkit-line-clamp:4; line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:8px; }
 .radio-bio-link { font-size:13px; color:var(--lastfm-red-text); text-decoration:none; }
 .radio-bio-link:hover { text-decoration:underline; }
+.radio-artist-photo { display:none; }  /* wide desktop only: see the min-width:1100px block */
+.radio-info-body { min-width:0; flex:1; }
 
 /* Time travel inside the radio view */
 .radio-top-left { display:flex; align-items:center; gap:16px; }
@@ -258,6 +260,9 @@
   .radio-col-main .radio-now { margin-bottom:0; }
   .radio-col-main .radio-info { margin-bottom:0; padding:20px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
   .radio-info .radio-stats { padding:0; border:none; background:none; }
+  .radio-col-main .radio-info { display:flex; gap:20px; align-items:flex-start; }
+  .radio-artist-photo { position:relative; display:flex; align-items:center; justify-content:center; flex:0 0 148px; width:148px; height:148px; border-radius:12px; overflow:hidden; background:var(--bg-tertiary); color:var(--text-tertiary); font-size:48px; }
+  .radio-artist-photo img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .radio-col-list { position:relative; min-height:0; }
   .radio-col-list > #radioUpNextBlock, .radio-col-list > .track-list-wrapper { position:absolute; inset:0; display:flex; flex-direction:column; margin:0; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); overflow:hidden; }
   .radio-col-list .radio-upnext-title, .radio-col-list .track-list-header { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:64px; box-sizing:border-box; margin:0; padding:10px 16px 10px 20px; border-bottom:1px solid var(--border); }
