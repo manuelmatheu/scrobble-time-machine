@@ -339,6 +339,26 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   global.setTimeout = realTimeout;
   assert.equal(run("spotifyBlockedFor()"), 0);
 
+  // 27b. the plain fallback query only counts when the hit has the same artist and title
+  run("spotifyBlockedUntil = 0; searchCache = {};");
+  const plainItems = [
+    { uri: "spotify:track:school", name: "School Spirit", artists: [{ name: "Kanye West" }] },
+    { uri: "spotify:track:yamaha", name: "Yamaha - Remastered 2011", artists: [{ name: "Delta Spirit" }] }
+  ];
+  const fetched = [];
+  global.fetch = async url => {
+    const q = new URL(url).searchParams.get("q"); fetched.push(q);
+    const items = q.startsWith("track:") ? [] : plainItems;
+    return { status: 200, ok: true, json: async () => ({ tracks: { items } }) };
+  };
+  assert.equal((await realSpotifySearch("token", "Delta Spirit", "Yamaha")).uri, "spotify:track:yamaha");
+  run("searchCache = {};");
+  plainItems.pop();  // Yamaha is not on Spotify: the top hit is an unrelated song
+  assert.equal(await realSpotifySearch("token", "Delta Spirit", "Yamaha"), null);
+  assert.equal(run("searchCache['delta spirit||yamaha']"), null);  // a clean miss is cached
+  assert.equal(run("spotifyLooseMatch('Air', 'Fair')"), false);
+  assert.equal(run("spotifyLooseMatch('Beyoncé', 'beyonce')"), true);
+
   // 28. time travel: a rate limit stops the batch, keeps the rest pending, and never marks tracks as not found
   run("spotifyBlockedUntil = 0; searchCache = {}; skippedPlan = []; isContinuing = false; abortController = { signal: { aborted: false } };");
   let blockSearches = 0;
