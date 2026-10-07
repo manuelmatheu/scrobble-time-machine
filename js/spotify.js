@@ -146,24 +146,27 @@ async function transferPlayback(token, deviceId) {
   await new Promise(r => setTimeout(r, 800));
 }
 
-async function spotifyPlay(token, uris, positionMs) {
+// opts.quick: already playing on the SDK device, so skip the transfer and shuffle reset (a shorter seam)
+async function spotifyPlay(token, uris, positionMs, opts) {
   const playUris = uris.slice(0, 100);
   const body = positionMs > 0 ? { uris: playUris, position_ms: positionMs } : { uris: playUris };
 
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
-    await fetch("https://api.spotify.com/v1/me/player", {
-      method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
-    });
-    await new Promise(r => setTimeout(r, 300));
-    // Disable shuffle on the SDK device too -- otherwise a shuffle state left on
-    // from a previous session (it persists on the user's account) reorders our queue
-    try {
-      await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + sdkDeviceId, {
-        method: "PUT", headers: { Authorization: "Bearer " + token }
+    if (!(opts && opts.quick)) {
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
       });
-    } catch {}
+      await new Promise(r => setTimeout(r, 300));
+      // Disable shuffle on the SDK device too -- otherwise a shuffle state left on
+      // from a previous session (it persists on the user's account) reorders our queue
+      try {
+        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + sdkDeviceId, {
+          method: "PUT", headers: { Authorization: "Bearer " + token }
+        });
+      } catch {}
+    }
     const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify(body)

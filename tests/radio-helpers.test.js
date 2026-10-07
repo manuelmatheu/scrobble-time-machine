@@ -47,6 +47,13 @@ assert.equal(r.radioShouldRefill({ ...s, exhausted: true }, 2), false);
 assert.equal(r.radioShouldRefill({ ...s, active: false }, 2), false);
 assert.equal(r.radioShouldRefill({ ...s, remaining: Infinity }, 2), false);
 
+// radioSeamDue: swap new tracks in only at the end of the last queued track
+assert.equal(r.radioSeamDue(true, 0, 178500, 180000, 1500), true);
+assert.equal(r.radioSeamDue(true, 0, 10000, 180000, 1500), false);   // mid-song: never
+assert.equal(r.radioSeamDue(true, 2, 179000, 180000, 1500), false);  // Spotify still has tracks queued
+assert.equal(r.radioSeamDue(false, 0, 179000, 180000, 1500), false); // nothing pending
+assert.equal(r.radioSeamDue(true, 0, 0, 0, 1500), false);            // no duration yet
+
 // radioCoverUrl (Spotify lists images largest first)
 const hit = { album: { images: [{ url: "big" }, { url: "mid" }, { url: "small" }] } };
 assert.equal(r.radioCoverUrl(hit), "small");
