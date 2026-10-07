@@ -2,7 +2,14 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.6 (current) ✅
+## v2.7 (current) ✅
+
+- [x] No more stutter a few seconds into a song: new tracks are swapped in at the end of the last queued track instead of mid-song
+- [x] The plain-query Spotify fallback only accepts a hit with the same artist and title (no more unrelated songs for tracks missing from Spotify)
+
+---
+
+## v2.6 ✅
 
 - [x] Artist photo (from Spotify) in the artist panel on wide desktop, linking to the artist on Spotify
 
