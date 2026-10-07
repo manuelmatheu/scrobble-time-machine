@@ -60,7 +60,8 @@ let radioSession = 0;           // bumped on every start/stop; stale fills compa
 let radioSeen = new Set();      // artist||track keys already picked this session
 let radioRefilling = false, radioExhausted = false, radioFailures = 0;
 let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the SDK is not driving state
-let radioPaused = false, radioPendingReissue = false;  // a top-up finished while paused: re-issue playback on resume
+let radioPaused = false, radioPendingReissue = false;  // new tracks not in Spotify's context yet: re-issue on resume (no SDK) or at the end of the last queued track (SDK)
+const RADIO_SEAM_MS = 1500;     // with the SDK, swap in the new tracks this close to the end of the last queued track
 let radioInfoIdx = -1;          // index whose bio/plays panel is showing (or loading)
 let radioArtistCache = {}, radioTrackCache = {};  // Last.fm getInfo results (promises), by artist / artist||track
 let radioMinimized = false;   // the radio/time-travel session keeps playing while the home view is showing

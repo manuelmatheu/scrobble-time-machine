@@ -246,7 +246,7 @@ async function continueRadio() {
       if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
-    if (radioPaused) { radioPendingReissue = true; return; }  // do not resume what the user paused
+    if (radioPaused || sdkReady) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK: swap at the seam (radioMaybeSeam)
     await radioReissue();
   } finally {
     if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
@@ -269,7 +269,33 @@ async function radioReissue() {
 // Track the play/pause state; a top-up that finished while paused re-issues on resume
 function radioSetPaused(paused) {
   radioPaused = paused;
-  if (!paused && radioPendingReissue) { radioPendingReissue = false; radioReissue(); }
+  if (!paused && radioPendingReissue && !sdkReady) { radioPendingReissue = false; radioReissue(); }
+}
+
+// SDK only. A re-issue restarts the stream (device transfer + play), which stutters if it lands a few
+// seconds into a song. So new tracks wait until the last track Spotify has queued is about to end, then
+// replace the context starting at the first new track.
+function radioSeamDue(pending, nextCount, positionMs, durationMs, seamMs) {
+  return !!pending && nextCount === 0 && durationMs > 0 && durationMs - positionMs <= seamMs;
+}
+
+function radioMaybeSeam() {
+  if (!(radioActive || travelActive) || !sdkReady) return;
+  if (!radioSeamDue(radioPendingReissue, _sdkNextCount, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
+  radioSeamReissue();
+}
+
+async function radioSeamReissue() {
+  radioPendingReissue = false;  // first, so the next 250ms tick does not fire it again
+  const sid = radioSession;
+  const uris = radioUrisFrom(matchedUris, allTrackCount, _sdkCurrentUri).slice(1);  // drop the track that is ending
+  if (!uris.length) return;
+  const token = await getSpotifyToken();
+  if (!token || sid !== radioSession) return;
+  let ok = false;
+  try { ok = await spotifyPlay(token, uris, 0, { quick: true }); } catch {}
+  if (!ok && sid === radioSession) ok = await spotifyPlay(token, uris);  // full device logic as a fallback
+  if (ok) checkLikedTracks();
 }
 
 // Called from the SDK state handler and the polling fallback on every track change
@@ -560,9 +586,10 @@ async function radioPlayFrom(idx) {
   if (!token) return;
   const ok = await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, matchedUris[idx]));
   if (!ok) showStatus("Playback failed. Is Spotify active?", "error");
+  else radioPendingReissue = false;  // the new context already holds every queued track
 }
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId };
 }

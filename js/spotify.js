@@ -93,27 +93,43 @@ async function spDelete(path, body) {
 // ═════════════════════════════════════════════════════════════════════════════
 // Runs one Spotify search query, handling 429 retry. Returns { item } on success,
 // or { rateLimited: true } / { error: true } so the caller can decide whether to fall back.
-async function runSpotifySearch(token, q, retries) {
+async function runSpotifySearch(token, q, retries, limit) {
   if (retries === undefined) retries = 2;
   try {
-    const r = await fetch("https://api.spotify.com/v1/search?" + new URLSearchParams({ q, type: "track", limit: "1" }), { headers: { Authorization: "Bearer " + token } });
+    const r = await fetch("https://api.spotify.com/v1/search?" + new URLSearchParams({ q, type: "track", limit: String(limit || 1) }), { headers: { Authorization: "Bearer " + token } });
     if (r.status === 429) {
       const w = parseInt(r.headers.get("Retry-After") || "5"), secs = isNaN(w) ? 5 : w;
       // A short hiccup is waited out; a long Retry-After trips a cooldown so nothing keeps hitting Spotify
-      if (secs <= 5 && retries > 0) { await new Promise(x => setTimeout(x, secs * 1000)); return runSpotifySearch(token, q, retries - 1); }
+      if (secs <= 5 && retries > 0) { await new Promise(x => setTimeout(x, secs * 1000)); return runSpotifySearch(token, q, retries - 1, limit); }
       spotifyBlockedUntil = Date.now() + secs * 1000;
       lastSearchError = "Rate limited (429)";
       return { rateLimited: true };
     }
     if (!r.ok) { if (!lastSearchError) { try { const e = await r.json(); lastSearchError = r.status+": "+(e.error?e.error.message:r.statusText); } catch(e) { lastSearchError = r.status+": "+r.statusText; } } return { error: true }; }
     const d = await r.json();
-    return { item: (d.tracks && d.tracks.items && d.tracks.items[0]) || null };
+    const items = (d.tracks && d.tracks.items) || [];
+    return limit > 1 ? { item: items[0] || null, items } : { item: items[0] || null };
   } catch (err) { if (!lastSearchError) lastSearchError = err.message; return { error: true }; }
 }
 
 // Milliseconds left of the cooldown after a Spotify 429 (0 when searches are allowed)
 function spotifyBlockedFor() { return Math.max(0, spotifyBlockedUntil - Date.now()); }
 function spotifyLimitMessage() { return "Spotify is limiting searches. Try again in about " + radioRateLimitText(spotifyBlockedFor()) + "."; }
+
+// Lowercase, no accents or punctuation, single spaces ("Beyoncé" -> "beyonce", "AC/DC" -> "ac dc")
+function spotifyNorm(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
+}
+// Equal, or one contains the other as whole words ("Yamaha" ~ "Yamaha - Remastered 2011"; "Air" does not match "Fair")
+function spotifyLooseMatch(a, b) {
+  a = spotifyNorm(a); b = spotifyNorm(b);
+  if (!a || !b) return false;
+  return a === b || (" " + a + " ").includes(" " + b + " ") || (" " + b + " ").includes(" " + a + " ");
+}
+// First search result by the scrobble's artist with the scrobble's title, else null
+function spotifyPickMatch(items, artist, track) {
+  return (items || []).find(it => it && (it.artists || []).some(a => spotifyLooseMatch(a.name, artist)) && spotifyLooseMatch(it.name, track)) || null;
+}
 
 async function spotifySearch(token, artist, track) {
   const ck = (artist + "||" + track).toLowerCase();
@@ -127,10 +143,13 @@ async function spotifySearch(token, artist, track) {
 
   // No hit → retry with a plain unqualified query, which Spotify's relevance
   // ranking handles much more forgivingly than strict field matching
+  // The plain query always returns something (Spotify ranks, it never says "no match"), so a hit
+  // only counts when it is by the same artist and has the same title: otherwise a song that is
+  // missing from Spotify is replaced by an unrelated one ("Delta Spirit - Yamaha" -> Kanye West's "School Spirit")
   if (!res.item) {
-    const plain = await runSpotifySearch(token, artist + " " + track);
+    const plain = await runSpotifySearch(token, artist + " " + track, undefined, 5);
     if (plain.rateLimited || plain.error) return null; // transient failure -- don't poison the cache
-    if (plain.item) res = plain;
+    res = { item: spotifyPickMatch(plain.items, artist, track) };
   }
 
   searchCache[ck] = res.item;
@@ -146,24 +165,27 @@ async function transferPlayback(token, deviceId) {
   await new Promise(r => setTimeout(r, 800));
 }
 
-async function spotifyPlay(token, uris, positionMs) {
+// opts.quick: already playing on the SDK device, so skip the transfer and shuffle reset (a shorter seam)
+async function spotifyPlay(token, uris, positionMs, opts) {
   const playUris = uris.slice(0, 100);
   const body = positionMs > 0 ? { uris: playUris, position_ms: positionMs } : { uris: playUris };
 
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
-    await fetch("https://api.spotify.com/v1/me/player", {
-      method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
-    });
-    await new Promise(r => setTimeout(r, 300));
-    // Disable shuffle on the SDK device too -- otherwise a shuffle state left on
-    // from a previous session (it persists on the user's account) reorders our queue
-    try {
-      await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + sdkDeviceId, {
-        method: "PUT", headers: { Authorization: "Bearer " + token }
+    if (!(opts && opts.quick)) {
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
       });
-    } catch {}
+      await new Promise(r => setTimeout(r, 300));
+      // Disable shuffle on the SDK device too -- otherwise a shuffle state left on
+      // from a previous session (it persists on the user's account) reorders our queue
+      try {
+        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + sdkDeviceId, {
+          method: "PUT", headers: { Authorization: "Bearer " + token }
+        });
+      } catch {}
+    }
     const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify(body)

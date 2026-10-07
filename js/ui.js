@@ -68,7 +68,7 @@ async function playFromTrack(i) {
   if (!uris.length) return;
   const tk = await getSpotifyToken(); if (!tk) { showStatus("Spotify expired.", "error"); return; }
   if (await spotifyPlay(tk, uris)) {
-    sessionQueue = new Set(uris); sessionPaused = false;
+    sessionQueue = new Set(uris); sessionPaused = false; radioPendingReissue = false;  // the new context holds every matched track
     highlightNowPlaying(i);
     showStatus("▶ Playing from track " + (i+1) + " (" + uris.length + " queued)", "success");
     startPolling();

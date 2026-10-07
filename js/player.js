@@ -116,7 +116,10 @@ async function continueMatching() {
     if (remainingUris.length > 0) {
       const tok2 = await getSpotifyToken();
       if (tok2) {
-        await spotifyPlay(tok2, remainingUris, _sdkPositionMs || 0);
+        // With the SDK, swap the new tracks in at the end of the last queued track: a re-issue
+        // mid-song restarts the stream and stutters (see radioMaybeSeam)
+        if (sdkReady) radioPendingReissue = true;
+        else await spotifyPlay(tok2, remainingUris, _sdkPositionMs || 0);
         remainingUris.forEach(u => sessionQueue.add(u));
       }
     }
@@ -279,6 +282,7 @@ let _sdkPositionMs = 0;
 let _sdkPlaying = false;
 let _sdkProgressTimer = null;
 let _sdkCurrentUri = null;
+let _sdkNextCount = 0;  // tracks Spotify still has queued after the current one
 
 function onSDKStateChange(state) {
   if (!state) return;
@@ -288,6 +292,7 @@ function onSDKStateChange(state) {
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
+  _sdkNextCount = (state.track_window.next_tracks || []).length;
 
   updateProgressBar(_sdkPositionMs, _sdkDurationMs);
 
@@ -296,6 +301,7 @@ function onSDKStateChange(state) {
     _sdkProgressTimer = setInterval(() => {
       _sdkPositionMs = Math.min(_sdkPositionMs + 250, _sdkDurationMs);
       updateProgressBar(_sdkPositionMs, _sdkDurationMs);
+      radioMaybeSeam();
     }, 250);
   }
 

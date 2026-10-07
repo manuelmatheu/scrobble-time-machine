@@ -139,6 +139,28 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   await run("continueRadio()");
   assert.equal(played.length, 1);
 
+  // 12b. with the SDK driving, a finished top-up does not touch playback: it waits for the seam
+  reset(); played = []; n = 100; run(existing); run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; _sdkNextCount = 0; _sdkDurationMs = 180000; _sdkPositionMs = 12000;");
+  global.getLastFmScrobbleAt = async () => song(n++);
+  await run("continueRadio()");
+  assert.equal(played.length, 0);
+  assert.equal(run("radioPendingReissue"), true);
+  run("radioMaybeSeam()");  // mid-song: still nothing
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0);
+  let playOpts = null;
+  global.spotifyPlay = async (token, uris, pos, opts) => { played.push(uris); playOpts = opts; return true; };
+  run("_sdkPositionMs = 179000;");
+  run("radioMaybeSeam(); radioMaybeSeam();");  // two ticks in the window fire once
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  assert.notEqual(played[0][0], "spotify:track:Existing");  // starts at the first new track
+  assert.ok(played[0].length > 1);
+  assert.deepEqual(playOpts, { quick: true });
+  assert.equal(run("radioPendingReissue"), false);
+  global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
+  run("sdkReady = false;");
+
   // 13. disconnecting Spotify tears the session down
   let resets = 0;
   global.handleReset = () => { resets++; };
@@ -316,6 +338,26 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.deepEqual(await run("runSpotifySearch('token', 'q')"), { item: { uri: "spotify:track:ok" } });
   global.setTimeout = realTimeout;
   assert.equal(run("spotifyBlockedFor()"), 0);
+
+  // 27b. the plain fallback query only counts when the hit has the same artist and title
+  run("spotifyBlockedUntil = 0; searchCache = {};");
+  const plainItems = [
+    { uri: "spotify:track:school", name: "School Spirit", artists: [{ name: "Kanye West" }] },
+    { uri: "spotify:track:yamaha", name: "Yamaha - Remastered 2011", artists: [{ name: "Delta Spirit" }] }
+  ];
+  const fetched = [];
+  global.fetch = async url => {
+    const q = new URL(url).searchParams.get("q"); fetched.push(q);
+    const items = q.startsWith("track:") ? [] : plainItems;
+    return { status: 200, ok: true, json: async () => ({ tracks: { items } }) };
+  };
+  assert.equal((await realSpotifySearch("token", "Delta Spirit", "Yamaha")).uri, "spotify:track:yamaha");
+  run("searchCache = {};");
+  plainItems.pop();  // Yamaha is not on Spotify: the top hit is an unrelated song
+  assert.equal(await realSpotifySearch("token", "Delta Spirit", "Yamaha"), null);
+  assert.equal(run("searchCache['delta spirit||yamaha']"), null);  // a clean miss is cached
+  assert.equal(run("spotifyLooseMatch('Air', 'Fair')"), false);
+  assert.equal(run("spotifyLooseMatch('Beyoncé', 'beyonce')"), true);
 
   // 28. time travel: a rate limit stops the batch, keeps the rest pending, and never marks tracks as not found
   run("spotifyBlockedUntil = 0; searchCache = {}; skippedPlan = []; isContinuing = false; abortController = { signal: { aborted: false } };");
