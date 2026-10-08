@@ -30,6 +30,12 @@
 <button id="probeBtn">Probe Spotify</button>
 <pre id="spOut">(not run)</pre>
 
+
+<h2>3. Discover preview (what the Discover station would play)</h2>
+<p>Mixes the Last.fm station picks (step 1) with tracks similar to your 5 most played songs of the last month (Spotify top tracks, then Last.fm <code>track.getSimilar</code>). Matches everything on Spotify, then marks what you already saved and which artists you have never played on Last.fm. Takes about a minute. Needs steps 1 and 2 done first.</p>
+<button id="discBtn">Build Discover preview</button>
+<pre id="discOut">(not run)</pre>
+
 <script src="js/config.js"></script>
 <script src="js/spotify.js"></script>
 <script>
@@ -100,6 +106,80 @@
       await probe("GET /artists/{id}/related-artists", "/artists/" + id + "/related-artists", j => (j.artists || []).map(a => a.name).join("; "));
     }
     log("Done.");
+  };
+
+  // ---- 3. Discover preview ----
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function lfmApi(params) {
+    try {
+      const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ ...params, api_key: LASTFM_API_KEY, format: "json" }));
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
+  document.getElementById("discBtn").onclick = async () => {
+    const lines = [];
+    const log = s => { lines.push(s); out("discOut", lines.join("\n")); };
+    const user = document.getElementById("user").value.trim();
+    const token = await getSpotifyToken();
+    if (!user) { log("Type your Last.fm username in step 1 first."); return; }
+    if (!token) { log("No Spotify session. Connect on the main page first."); return; }
+    localStorage.setItem("spike_user", user);
+
+    // seeds: 5 most played tracks of the last month
+    const topR = await fetch("https://api.spotify.com/v1/me/top/tracks?limit=5&time_range=short_term", { headers: { Authorization: "Bearer " + token } });
+    if (!topR.ok) { log("Top tracks failed: HTTP " + topR.status + ". Reconnect with the extra permission (step 2)."); return; }
+    const seeds = (await topR.json()).items.map(t => ({ name: t.name, artist: t.artists[0].name }));
+    log("Seeds (last month): " + seeds.map(t => t.artist + " - " + t.name).join("; "));
+
+    // candidates
+    const cands = [], seen = new Set();
+    const add = (artist, name, source) => { const k = (artist + "||" + name).toLowerCase(); if (seen.has(k)) return false; seen.add(k); cands.push({ artist, name, source }); return true; };
+    seeds.forEach(t => seen.add((t.artist + "||" + t.name).toLowerCase()));  // never recommend the seeds themselves
+    try {
+      const r = await fetch("/api/lfm-station?user=" + encodeURIComponent(user)); const j = await r.json();
+      (j.playlist || []).filter(t => t.name && t.artists && t.artists[0]).forEach(t => add(t.artists[0].name, t.name, "Last.fm pick"));
+    } catch (e) { log("Last.fm station failed: " + e.message); }
+    const nStation = cands.length;
+    for (const sd of seeds) {
+      const j = await lfmApi({ method: "track.getsimilar", artist: sd.artist, track: sd.name, limit: "6", autocorrect: "1" });
+      const list = (j && j.similartracks && j.similartracks.track) || [];
+      list.forEach(t => add(t.artist.name, t.name, "Similar to " + sd.artist));
+      await sleep(250);
+    }
+    log("Candidates: " + cands.length + " (" + nStation + " from the station, " + (cands.length - nStation) + " from similar tracks)");
+
+    // match on Spotify
+    log("Matching on Spotify ...");
+    for (const c of cands) { c.m = await spotifySearch(token, c.artist, c.name); await sleep(450); }
+    const matched = cands.filter(c => c.m);
+
+    // already saved?
+    for (let i = 0; i < matched.length; i += 40) {
+      const batch = matched.slice(i, i + 40);
+      const r = await fetch("https://api.spotify.com/v1/me/library/contains?uris=" + batch.map(c => c.m.uri).join(","), { headers: { Authorization: "Bearer " + token } });
+      if (r.ok) { const flags = await r.json(); batch.forEach((c, j) => c.saved = !!flags[j]); } else if (i === 0) log("(Saved check failed: HTTP " + r.status + ")");
+    }
+
+    // has the artist ever been played on Last.fm?
+    log("Checking your Last.fm play counts per artist ...");
+    const plays = {};
+    for (const c of matched) {
+      if (c.artist in plays) continue;
+      const j = await lfmApi({ method: "artist.getinfo", artist: c.artist, username: user, autocorrect: "1" });
+      plays[c.artist] = j && j.artist && j.artist.stats && j.artist.stats.userplaycount != null ? parseInt(j.artist.stats.userplaycount) : null;
+      await sleep(250);
+    }
+
+    log("\n#  source  |  artist - track  [status]");
+    cands.forEach((c, i) => {
+      const p = plays[c.artist];
+      const st = !c.m ? "NOT ON SPOTIFY" : [c.saved ? "already saved" : null, p === 0 ? "new artist" : p == null ? "plays unknown" : "played " + p + "x"].filter(Boolean).join(", ");
+      log((i + 1) + "  " + c.source + "  |  " + c.artist + " - " + c.name + "  [" + st + "]");
+    });
+    const by = f => matched.filter(f).length;
+    log("\nSummary: " + matched.length + " of " + cands.length + " matched on Spotify; " +
+        by(c => c.saved) + " already saved; " + by(c => plays[c.artist] === 0) + " from artists you have never played; " +
+        by(c => !c.saved && plays[c.artist] === 0) + " are new songs by new artists.");
   };
 </script>
 </body>
