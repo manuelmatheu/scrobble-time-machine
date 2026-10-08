@@ -10,6 +10,7 @@ Scrobble Time Machine connects your Last.fm scrobble history with Spotify playba
 
 ## Features
 
+- **Stations** - pick **Library** (below), **Discover** (new music from Last.fm's recommendations and artists similar to your recent top artists, skipping songs you played or saved) or **Mix** (your past and new music, alternating)
 - **Library Radio** - one click starts an endless stream of random scrobbles from your whole history; songs you played more often come up more often. Shows an Up next list (click to jump), the artist's Last.fm bio and your play counts for the artist and track
 - **Random time travel** - lands on a random moment in your history, labelled by date
 - **Date search** - jump to a specific year, month, or day
