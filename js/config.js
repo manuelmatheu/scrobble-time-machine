@@ -61,6 +61,8 @@ let radioSeen = new Set();      // artist||track keys already picked this sessio
 let radioRefilling = false, radioExhausted = false, radioFailures = 0;
 let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the SDK is not driving state
 let radioPaused = false, radioPendingReissue = false;  // new tracks not in Spotify's context yet: re-issue on resume (no SDK) or at the end of the last queued track (SDK)
+let radioSeaming = false;      // a seam swap is in flight (the 250ms timer must not start another)
+let radioDebug = true;         // one-line [STM radio] messages in the console at top-ups and seams (set false in tests)
 let radioContextLastUri = null;  // last URI of the most recent play we issued: after it Spotify has nothing of ours (set by spotifyPlay)
 const RADIO_SEAM_MS = 1500;     // with the SDK, swap in the new tracks this close to the end of the last queued track
 // Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays

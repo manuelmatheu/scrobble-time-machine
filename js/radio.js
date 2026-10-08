@@ -198,6 +198,7 @@ function radioCoverUrl(hit, size) {
 // LIBRARY RADIO - engine (uses globals from config.js, spotify.js, player.js)
 // =============================================================================
 function radioSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function radioLog(...args) { if (radioDebug && typeof console !== "undefined") console.info("[STM radio]", ...args); }
 
 // Fire RADIO_CONCURRENCY single-scrobble requests in parallel
 async function radioCollectBatch(user) {
@@ -338,6 +339,7 @@ async function radioFill(want) {
     const batch = station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid) : await radioCollectBatch(user);
     if (sid !== radioSession) return added;
     attempts += fresh ? 1 : batch.total;
+    radioLog("round", attempts, station, "picks", batch.picks.length, "failed", batch.failed + "/" + batch.total);
     if (batch.failed === batch.total) {
       radioFailures++;
       await radioSleep(Math.min(1000 * radioFailures, 8000));
@@ -431,9 +433,11 @@ async function continueRadio() {
   if (!radioActive || radioRefilling || radioExhausted) return;
   const sid = radioSession;
   radioRefilling = true; radioRenderQueue();
+  radioLog("top-up start", radioActiveStation, "queued after current:", radioRemaining(matchedUris, allTrackCount, radioCurrentUri));
   try {
     const added = await radioFill(RADIO_REFILL);
     if (sid !== radioSession) return;
+    radioLog("top-up done: added", added, "| pool", discoverPool.length, "| buffered past/new", radioBuf.past.length + "/" + radioBuf.new.length, "| failures", radioFailures, "| search error", lastSearchError || "none", "| 429 wait ms", spotifyBlockedFor());
     if (!added) {
       // Only a healthy Last.fm + Spotify round that found nothing new means the library is exhausted;
       // a failing search or a missing token is transient and must stay retryable
@@ -478,23 +482,35 @@ function radioSeamDue(pending, atLastTrack, positionMs, durationMs, seamMs) {
   return !!pending && !!atLastTrack && durationMs > 0 && durationMs - positionMs <= seamMs;
 }
 
+// Tracks we hold that Spotify has not been sent: everything after the last URI of our latest play. Derived from the
+// data on purpose: a flag that something is pending can get lost (or never be set), the tracks themselves cannot.
+function radioUnsentUris() {
+  if (!radioContextLastUri) return [];
+  return radioUrisFrom(matchedUris, allTrackCount, radioContextLastUri).slice(1);
+}
 function radioMaybeSeam() {
-  if (!(radioActive || travelActive) || !sdkReady) return;
-  if (!radioSeamDue(radioPendingReissue, !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
+  if (!(radioActive || travelActive) || !sdkReady || radioSeaming) return;
+  const atLast = !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri;
+  if (!radioSeamDue(radioPendingReissue || (atLast && radioUnsentUris().length > 0), atLast, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
   radioSeamReissue();
 }
 
 async function radioSeamReissue() {
-  radioPendingReissue = false;  // first, so the next 250ms tick does not fire it again
-  const sid = radioSession;
-  const uris = radioUrisFrom(matchedUris, allTrackCount, _sdkCurrentUri).slice(1);  // drop the track that is ending
-  if (!uris.length) return;
-  const token = await getSpotifyToken();
-  if (!token || sid !== radioSession) return;
-  let ok = false;
-  try { ok = await spotifyPlay(token, uris, 0, { quick: true }); } catch {}
-  if (!ok && sid === radioSession) ok = await spotifyPlay(token, uris);  // full device logic as a fallback
-  if (ok) checkLikedTracks();
+  radioSeaming = true;  // first, so the next 250ms tick does not fire it again
+  radioPendingReissue = false;
+  try {
+    const sid = radioSession;
+    const uris = radioUrisFrom(matchedUris, allTrackCount, _sdkCurrentUri).slice(1);  // drop the track that is ending
+    radioLog("seam: swapping in", uris.length, "tracks");
+    if (!uris.length) return;
+    const token = await getSpotifyToken();
+    if (!token || sid !== radioSession) return;
+    let ok = false;
+    try { ok = await spotifyPlay(token, uris, 0, { quick: true }); } catch {}
+    if (!ok && sid === radioSession) ok = await spotifyPlay(token, uris);  // full device logic as a fallback
+    radioLog("seam:", ok ? "done" : "FAILED");
+    if (ok) checkLikedTracks();
+  } finally { radioSeaming = false; }
 }
 
 // Called from the SDK state handler and the polling fallback on every track change

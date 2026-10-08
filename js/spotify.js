@@ -186,6 +186,12 @@ async function spotifyPlay(token, uris, positionMs, opts) {
           method: "PUT", headers: { Authorization: "Bearer " + token }
         });
       } catch {}
+      // Repeat persists on the account like shuffle: with "repeat context" left on, Spotify replays our list from the start
+      try {
+        await fetch("https://api.spotify.com/v1/me/player/repeat?state=off&device_id=" + sdkDeviceId, {
+          method: "PUT", headers: { Authorization: "Bearer " + token }
+        });
+      } catch {}
     }
     const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
@@ -217,6 +223,11 @@ async function spotifyPlay(token, uris, positionMs, opts) {
   // Disable shuffle on the remote device to preserve scrobble order
   try {
     await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + device.id, {
+      method: "PUT", headers: { Authorization: "Bearer " + token }
+    });
+  } catch {}
+  try {
+    await fetch("https://api.spotify.com/v1/me/player/repeat?state=off&device_id=" + device.id, {
       method: "PUT", headers: { Authorization: "Bearer " + token }
     });
   } catch {}

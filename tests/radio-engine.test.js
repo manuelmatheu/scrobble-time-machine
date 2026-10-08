@@ -12,6 +12,7 @@ load("radio.js");
 load("spotify.js");
 load("ui.js");
 load("player.js");
+run("radioDebug = false;");
 const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
 const realSpotifyPlay = global.spotifyPlay;
 const realShowStatus = global.showStatus;
@@ -171,10 +172,17 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioPendingReissue"), true);  // still waiting
   // ...and spotifyPlay remembers the end of every context it sends (Spotify caps a play at 100 URIs)
   const realFetch = global.fetch;
-  global.fetch = async () => ({ ok: true, status: 204 });
-  run("sdkDeviceId = 'dev'; radioContextLastUri = null;");
+  const playCalls = [];
+  global.fetch = async (url) => { playCalls.push(String(url)); return { ok: true, status: 204 }; };
+  run("sdkReady = true; sdkDeviceId = 'dev'; radioContextLastUri = null;");
   assert.equal(await realSpotifyPlay("t", ["spotify:track:a", "spotify:track:b"]), true);
   assert.equal(run("radioContextLastUri"), "spotify:track:b");
+  // a full play also turns shuffle and repeat off (both persist on the account), a quick one skips that
+  assert.ok(playCalls.some(u => /me\/player\/shuffle\?state=false/.test(u)));
+  assert.ok(playCalls.some(u => /me\/player\/repeat\?state=off/.test(u)));
+  playCalls.length = 0;
+  await realSpotifyPlay("t", ["spotify:track:q"], 0, { quick: true });
+  assert.ok(!playCalls.some(u => /repeat|shuffle/.test(u)));
   await realSpotifyPlay("t", Array.from({ length: 150 }, (_, i) => "spotify:track:n" + i), 0, { quick: true });
   assert.equal(run("radioContextLastUri"), "spotify:track:n99");
   global.fetch = async () => ({ ok: false, status: 500 });
@@ -184,6 +192,25 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioContextLastUri"), "keep");  // a failed play does not move it
   global.fetch = realFetch;
   run("sdkReady = false; radioPendingReissue = false; radioContextLastUri = null;");
+
+  // 12b3. the swap is driven by the tracks we hold, not by a flag: it fires with the flag lost, and not when nothing is unsent
+  reset(); played = []; run(existing);
+  run("matchedUris[1] = 'spotify:track:Later'; matchedUris[2] = 'spotify:track:Latest'; allTrackCount = 3; uriToIndices['spotify:track:Later'] = [1]; uriToIndices['spotify:track:Latest'] = [2];");
+  run("sdkReady = true; radioSeaming = false; radioPendingReissue = false; _sdkCurrentUri = 'spotify:track:Existing'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 179000;");
+  assert.deepEqual(run("radioUnsentUris()"), ["spotify:track:Later", "spotify:track:Latest"]);
+  global.spotifyPlay = async (token, uris, pos, opts) => { played.push(uris); return true; };
+  run("radioMaybeSeam(); radioMaybeSeam();");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);  // one swap even with two ticks in flight
+  assert.deepEqual(played[0], ["spotify:track:Later", "spotify:track:Latest"]);
+  assert.equal(run("radioSeaming"), false);
+  run("radioContextLastUri = 'spotify:track:Latest'; _sdkCurrentUri = 'spotify:track:Latest';");  // the swap's own play moved the end
+  assert.deepEqual(run("radioUnsentUris()"), []);
+  run("radioMaybeSeam()");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);  // nothing unsent: nothing to swap
+  run("sdkReady = false; radioContextLastUri = null;");
+  global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
 
   // 12c. Discover: vets candidates (played songs and saved songs are dropped), labels the source, mixes both sources
   const dReset = () => {
