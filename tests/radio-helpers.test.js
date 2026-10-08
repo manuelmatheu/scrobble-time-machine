@@ -73,6 +73,13 @@ assert.match(r.discoverStatsHtml("Band", 0, "new-artist", "Last.fm pick"), /New 
 assert.match(r.discoverStatsHtml("Band", 12, "new-song", "Similar to Seed"), /New song.*12 times, never this one.*Similar to <strong>Seed<\/strong>/);
 assert.equal(r.discoverStatsHtml("Band", null, "unknown", ""), "");
 
+// Mix pattern
+assert.deepEqual([0, 1, 2, 3].map(i => r.mixKindAt("balanced", i)), ["past", "new", "past", "new"]);
+assert.deepEqual([0, 1, 2, 3, 4].map(i => r.mixKindAt("mostly-past", i)), ["past", "past", "past", "new", "past"]);
+assert.deepEqual([0, 1, 2, 3].map(i => r.mixKindAt("mostly-new", i)), ["new", "new", "new", "past"]);
+assert.equal(r.mixKindAt("nonsense", 1), "new");
+assert.equal(r.mixKindAt("balanced", -1), "new");
+
 // radioCoverUrl (Spotify lists images largest first)
 const hit = { album: { images: [{ url: "big" }, { url: "mid" }, { url: "small" }] } };
 assert.equal(r.radioCoverUrl(hit), "small");

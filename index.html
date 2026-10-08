@@ -90,6 +90,15 @@
       <div class="station-picker" id="stationPicker" role="group" aria-label="Station">
         <button class="station-opt active" data-station="library" aria-pressed="true" onclick="radioSetStation('library')"><i class="ph-fill ph-vinyl-record" aria-hidden="true"></i><span class="station-text"><span class="station-name">Library</span><span class="station-desc">Random scrobbles from every year of your history</span></span><span class="station-dot" aria-hidden="true"></span></button>
         <button class="station-opt" data-station="discover" aria-pressed="false" onclick="radioSetStation('discover')"><i class="ph ph-compass" aria-hidden="true"></i><span class="station-text"><span class="station-name">Discover</span><span class="station-desc">New music picked from Last.fm and your Spotify taste</span></span><span class="station-dot" aria-hidden="true"></span></button>
+        <button class="station-opt" data-station="mix" aria-pressed="false" onclick="radioSetStation('mix')"><i class="ph ph-shuffle" aria-hidden="true"></i><span class="station-text"><span class="station-name">Mix</span><span class="station-desc">Your past, with new music woven in</span></span><span class="station-dot" aria-hidden="true"></span></button>
+      </div>
+      <div class="mix-balance" id="mixBalance" style="display:none">
+        <span class="mix-balance-label" id="mixBalanceLabel">How much is new</span>
+        <div class="seg" role="group" aria-labelledby="mixBalanceLabel">
+          <button class="seg-opt" data-balance="mostly-past" aria-pressed="false" onclick="radioSetBalance('mostly-past')">Mostly past</button>
+          <button class="seg-opt active" data-balance="balanced" aria-pressed="true" onclick="radioSetBalance('balanced')">Balanced</button>
+          <button class="seg-opt" data-balance="mostly-new" aria-pressed="false" onclick="radioSetBalance('mostly-new')">Mostly new</button>
+        </div>
       </div>
       <div class="radio-playing" id="radioPlaying" style="display:none"><i class="ph-fill ph-equalizer" aria-hidden="true"></i><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
       <div class="controls">
@@ -160,7 +169,7 @@
       <div class="radio-hero">
         <img id="radioArt" class="radio-art" alt="">
         <div class="radio-hero-text">
-          <div class="radio-eyebrow-row"><span class="eyebrow">Now playing</span><span class="radio-chip" id="radioSource" style="display:none"><i class="ph-fill ph-sparkle" aria-hidden="true"></i><span id="radioSourceText"></span></span></div>
+          <div class="radio-eyebrow-row"><span class="eyebrow">Now playing</span><span class="radio-chip" id="radioSource" style="display:none"><i id="radioSourceIcon" class="ph-fill ph-sparkle" aria-hidden="true"></i><span id="radioSourceText"></span></span></div>
           <div class="radio-track" id="radioTrack">Tuning...</div>
           <div class="radio-artist" id="radioArtist"></div>
           <button class="radio-btn radio-heart-title" id="radioHeartTitle" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>

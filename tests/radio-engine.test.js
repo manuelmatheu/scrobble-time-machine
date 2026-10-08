@@ -16,7 +16,7 @@ const realSpotifySearch = global.spotifySearch;  // the real one, before the tes
 const realShowStatus = global.showStatus;
 
 function reset() {
-  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
+  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {}; radioBuf = { past: [], new: [] }; radioMixCursor = 0;");
 }
 const song = n => [{ name: "Song " + n, artist: { "#text": "Artist" }, date: { uts: "1500000000" } }];
 const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
@@ -225,6 +225,49 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.match(run("radioQueueRowHtml(3, { name: 'Song', artist: 'A', source: 'Similar to <b>' }, s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))"), /radio-chip.*Similar to &lt;b&gt;/);
   assert.doesNotMatch(run("radioQueueRowHtml(3, { name: 'Song', artist: 'A' }, s => s)"), /radio-chip/);
   run("radioActiveStation = 'library'");
+
+  // 12h. Mix: alternates your past and new music in the pattern of the balance; each source is vetted its own way
+  const mReset = bal => {
+    dReset();
+    run("radioActiveStation = 'mix'; radioActiveBalance = '" + bal + "'; radioTotal = 1000;");
+    let sn = 0, fn = 0;
+    global.getLastFmScrobbleAt = async () => [{ name: "Old " + (sn++), artist: { "#text": "Artist" }, date: { uts: "1400000000" } }];
+    global.getLastFmStation = async () => ({ playlist: Array.from({ length: 6 }, () => ({ name: "Fresh " + (fn++), artists: [{ name: "Newcomer" }] })) });
+    global.spGet = async path => path.startsWith("/me/library/contains") ? [false] : { items: [] };
+    global.getLastFmArtistInfo = async () => ({ artist: { bio: { summary: "" }, stats: { userplaycount: "0" } } });
+    global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "0" } });
+  };
+  const origin = i => run("trackMeta[" + i + "]").source ? "new" : "past";
+  mReset("balanced");
+  assert.equal(await run("radioFill(6)"), 6);
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map(origin), ["past", "new", "past", "new", "past", "new"]);
+  assert.equal(run("trackMeta[0].mixPast"), true);   // from your history, shown as "From 2014"
+  assert.equal(run("trackMeta[0].year"), 2014);
+  assert.equal(run("trackMeta[1].mixPast"), undefined);
+  assert.equal(run("trackMeta[1].source"), "Last.fm pick");
+  mReset("mostly-past");
+  assert.equal(await run("radioFill(8)"), 8);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map(origin), ["past", "past", "past", "new", "past", "past", "past", "new"]);
+  mReset("mostly-new");
+  assert.equal(await run("radioFill(4)"), 4);
+  assert.deepEqual([0, 1, 2, 3].map(origin), ["new", "new", "new", "past"]);
+
+  // 12i. Mix: when new music is unavailable the history keeps playing (and the other way round)
+  mReset("balanced");
+  global.getLastFmStation = async () => { throw new Error("down"); };
+  assert.equal(await run("radioFill(4)"), 4);
+  assert.deepEqual([0, 1, 2, 3].map(origin), ["past", "past", "past", "past"]);
+  mReset("balanced");
+  global.getLastFmScrobbleAt = async () => { throw new Error("rate limit"); };
+  assert.equal(await run("radioFill(3)"), 3);
+  assert.deepEqual([0, 1, 2].map(origin), ["new", "new", "new"]);
+  // ...and only when both fail is it a failure
+  mReset("balanced");
+  global.getLastFmScrobbleAt = async () => { throw new Error("x"); };
+  global.getLastFmStation = async () => { throw new Error("y"); };
+  assert.equal(await run("radioFill(2)"), 0);
+  assert.ok(run("radioFailures") > 0);
+  run("radioActiveStation = 'library'; radioActiveBalance = 'balanced';");
 
   // 13. disconnecting Spotify tears the session down
   let resets = 0;

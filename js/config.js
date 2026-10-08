@@ -63,7 +63,11 @@ let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the 
 let radioPaused = false, radioPendingReissue = false;  // new tracks not in Spotify's context yet: re-issue on resume (no SDK) or at the end of the last queued track (SDK)
 const RADIO_SEAM_MS = 1500;     // with the SDK, swap in the new tracks this close to the end of the last queued track
 // Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays
-let radioStation = "library", radioActiveStation = "library";  // "library" | "discover"
+let radioStation = "library", radioActiveStation = "library";  // "library" | "discover" | "mix"
+let radioBalance = "balanced", radioActiveBalance = "balanced";  // Mix: "mostly-past" | "balanced" | "mostly-new"
+const MIX_BATCH = 8;                 // picks handed out per Mix round
+let radioBuf = { past: [], new: [] }; // Mix: picks collected but not used yet, by source
+let radioMixCursor = 0;              // position in the Mix pattern
 const DISCOVER_BATCH = 6;            // candidates vetted per round
 const DISCOVER_MAX_ROUNDS = 6;       // rounds per fill before giving up
 const DISCOVER_SEEDS_PER_ROUND = 2;  // top artists expanded per pool refill

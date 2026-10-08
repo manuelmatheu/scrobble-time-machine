@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshHomeMeta();
   let savedStation = "library"; try { savedStation = localStorage.getItem("stm_station") || "library"; } catch {}
   radioSetStation(savedStation);
+  let savedBalance = "balanced"; try { savedBalance = localStorage.getItem("stm_mix_balance") || "balanced"; } catch {}
+  radioSetBalance(savedBalance);
 
   // Username: save on change, update button
   $("usernameInput").addEventListener("input", updateGoButton);
