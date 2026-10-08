@@ -110,11 +110,13 @@
 
   // ---- 3. Discover preview ----
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // returns { status, json, error } so a failure is visible instead of looking like "no results"
   async function lfmApi(params) {
     try {
       const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ ...params, api_key: LASTFM_API_KEY, format: "json" }));
-      return r.ok ? await r.json() : null;
-    } catch { return null; }
+      let json = null; try { json = await r.json(); } catch {}
+      return { status: r.status, json, error: json && json.error ? json.error + ": " + json.message : (r.ok ? null : "HTTP " + r.status) };
+    } catch (e) { return { status: 0, json: null, error: "network/CORS: " + e.message }; }
   }
   document.getElementById("discBtn").onclick = async () => {
     const lines = [];
@@ -140,13 +142,29 @@
       (j.playlist || []).filter(t => t.name && t.artists && t.artists[0]).forEach(t => add(t.artists[0].name, t.name, "Last.fm pick"));
     } catch (e) { log("Last.fm station failed: " + e.message); }
     const nStation = cands.length;
+    const diag = [];
     for (const sd of seeds) {
-      const j = await lfmApi({ method: "track.getsimilar", artist: sd.artist, track: sd.name, limit: "6", autocorrect: "1" });
-      const list = (j && j.similartracks && j.similartracks.track) || [];
-      list.forEach(t => add(t.artist.name, t.name, "Similar to " + sd.artist));
+      const res = await lfmApi({ method: "track.getsimilar", artist: sd.artist, track: sd.name, limit: "6", autocorrect: "1" });
+      const list = (res.json && res.json.similartracks && res.json.similartracks.track) || [];
+      list.forEach(t => add(t.artist.name, t.name, "Similar track to " + sd.artist));
+      diag.push("  track.getsimilar " + sd.artist + " - " + sd.name + ": " + (res.error ? "ERROR " + res.error : list.length + " tracks"));
       await sleep(250);
     }
-    log("Candidates: " + cands.length + " (" + nStation + " from the station, " + (cands.length - nStation) + " from similar tracks)");
+    // artist route (what signal.fm does): similar artists, then one of each one's top tracks
+    for (const an of [...new Set(seeds.map(t => t.artist))]) {
+      const res = await lfmApi({ method: "artist.getsimilar", artist: an, limit: "6", autocorrect: "1" });
+      const sims = (res.json && res.json.similarartists && res.json.similarartists.artist) || [];
+      diag.push("  artist.getsimilar " + an + ": " + (res.error ? "ERROR " + res.error : sims.length + " artists"));
+      await sleep(250);
+      for (const sa of sims) {
+        const tt = await lfmApi({ method: "artist.gettoptracks", artist: sa.name, limit: "3", autocorrect: "1" });
+        const tl = (tt.json && tt.json.toptracks && tt.json.toptracks.track) || [];
+        if (tl[0]) add(sa.name, tl[0].name, "Similar artist to " + an);
+        await sleep(250);
+      }
+    }
+    log("Last.fm calls:\n" + diag.join("\n"));
+    log("Candidates: " + cands.length + " (" + nStation + " from the station, " + (cands.length - nStation) + " from similar tracks and artists)");
 
     // match on Spotify
     log("Matching on Spotify ...");
@@ -165,7 +183,7 @@
     const plays = {};
     for (const c of matched) {
       if (c.artist in plays) continue;
-      const j = await lfmApi({ method: "artist.getinfo", artist: c.artist, username: user, autocorrect: "1" });
+      const j = (await lfmApi({ method: "artist.getinfo", artist: c.artist, username: user, autocorrect: "1" })).json;
       plays[c.artist] = j && j.artist && j.artist.stats && j.artist.stats.userplaycount != null ? parseInt(j.artist.stats.userplaycount) : null;
       await sleep(250);
     }
