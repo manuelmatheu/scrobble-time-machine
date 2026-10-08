@@ -282,7 +282,6 @@ let _sdkPositionMs = 0;
 let _sdkPlaying = false;
 let _sdkProgressTimer = null;
 let _sdkCurrentUri = null;
-let _sdkNextCount = 0;  // tracks Spotify still has queued after the current one
 
 function onSDKStateChange(state) {
   if (!state) return;
@@ -292,7 +291,6 @@ function onSDKStateChange(state) {
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
-  _sdkNextCount = (state.track_window.next_tracks || []).length;
 
   updateProgressBar(_sdkPositionMs, _sdkDurationMs);
 

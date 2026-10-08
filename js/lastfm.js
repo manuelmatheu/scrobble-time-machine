@@ -171,6 +171,27 @@ async function getLastFmTrackInfo(user, artist, track) {
   return d;
 }
 
+// Artists Last.fm lists as similar to one artist
+async function getLastFmSimilarArtists(artist, limit) {
+  const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"artist.getsimilar", artist, limit:String(limit || 10), autocorrect:"1", api_key:LASTFM_API_KEY, format:"json" }));
+  if (!r.ok) throw new Error("Last.fm API error");
+  const d = await r.json(); if (d.error) throw new Error(d.message);
+  return d;
+}
+async function getLastFmArtistTopTracks(artist, limit) {
+  const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"artist.gettoptracks", artist, limit:String(limit || 10), autocorrect:"1", api_key:LASTFM_API_KEY, format:"json" }));
+  if (!r.ok) throw new Error("Last.fm API error");
+  const d = await r.json(); if (d.error) throw new Error(d.message);
+  return d;
+}
+// Last.fm's personalized "recommended" station. The endpoint is undocumented and blocks cross-origin
+// requests, so a Vercel function (api/lfm-station.js) fetches it; each call returns a different set of ~24 tracks
+async function getLastFmStation(user) {
+  const r = await fetch("/api/lfm-station?user=" + encodeURIComponent(user), { cache: "no-store" });
+  if (!r.ok) throw new Error("Last.fm station unavailable");
+  return r.json();
+}
+
 // One scrobble at a 1-based position in the user's history (limit=1 makes "page" an index)
 async function getLastFmScrobbleAt(user, page) {
   const r = await fetch("https://ws.audioscrobbler.com/2.0/?" + new URLSearchParams({ method:"user.getrecenttracks", user, api_key:LASTFM_API_KEY, format:"json", limit:"1", page:String(page) }));

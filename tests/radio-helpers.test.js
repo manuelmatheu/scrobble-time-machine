@@ -48,11 +48,37 @@ assert.equal(r.radioShouldRefill({ ...s, active: false }, 2), false);
 assert.equal(r.radioShouldRefill({ ...s, remaining: Infinity }, 2), false);
 
 // radioSeamDue: swap new tracks in only at the end of the last queued track
-assert.equal(r.radioSeamDue(true, 0, 178500, 180000, 1500), true);
-assert.equal(r.radioSeamDue(true, 0, 10000, 180000, 1500), false);   // mid-song: never
-assert.equal(r.radioSeamDue(true, 2, 179000, 180000, 1500), false);  // Spotify still has tracks queued
-assert.equal(r.radioSeamDue(false, 0, 179000, 180000, 1500), false); // nothing pending
-assert.equal(r.radioSeamDue(true, 0, 0, 0, 1500), false);            // no duration yet
+assert.equal(r.radioSeamDue(true, true, 178500, 180000, 1500), true);
+assert.equal(r.radioSeamDue(true, true, 10000, 180000, 1500), false);   // mid-song: never
+assert.equal(r.radioSeamDue(true, false, 179000, 180000, 1500), false); // not the last track we sent to Spotify
+assert.equal(r.radioSeamDue(false, true, 179000, 180000, 1500), false); // nothing pending
+assert.equal(r.radioSeamDue(true, true, 0, 0, 1500), false);            // no duration yet
+
+// Discover helpers
+assert.deepEqual(r.discoverParseStation({ playlist: [{ name: "A", artists: [{ name: "X" }] }, { name: "", artists: [{ name: "Y" }] }, { name: "B", artists: [] }, null] }), [{ artist: "X", track: "A" }]);
+assert.deepEqual(r.discoverParseStation(null), []);
+assert.deepEqual(r.discoverParseSimilarArtists({ similarartists: { artist: [{ name: "P" }, { name: "Q" }] } }), ["P", "Q"]);
+assert.deepEqual(r.discoverParseSimilarArtists({ similarartists: { artist: { name: "Solo" } } }), ["Solo"]);
+assert.deepEqual(r.discoverParseSimilarArtists({}), []);
+assert.deepEqual(r.discoverParseTopTracks({ toptracks: { track: [{ name: "T1" }, { name: "T2" }] } }), ["T1", "T2"]);
+assert.deepEqual(r.discoverInterleave([1, 2, 3, 4, 5], ["a", "b"], 2), [1, 2, "a", 3, 4, "b", 5]);
+assert.deepEqual(r.discoverInterleave([], ["a"], 2), ["a"]);
+assert.deepEqual(r.discoverShuffle([1, 2, 3, 4], () => 0).sort(), [1, 2, 3, 4]);
+assert.equal(r.discoverVerdict(10, 2), "skip");
+assert.equal(r.discoverVerdict(0, 0), "new-artist");
+assert.equal(r.discoverVerdict(7, 0), "new-song");
+assert.equal(r.discoverVerdict(null, null), "unknown");
+assert.equal(r.discoverVerdict(0, null), "new-artist");
+assert.match(r.discoverStatsHtml("Band", 0, "new-artist", "Last.fm pick"), /New to you.*never played <strong>Band<\/strong>.*Picked for you by Last\.fm/);
+assert.match(r.discoverStatsHtml("Band", 12, "new-song", "Similar to Seed"), /New song.*12 times, never this one.*Similar to <strong>Seed<\/strong>/);
+assert.equal(r.discoverStatsHtml("Band", null, "unknown", ""), "");
+
+// Mix pattern
+assert.deepEqual([0, 1, 2, 3].map(i => r.mixKindAt("balanced", i)), ["past", "new", "past", "new"]);
+assert.deepEqual([0, 1, 2, 3, 4].map(i => r.mixKindAt("mostly-past", i)), ["past", "past", "past", "new", "past"]);
+assert.deepEqual([0, 1, 2, 3].map(i => r.mixKindAt("mostly-new", i)), ["new", "new", "new", "past"]);
+assert.equal(r.mixKindAt("nonsense", 1), "new");
+assert.equal(r.mixKindAt("balanced", -1), "new");
 
 // radioCoverUrl (Spotify lists images largest first)
 const hit = { album: { images: [{ url: "big" }, { url: "mid" }, { url: "small" }] } };

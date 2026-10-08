@@ -2,7 +2,16 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.7 (current) ✅
+## v2.8 (current) ✅
+
+- [x] Stations on the home card: Library (your history), Discover (new music) and Mix (both, with a balance control)
+- [x] Discover: Last.fm's personalized station plus artists similar to your top artists of the last month; songs you played or saved are skipped
+- [x] Each pick shows where it came from (Last.fm pick, Similar to an artist, or From a year of your history)
+- [x] The radio keeps getting new tracks even when Spotify queues its own autoplay songs after ours
+
+---
+
+## v2.7 ✅
 
 - [x] No more stutter a few seconds into a song: new tracks are swapped in at the end of the last queued track instead of mid-song
 - [x] The plain-query Spotify fallback only accepts a hit with the same artist and title (no more unrelated songs for tracks missing from Spotify)

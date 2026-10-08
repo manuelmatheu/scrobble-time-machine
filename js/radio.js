@@ -109,6 +109,76 @@ function radioShouldRefill(s, lowWater) {
   return !!s.active && !s.refilling && !s.exhausted && s.remaining <= lowWater;
 }
 
+// ===== Stations =====
+const RADIO_STATIONS = {
+  library: { eyebrow: "Library radio", headline: "Your library, shuffled across every year.", title: "Library radio", button: "Start Library radio" },
+  discover: { eyebrow: "Discover radio", headline: "New music, picked from your taste.", title: "Discover radio", button: "Start Discover radio" },
+  mix: { eyebrow: "Mix radio", headline: "Your past, with new music woven in.", title: "Mix radio", button: "Start Mix radio" }
+};
+
+// Mix: which source the next track comes from. A pattern per balance, repeated.
+const MIX_PATTERNS = {
+  "mostly-past": ["past", "past", "past", "new"],
+  "balanced": ["past", "new"],
+  "mostly-new": ["new", "new", "new", "past"]
+};
+function mixKindAt(balance, cursor) {
+  const p = MIX_PATTERNS[balance] || MIX_PATTERNS.balanced;
+  return p[((cursor % p.length) + p.length) % p.length];
+}
+
+// Last.fm station JSON -> [{ artist, track }] (entries without a title or artist are dropped)
+function discoverParseStation(data) {
+  const list = data && Array.isArray(data.playlist) ? data.playlist : [];
+  const out = [];
+  for (const t of list) {
+    const artist = t && t.artists && t.artists[0] && t.artists[0].name;
+    if (t && typeof t.name === "string" && t.name && typeof artist === "string" && artist) out.push({ artist, track: t.name });
+  }
+  return out;
+}
+// artist.getsimilar JSON -> artist names (Last.fm sends one object instead of an array for a single result)
+function discoverParseSimilarArtists(d) {
+  const a = d && d.similarartists && d.similarartists.artist;
+  return (Array.isArray(a) ? a : a ? [a] : []).map(x => x && x.name).filter(n => typeof n === "string" && n);
+}
+// artist.gettoptracks JSON -> track names
+function discoverParseTopTracks(d) {
+  const t = d && d.toptracks && d.toptracks.track;
+  return (Array.isArray(t) ? t : t ? [t] : []).map(x => x && x.name).filter(n => typeof n === "string" && n);
+}
+// Take `ratio` items of a for every item of b, then whatever is left
+function discoverInterleave(a, b, ratio) {
+  const out = [], r = Math.max(1, ratio || 1), x = a.slice(), y = b.slice();
+  while (x.length || y.length) {
+    for (let i = 0; i < r && x.length; i++) out.push(x.shift());
+    if (y.length) out.push(y.shift());
+  }
+  return out;
+}
+function discoverShuffle(list, rand) {
+  const a = list.slice(), rnd = rand || Math.random;
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// What a candidate is to you: "skip" (you played the song), "new-artist" (never played the artist),
+// "new-song" (an artist you play, a song you have not) or "unknown" (the lookups failed: not a reason to drop it)
+function discoverVerdict(artistPlays, trackPlays) {
+  if (trackPlays !== null && trackPlays !== undefined && trackPlays > 0) return "skip";
+  if (artistPlays === null || artistPlays === undefined) return "unknown";
+  return artistPlays === 0 ? "new-artist" : "new-song";
+}
+// The artist panel's first lines for a Discover track; "" when there is nothing to say
+function discoverStatsHtml(artist, artistPlays, kind, source, esc) {
+  esc = esc || (s => s);
+  let s = "";
+  if (kind === "new-artist") s = "<strong>New to you.</strong> You have never played <strong>" + esc(artist) + "</strong>.";
+  else if (kind === "new-song" && artistPlays > 0) s = "<strong>New song.</strong> You've listened to <strong>" + esc(artist) + "</strong> " + radioPlaysText(artistPlays) + ", never this one.";
+  if (source === "Last.fm pick") s += (s ? " " : "") + "Picked for you by Last.fm.";
+  else if (/^Similar to /.test(source || "")) s += (s ? " " : "") + "Similar to <strong>" + esc(source.slice(11)) + "</strong>, who you listen to lately.";
+  return s;
+}
+
 // REST fallback for the radio controls when the SDK is not driving playback
 function radioTransportRequest(action, paused) {
   if (action === "toggle") return { method: "PUT", path: paused ? "/me/player/play" : "/me/player/pause" };
@@ -128,6 +198,7 @@ function radioCoverUrl(hit, size) {
 // LIBRARY RADIO - engine (uses globals from config.js, spotify.js, player.js)
 // =============================================================================
 function radioSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function radioLog(...args) { if (radioDebug && typeof console !== "undefined") console.info("[STM radio]", ...args); }
 
 // Fire RADIO_CONCURRENCY single-scrobble requests in parallel
 async function radioCollectBatch(user) {
@@ -142,19 +213,133 @@ async function radioCollectBatch(user) {
   return { picks, failed, total: settled.length };
 }
 
+// ===== Discover station =====
+// Candidates come from two places, interleaved two to one: Last.fm's personalized station (new set on every call)
+// and artists similar to your top artists of the last month (a random song from each one's top 10). Every candidate
+// is vetted before it costs a Spotify search: songs you have played are dropped, and so are songs you saved.
+
+// Your top artists of the last month (the seeds). Needs the user-top-read scope: without it the station still works.
+async function discoverLoadSeeds() {
+  if (discoverSeeds) return discoverSeeds;
+  try {
+    const d = await spGet("/me/top/artists?limit=5&time_range=short_term");
+    discoverSeeds = ((d && d.items) || []).map(a => a && a.name).filter(Boolean);
+  } catch (e) {
+    discoverSeeds = [];
+    if (e && e.status === 403) discoverNeedsReconnect = true;
+  }
+  return discoverSeeds;
+}
+
+async function discoverStationCandidates(user) {
+  const list = discoverParseStation(await getLastFmStation(user));
+  return discoverShuffle(list).map(c => ({ artist: c.artist, track: c.track, source: "Last.fm pick" }));
+}
+
+// A few artists similar to the next top artists in rotation, each with one random top-10 song
+async function discoverSimilarCandidates() {
+  const seeds = await discoverLoadSeeds();
+  if (!seeds.length) return [];
+  const out = [];
+  for (let k = 0; k < DISCOVER_SEEDS_PER_ROUND; k++) {
+    const seed = seeds[discoverSeedRound++ % seeds.length];
+    if (!discoverSimilarCache[seed]) {
+      try { discoverSimilarCache[seed] = discoverParseSimilarArtists(await getLastFmSimilarArtists(seed, 15)); } catch { continue; }  // a failure is not cached
+    }
+    const fresh = discoverShuffle(discoverSimilarCache[seed].filter(n => !discoverUsedArtists.has(n.toLowerCase()))).slice(0, 3);
+    await Promise.all(fresh.map(async name => {
+      discoverUsedArtists.add(name.toLowerCase());
+      if (!discoverTopCache[name]) {
+        try { discoverTopCache[name] = discoverParseTopTracks(await getLastFmArtistTopTracks(name, 10)); } catch { return; }
+      }
+      const options = discoverTopCache[name].filter(t => !radioSeen.has(radioTrackKey(name, t)));
+      if (options.length) out.push({ artist: name, track: options[Math.floor(Math.random() * options.length)], source: "Similar to " + seed });
+    }));
+  }
+  return out;
+}
+
+// Fill the pool from both sources. failed = true only when nothing at all could be fetched.
+async function discoverRefillPool(user, sid) {
+  const [st, sim] = await Promise.allSettled([discoverStationCandidates(user), discoverSimilarCandidates()]);
+  if (sid !== radioSession) return { failed: false };
+  const station = st.status === "fulfilled" ? st.value : [];
+  const similar = sim.status === "fulfilled" ? sim.value : [];
+  discoverPool.push(...discoverInterleave(station, similar, 2));
+  return { failed: st.status === "rejected" && !similar.length };
+}
+
+// Your plays of the artist and of the song, and whether it is worth queueing. null = drop it.
+async function discoverVet(user, c) {
+  const [artistInfo, trackPlays] = await Promise.all([radioArtistInfoP(user, c.artist), radioTrackPlaysP(user, c.artist, c.track)]);
+  const artistPlays = artistInfo ? artistInfo.plays : null;
+  const kind = discoverVerdict(artistPlays, trackPlays);
+  if (kind === "skip") { radioSeen.add(radioTrackKey(c.artist, c.track)); return null; }
+  return { artist: c.artist, track: c.track, album: "", page: null, year: null, source: c.source, kind, artistPlays };
+}
+
+async function discoverIsSaved(uri) {
+  try { const r = await spGet("/me/library/contains?uris=" + uri); return Array.isArray(r) && !!r[0]; } catch { return false; }
+}
+
+// Same shape as radioCollectBatch: a batch of vetted picks. An empty batch is a failure only when the sources failed.
+async function discoverCollectBatch(user, sid) {
+  if (discoverPool.length < DISCOVER_BATCH) {
+    const r = await discoverRefillPool(user, sid);
+    if (sid !== radioSession) return { picks: [], failed: 0, total: 1 };
+    if (!discoverPool.length) return { picks: [], failed: r.failed ? 1 : 0, total: 1 };
+  }
+  const cands = [];
+  while (cands.length < DISCOVER_BATCH && discoverPool.length) {
+    const c = discoverPool.shift();
+    if (!radioSeen.has(radioTrackKey(c.artist, c.track))) cands.push(c);
+  }
+  const vetted = await Promise.all(cands.map(c => discoverVet(user, c)));
+  return { picks: vetted.filter(Boolean), failed: 0, total: 1 };
+}
+
+// ===== Mix station =====
+// Both sources are collected in parallel (picks wait in radioBuf between rounds) and handed out in the pattern of the
+// chosen balance, so the queue alternates between your past and new music. If one source runs dry the other fills in.
+async function mixCollectBatch(user, sid) {
+  const wanted = { past: radioBuf.past.length < 2, new: radioBuf.new.length < 2 };
+  const [past, fresh] = await Promise.all([wanted.past ? radioCollectBatch(user) : null, wanted.new ? discoverCollectBatch(user, sid) : null]);
+  if (sid !== radioSession) return { picks: [], failed: 0, total: 1 };
+  if (past) radioBuf.past.push(...past.picks.map(p => Object.assign(p, { origin: "past" })));
+  if (fresh) radioBuf.new.push(...fresh.picks);
+  const picks = [];
+  // Hand picks out in pattern order until the source whose turn it is runs empty (the next round fetches more of it)...
+  while (picks.length < MIX_BATCH) {
+    const kind = mixKindAt(radioActiveBalance, radioMixCursor);
+    if (!radioBuf[kind].length) break;
+    picks.push(radioBuf[kind].shift()); radioMixCursor++;
+  }
+  // ...unless that source has nothing at all (down, or dry): then the other one keeps the radio going
+  if (!picks.length) {
+    const other = mixKindAt(radioActiveBalance, radioMixCursor) === "past" ? "new" : "past";
+    while (radioBuf[other].length && picks.length < MIX_BATCH) picks.push(radioBuf[other].shift());
+  }
+  // A failure only counts when nothing could be fetched from any source we asked
+  const asked = [past, fresh].filter(Boolean);
+  const failed = !picks.length && asked.length && asked.every(b => b.failed === b.total) ? 1 : 0;
+  return { picks, failed, total: 1 };
+}
+
 // Pick random scrobbles, match them on Spotify, append matches to the session. Returns
 // the number of tracks added. Bails out quietly if the session changes mid-flight.
 async function radioFill(want) {
-  const sid = radioSession, user = radioUser;
+  const sid = radioSession, user = radioUser, station = radioActiveStation;
+  const fresh = station !== "library";  // Discover and Mix: more than one round of vetting per fill
   const token = await getSpotifyToken();
   if (!token || sid !== radioSession) return 0;
   if (spotifyBlockedFor() > 0) { lastSearchError = "Rate limited (429)"; showStatus(spotifyLimitMessage(), "error"); return 0; }
   lastSearchError = null;
   let added = 0, attempts = 0;
-  while (added < want && attempts < RADIO_MAX_ATTEMPTS) {
-    const batch = await radioCollectBatch(user);
+  while (added < want && attempts < (fresh ? DISCOVER_MAX_ROUNDS : RADIO_MAX_ATTEMPTS)) {
+    const batch = station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid) : await radioCollectBatch(user);
     if (sid !== radioSession) return added;
-    attempts += batch.total;
+    attempts += fresh ? 1 : batch.total;
+    radioLog("round", attempts, station, "picks", batch.picks.length, "failed", batch.failed + "/" + batch.total);
     if (batch.failed === batch.total) {
       radioFailures++;
       await radioSleep(Math.min(1000 * radioFailures, 8000));
@@ -171,6 +356,8 @@ async function radioFill(want) {
       const hit = await spotifySearch(token, p.artist, p.track);
       if (sid !== radioSession) return added;
       if (!hit && spotifyBlockedFor() > 0) { showStatus(spotifyLimitMessage(), "error"); return added; }
+      if (hit && p.source && await discoverIsSaved(hit.uri)) continue;  // saved songs are not new to you
+      if (sid !== radioSession) return added;
       if (hit && !uriToIndices[hit.uri]) {
         const idx = allTrackCount++;
         matchedUris[idx] = hit.uri; registerUri(hit.uri, idx); sessionQueue.add(hit.uri); totalMatched++;
@@ -180,6 +367,8 @@ async function radioFill(want) {
           album: p.album, page: p.page, year: p.year, art: radioCoverUrl(hit),
           lfmArtist: p.artist, lfmTrack: p.track  // the scrobble's own names, for Last.fm getInfo lookups
         };
+        if (p.source) Object.assign(trackMeta[idx], { source: p.source, kind: p.kind, artistPlays: p.artistPlays });
+        else if (station === "mix") trackMeta[idx].mixPast = true;  // from your history, in a mix
         added++;
       }
       await radioSleep(SEARCH_DELAY);
@@ -193,18 +382,26 @@ async function startRadio() {
   const user = $("usernameInput").value.trim();
   if (!user || !spotifyToken) return;
   beginSession();
+  radioActiveStation = radioStation; radioActiveBalance = radioBalance;
+  const discover = radioActiveStation === "discover", fresh = radioActiveStation !== "library";
+  radioBuf = { past: [], new: [] }; radioMixCursor = 0;
+  discoverPool = []; discoverSeeds = null; discoverSeedRound = 0; discoverSimilarCache = {}; discoverTopCache = {}; discoverUsedArtists = new Set();
+  discoverNeedsReconnect = false; discoverWarnedEmpty = false;
   matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; skippedPlan = []; isContinuing = false;
   trackMeta = {}; radioSeen = new Set(); radioFailures = 0; radioRefilling = false; radioExhausted = false;
   radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioUser = user; radioActive = true;
   const sid = ++radioSession;
   try {
-    showStatus("Reading your Last.fm library...");
-    const { totalScrobbles } = await getLastFmTotalPages(user);
-    if (sid !== radioSession) return;
-    if (!totalScrobbles) throw new Error("No scrobbles found");
-    radioTotal = totalScrobbles;
+    let totalScrobbles = 0;
+    if (!discover) {
+      showStatus("Reading your Last.fm library...");
+      ({ totalScrobbles } = await getLastFmTotalPages(user));
+      if (sid !== radioSession) return;
+      if (!totalScrobbles) throw new Error("No scrobbles found");
+      radioTotal = totalScrobbles;
+    }
     showRadioView();
-    showStatus("Tuning your library...");
+    showStatus(discover ? "Tuning new music..." : "Tuning your library...");
     const added = await radioFill(RADIO_INITIAL);
     if (sid !== radioSession) return;
     if (!added) throw new Error(spotifyBlockedFor() > 0 ? spotifyLimitMessage() : "No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : ""));
@@ -219,7 +416,8 @@ async function startRadio() {
       throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active.");
     }
     currentPhase = "done";
-    showStatus("▶ Library radio" + (totalScrobbles < 200 ? " · small library, new tracks may run out" : ""), "success");
+    showStatus("▶ " + RADIO_STATIONS[radioActiveStation].title + (!discover && totalScrobbles < 200 ? " · small library, new tracks may run out" : ""), "success");
+    if (fresh && discoverNeedsReconnect) showStatus("Reconnect Spotify to get picks based on what you play lately.", "warn");
     startPolling();
     checkLikedTracks();
     endSessionUI();
@@ -235,15 +433,20 @@ async function continueRadio() {
   if (!radioActive || radioRefilling || radioExhausted) return;
   const sid = radioSession;
   radioRefilling = true; radioRenderQueue();
+  radioLog("top-up start", radioActiveStation, "queued after current:", radioRemaining(matchedUris, allTrackCount, radioCurrentUri));
   try {
     const added = await radioFill(RADIO_REFILL);
     if (sid !== radioSession) return;
+    radioLog("top-up done: added", added, "| pool", discoverPool.length, "| buffered past/new", radioBuf.past.length + "/" + radioBuf.new.length, "| failures", radioFailures, "| search error", lastSearchError || "none", "| 429 wait ms", spotifyBlockedFor());
     if (!added) {
       // Only a healthy Last.fm + Spotify round that found nothing new means the library is exhausted;
       // a failing search or a missing token is transient and must stay retryable
       const healthy = radioFailures === 0 && !lastSearchError && await getSpotifyToken();
       if (sid !== radioSession) return;
-      if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
+      if (healthy && radioActiveStation !== "library") {
+        // New music keeps arriving (the station changes on every call): an empty round is retried on the next track change
+        if (!discoverWarnedEmpty) { discoverWarnedEmpty = true; showStatus("No new music found right now. Playing what is queued.", "warn"); }
+      } else if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
     if (radioPaused || sdkReady) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK: swap at the seam (radioMaybeSeam)
@@ -275,27 +478,39 @@ function radioSetPaused(paused) {
 // SDK only. A re-issue restarts the stream (device transfer + play), which stutters if it lands a few
 // seconds into a song. So new tracks wait until the last track Spotify has queued is about to end, then
 // replace the context starting at the first new track.
-function radioSeamDue(pending, nextCount, positionMs, durationMs, seamMs) {
-  return !!pending && nextCount === 0 && durationMs > 0 && durationMs - positionMs <= seamMs;
+function radioSeamDue(pending, atLastTrack, positionMs, durationMs, seamMs) {
+  return !!pending && !!atLastTrack && durationMs > 0 && durationMs - positionMs <= seamMs;
 }
 
+// Tracks we hold that Spotify has not been sent: everything after the last URI of our latest play. Derived from the
+// data on purpose: a flag that something is pending can get lost (or never be set), the tracks themselves cannot.
+function radioUnsentUris() {
+  if (!radioContextLastUri) return [];
+  return radioUrisFrom(matchedUris, allTrackCount, radioContextLastUri).slice(1);
+}
 function radioMaybeSeam() {
-  if (!(radioActive || travelActive) || !sdkReady) return;
-  if (!radioSeamDue(radioPendingReissue, _sdkNextCount, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
+  if (!(radioActive || travelActive) || !sdkReady || radioSeaming) return;
+  const atLast = !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri;
+  if (!radioSeamDue(radioPendingReissue || (atLast && radioUnsentUris().length > 0), atLast, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
   radioSeamReissue();
 }
 
 async function radioSeamReissue() {
-  radioPendingReissue = false;  // first, so the next 250ms tick does not fire it again
-  const sid = radioSession;
-  const uris = radioUrisFrom(matchedUris, allTrackCount, _sdkCurrentUri).slice(1);  // drop the track that is ending
-  if (!uris.length) return;
-  const token = await getSpotifyToken();
-  if (!token || sid !== radioSession) return;
-  let ok = false;
-  try { ok = await spotifyPlay(token, uris, 0, { quick: true }); } catch {}
-  if (!ok && sid === radioSession) ok = await spotifyPlay(token, uris);  // full device logic as a fallback
-  if (ok) checkLikedTracks();
+  radioSeaming = true;  // first, so the next 250ms tick does not fire it again
+  radioPendingReissue = false;
+  try {
+    const sid = radioSession;
+    const uris = radioUrisFrom(matchedUris, allTrackCount, _sdkCurrentUri).slice(1);  // drop the track that is ending
+    radioLog("seam: swapping in", uris.length, "tracks");
+    if (!uris.length) return;
+    const token = await getSpotifyToken();
+    if (!token || sid !== radioSession) return;
+    let ok = false;
+    try { ok = await spotifyPlay(token, uris, 0, { quick: true }); } catch {}
+    if (!ok && sid === radioSession) ok = await spotifyPlay(token, uris);  // full device logic as a fallback
+    radioLog("seam:", ok ? "done" : "FAILED");
+    if (ok) checkLikedTracks();
+  } finally { radioSeaming = false; }
 }
 
 // Called from the SDK state handler and the polling fallback on every track change
@@ -307,7 +522,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false;
-  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null;
   hideRadioView();
 }
 
@@ -353,7 +568,7 @@ function radioSyncHome() {
   if (box) box.style.display = on ? "" : "none";
   if (again) {
     again.className = "btn btn-radio " + (on ? "btn-ghost" : "btn-primary");
-    again.innerHTML = on ? "Start a new radio" : '<i class="ph-fill ph-play" aria-hidden="true"></i> Start radio';
+    again.innerHTML = on ? "Start a new radio" : '<i class="ph-fill ph-play" aria-hidden="true"></i> ' + RADIO_STATIONS[radioStation].button;
   }
   const state = $("radioPlayingState"), track = $("radioPlayingTrack");
   if (state) state.textContent = radioNowPaused ? "Paused" : "Playing now";
@@ -369,6 +584,40 @@ function radioResetHero() {
   $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioInfoIdx = -1; radioHideInfo();
   radioPhotoId = ""; radioShowArtistPhoto(null);
+  radioShowSource("");
+}
+
+// The "why this track" chip next to NOW PLAYING (Discover only)
+function radioShowSource(text, past) {
+  const el = $("radioSource");
+  if (!el) return;
+  el.style.display = text ? "" : "none";
+  if (el.classList) el.classList[past ? "add" : "remove"]("past");
+  const ic = $("radioSourceIcon");
+  if (ic) ic.className = past ? "ph ph-clock" : "ph-fill ph-sparkle";
+  const t = $("radioSourceText");
+  if (t) t.textContent = text || "";
+}
+
+// Home card: how much of a Mix is new
+function radioSetBalance(name) {
+  if (!MIX_PATTERNS[name]) name = "balanced";
+  radioBalance = name;
+  try { localStorage.setItem("stm_mix_balance", name); } catch {}
+  document.querySelectorAll(".seg-opt").forEach(b => { const on = b.dataset.balance === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+}
+
+// Home card: the station picked here is the one Start radio plays
+function radioSetStation(name) {
+  if (!RADIO_STATIONS[name]) name = "library";
+  radioStation = name;
+  try { localStorage.setItem("stm_station", name); } catch {}
+  document.querySelectorAll(".station-opt").forEach(b => { const on = b.dataset.station === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+  const s = RADIO_STATIONS[name];
+  if ($("mixBalance")) $("mixBalance").style.display = name === "mix" ? "" : "none";
+  if ($("radioEyebrow")) $("radioEyebrow").textContent = s.eyebrow;
+  if ($("homeHeadline")) $("homeHeadline").textContent = s.headline;
+  radioSyncHome();
 }
 
 // mode "radio" (default) shows Up next; "travel" shows the era panel and the full track list
@@ -379,7 +628,7 @@ function showRadioView(mode) {
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
   $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
-  $("radioTitle").textContent = travel ? "Time travel" : "Library radio";
+  $("radioTitle").textContent = travel ? "Time travel" : RADIO_STATIONS[radioActiveStation].title;
   $("radioAgainBtn").style.display = travel ? "" : "none";
   $("radioUpNextBlock").style.display = travel ? "none" : "";
   radioResetHero();
@@ -432,6 +681,18 @@ function radioInfoSource(idx) {
   return artist && t.name ? { artist, track: t.name } : null;
 }
 
+// Cached Last.fm lookups (promises, so concurrent calls share one request); the info panel and Discover use the same caches
+function radioArtistInfoP(user, artist) {
+  const k = user.toLowerCase() + "|" + artist.toLowerCase();
+  if (!(k in radioArtistCache)) radioArtistCache[k] = getLastFmArtistInfo(user, artist).then(radioArtistFromInfo, () => null);
+  return radioArtistCache[k];
+}
+function radioTrackPlaysP(user, artist, track) {
+  const k = user.toLowerCase() + "|" + radioTrackKey(artist, track);
+  if (!(k in radioTrackCache)) radioTrackCache[k] = getLastFmTrackInfo(user, artist, track).then(radioTrackPlaysFromInfo, () => null);
+  return radioTrackCache[k];
+}
+
 // Bio + your play counts for the track at idx. Cached per artist and per track (as promises, so
 // concurrent calls share one request); a failed lookup is never cached and never throws.
 async function radioInfoFor(idx) {
@@ -441,9 +702,7 @@ async function radioInfoFor(idx) {
   const user = travelActive ? $("usernameInput").value.trim() : radioUser;
   const uKey = user.toLowerCase();
   const aKey = uKey + "|" + src.artist.toLowerCase(), tKey = uKey + "|" + radioTrackKey(src.artist, src.track);
-  if (!(aKey in radioArtistCache)) radioArtistCache[aKey] = getLastFmArtistInfo(user, src.artist).then(radioArtistFromInfo, () => null);
-  if (!(tKey in radioTrackCache)) radioTrackCache[tKey] = getLastFmTrackInfo(user, src.artist, src.track).then(radioTrackPlaysFromInfo, () => null);
-  const [artist, trackPlays] = await Promise.all([radioArtistCache[aKey], radioTrackCache[tKey]]);
+  const [artist, trackPlays] = await Promise.all([radioArtistInfoP(user, src.artist), radioTrackPlaysP(user, src.artist, src.track)]);
   if (!artist) delete radioArtistCache[aKey];
   if (trackPlays === null) delete radioTrackCache[tKey];
   const bio = artist ? radioParseBio(artist.bioHtml) : { text: "", url: "" };
@@ -455,8 +714,9 @@ function radioHideInfo() {
   if (box) box.style.display = "none";
 }
 
-function radioRenderInfo(info) {
-  const stats = radioStatsHtml(info.artist, info.plays, info.track, info.trackPlays, escHtml);
+function radioRenderInfo(info, meta) {
+  const stats = (radioActive && meta && meta.source && discoverStatsHtml(info.artist, info.plays, meta.kind, meta.source, escHtml))
+    || radioStatsHtml(info.artist, info.plays, info.track, info.trackPlays, escHtml);
   $("radioStats").innerHTML = stats;
   $("radioStats").style.display = stats ? "" : "none";
   const hasBio = !!info.bioText;
@@ -526,7 +786,7 @@ function radioSyncInfo() {
   if (idx < 0 || !radioInfoSource(idx)) return;
   radioInfoFor(idx).then(info => {
     if (!info || sid !== radioSession || idx !== radioInfoIdx) return;
-    radioRenderInfo(info);
+    radioRenderInfo(info, trackMeta[idx]);
   });
 }
 
@@ -545,6 +805,8 @@ function radioRenderNow(track, paused) {
   radioNowLabel = (track.name || (meta && meta.name) || "") + (artists ? " \u00b7 " + artists : "");
   radioNowPaused = !!paused;
   radioSyncVolume();
+  const fromPast = radioActive && meta && meta.mixPast && meta.year;
+  radioShowSource(radioActive && meta && meta.source ? meta.source : fromPast ? "From " + meta.year : "", !!fromPast);
   if (radioMinimized) radioSyncHome();
   radioSyncInfo();
   radioSyncArtistPhoto(track);
@@ -557,8 +819,10 @@ function radioQueueRowHtml(idx, m, esc) {
   const art = /^https:\/\/[^"'<>\s]+$/.test(m.art || "")
     ? '<img class="radio-row-art" src="' + m.art + '" alt="" loading="lazy">'
     : '<div class="radio-row-art"></div>';
+  const chip = m.source ? '<span class="radio-chip"><i class="ph-fill ph-sparkle" aria-hidden="true"></i><span>' + esc(m.source) + '</span></span>'
+    : m.mixPast && m.year ? '<span class="radio-chip past"><i class="ph ph-clock" aria-hidden="true"></i><span>From ' + esc(String(m.year)) + '</span></span>' : '';
   return '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + idx + ')">' + art
-    + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div></div>';
+    + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div>' + chip + '</div>';
 }
 
 // Up next: the matched tracks after the current one, plus a Tuning row while a top-up runs
@@ -591,5 +855,5 @@ async function radioPlayFrom(idx) {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt };
 }

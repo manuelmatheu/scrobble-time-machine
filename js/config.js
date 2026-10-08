@@ -4,7 +4,7 @@
 const LASTFM_API_KEY = "177b9e8ee70fe2325bfff606cfdaee23";
 const SPOTIFY_CLIENT_ID = "73fce01f5762463e86ff6555751a148c";
 const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname;
-const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read";
+const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read user-top-read";
 const BATCH_SIZE = 5;     // max Spotify searches per batch (time travel loads more as you listen)
 const SEARCH_DELAY = 500; // ms between search calls
 const POLL_INTERVAL = 5000; // ms between now-playing polls
@@ -61,7 +61,23 @@ let radioSeen = new Set();      // artist||track keys already picked this sessio
 let radioRefilling = false, radioExhausted = false, radioFailures = 0;
 let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the SDK is not driving state
 let radioPaused = false, radioPendingReissue = false;  // new tracks not in Spotify's context yet: re-issue on resume (no SDK) or at the end of the last queued track (SDK)
+let radioSeaming = false;      // a seam swap is in flight (the 250ms timer must not start another)
+let radioDebug = true;         // one-line [STM radio] messages in the console at top-ups and seams (set false in tests)
+let radioContextLastUri = null;  // last URI of the most recent play we issued: after it Spotify has nothing of ours (set by spotifyPlay)
 const RADIO_SEAM_MS = 1500;     // with the SDK, swap in the new tracks this close to the end of the last queued track
+// Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays
+let radioStation = "library", radioActiveStation = "library";  // "library" | "discover" | "mix"
+let radioBalance = "balanced", radioActiveBalance = "balanced";  // Mix: "mostly-past" | "balanced" | "mostly-new"
+const MIX_BATCH = 8;                 // picks handed out per Mix round
+let radioBuf = { past: [], new: [] }; // Mix: picks collected but not used yet, by source
+let radioMixCursor = 0;              // position in the Mix pattern
+const DISCOVER_BATCH = 6;            // candidates vetted per round
+const DISCOVER_MAX_ROUNDS = 6;       // rounds per fill before giving up
+const DISCOVER_SEEDS_PER_ROUND = 2;  // top artists expanded per pool refill
+let discoverPool = [];               // candidates waiting to be vetted: { artist, track, source }
+let discoverSeeds = null;            // names of your recent top artists (null = not loaded yet)
+let discoverSeedRound = 0, discoverSimilarCache = {}, discoverTopCache = {}, discoverUsedArtists = new Set();
+let discoverNeedsReconnect = false, discoverWarnedEmpty = false;
 let radioInfoIdx = -1;          // index whose bio/plays panel is showing (or loading)
 let radioArtistCache = {}, radioTrackCache = {};  // Last.fm getInfo results (promises), by artist / artist||track
 let radioMinimized = false;   // the radio/time-travel session keeps playing while the home view is showing

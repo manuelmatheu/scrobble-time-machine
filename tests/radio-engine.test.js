@@ -12,11 +12,13 @@ load("radio.js");
 load("spotify.js");
 load("ui.js");
 load("player.js");
+run("radioDebug = false;");
 const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
+const realSpotifyPlay = global.spotifyPlay;
 const realShowStatus = global.showStatus;
 
 function reset() {
-  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {};");
+  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {}; radioBuf = { past: [], new: [] }; radioMixCursor = 0;");
 }
 const song = n => [{ name: "Song " + n, artist: { "#text": "Artist" }, date: { uts: "1500000000" } }];
 const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
@@ -140,7 +142,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(played.length, 1);
 
   // 12b. with the SDK driving, a finished top-up does not touch playback: it waits for the seam
-  reset(); played = []; n = 100; run(existing); run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; _sdkNextCount = 0; _sdkDurationMs = 180000; _sdkPositionMs = 12000;");
+  reset(); played = []; n = 100; run(existing); run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 12000;");
   global.getLastFmScrobbleAt = async () => song(n++);
   await run("continueRadio()");
   assert.equal(played.length, 0);
@@ -160,6 +162,163 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioPendingReissue"), false);
   global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
   run("sdkReady = false;");
+
+  // 12b2. the swap waits for the last track we sent to Spotify, whatever Spotify reports as queued next (its autoplay can add its own)
+  reset(); played = []; run(existing);
+  run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Elsewhere'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 179500; radioPendingReissue = true;");
+  run("radioMaybeSeam()");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0);
+  assert.equal(run("radioPendingReissue"), true);  // still waiting
+  // ...and spotifyPlay remembers the end of every context it sends (Spotify caps a play at 100 URIs)
+  const realFetch = global.fetch;
+  const playCalls = [];
+  global.fetch = async (url) => { playCalls.push(String(url)); return { ok: true, status: 204 }; };
+  run("sdkReady = true; sdkDeviceId = 'dev'; radioContextLastUri = null;");
+  assert.equal(await realSpotifyPlay("t", ["spotify:track:a", "spotify:track:b"]), true);
+  assert.equal(run("radioContextLastUri"), "spotify:track:b");
+  // a full play also turns shuffle and repeat off (both persist on the account), a quick one skips that
+  assert.ok(playCalls.some(u => /me\/player\/shuffle\?state=false/.test(u)));
+  assert.ok(playCalls.some(u => /me\/player\/repeat\?state=off/.test(u)));
+  playCalls.length = 0;
+  await realSpotifyPlay("t", ["spotify:track:q"], 0, { quick: true });
+  assert.ok(!playCalls.some(u => /repeat|shuffle/.test(u)));
+  await realSpotifyPlay("t", Array.from({ length: 150 }, (_, i) => "spotify:track:n" + i), 0, { quick: true });
+  assert.equal(run("radioContextLastUri"), "spotify:track:n99");
+  global.fetch = async () => ({ ok: false, status: 500 });
+  run("radioContextLastUri = 'keep'; sdkReady = false;");
+  global.getSpotifyDevices = async () => [];
+  assert.equal(await realSpotifyPlay("t", ["spotify:track:z"]), false);
+  assert.equal(run("radioContextLastUri"), "keep");  // a failed play does not move it
+  global.fetch = realFetch;
+  run("sdkReady = false; radioPendingReissue = false; radioContextLastUri = null;");
+
+  // 12b3. the swap is driven by the tracks we hold, not by a flag: it fires with the flag lost, and not when nothing is unsent
+  reset(); played = []; run(existing);
+  run("matchedUris[1] = 'spotify:track:Later'; matchedUris[2] = 'spotify:track:Latest'; allTrackCount = 3; uriToIndices['spotify:track:Later'] = [1]; uriToIndices['spotify:track:Latest'] = [2];");
+  run("sdkReady = true; radioSeaming = false; radioPendingReissue = false; _sdkCurrentUri = 'spotify:track:Existing'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 179000;");
+  assert.deepEqual(run("radioUnsentUris()"), ["spotify:track:Later", "spotify:track:Latest"]);
+  global.spotifyPlay = async (token, uris, pos, opts) => { played.push(uris); return true; };
+  run("radioMaybeSeam(); radioMaybeSeam();");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);  // one swap even with two ticks in flight
+  assert.deepEqual(played[0], ["spotify:track:Later", "spotify:track:Latest"]);
+  assert.equal(run("radioSeaming"), false);
+  run("radioContextLastUri = 'spotify:track:Latest'; _sdkCurrentUri = 'spotify:track:Latest';");  // the swap's own play moved the end
+  assert.deepEqual(run("radioUnsentUris()"), []);
+  run("radioMaybeSeam()");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);  // nothing unsent: nothing to swap
+  run("sdkReady = false; radioContextLastUri = null;");
+  global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
+
+  // 12c. Discover: vets candidates (played songs and saved songs are dropped), labels the source, mixes both sources
+  const dReset = () => {
+    reset(); played = []; statuses = [];
+    run("radioActiveStation = 'discover'; discoverPool = []; discoverSeeds = null; discoverSeedRound = 0; discoverSimilarCache = {}; discoverTopCache = {}; discoverUsedArtists = new Set(); discoverNeedsReconnect = false; discoverWarnedEmpty = false;");
+    global.radioSleep = async () => {};
+    global.spotifySearch = async (token, artist, track) => ({ uri: uriFor(track), name: track, artists: [{ name: artist }], album: { images: [] } });
+  };
+  const plays = { "Newcomer": [0, 0], "Regular": [40, 0], "Played": [9, 3], "Saver": [2, 0] };  // artist plays, song plays
+  global.getLastFmArtistInfo = async (u, a) => ({ artist: { bio: { summary: "" }, stats: { userplaycount: String((plays[a] || [0, 0])[0]) } } });
+  global.getLastFmTrackInfo = async (u, a) => ({ track: { userplaycount: String((plays[a] || [0, 0])[1]) } });
+  global.getLastFmStation = async () => ({ playlist: [
+    { name: "Fresh", artists: [{ name: "Newcomer" }] }, { name: "Heard", artists: [{ name: "Played" }] },
+    { name: "Kept", artists: [{ name: "Saver" }] }, { name: "NewSong", artists: [{ name: "Regular" }] }, { name: "", artists: [] }] });
+  global.getLastFmSimilarArtists = async () => ({ similarartists: { artist: [{ name: "Sim One" }] } });
+  global.getLastFmArtistTopTracks = async () => ({ toptracks: { track: [{ name: "Deep Cut" }] } });
+  const spCalls = [];
+  global.spGet = async path => {
+    spCalls.push(path);
+    if (path.startsWith("/me/top/artists")) return { items: [{ name: "Seed Band" }] };
+    if (path.startsWith("/me/library/contains")) return [path.includes("Kept")];
+    return {};
+  };
+  dReset();
+  const dAdded = await run("radioFill(10)");
+  assert.equal(dAdded, 3);  // Fresh, NewSong, Deep Cut; "Heard" was played and "Kept" is saved
+  const dNames = [0, 1, 2].map(i => run("trackMeta[" + i + "].name")).sort();
+  assert.deepEqual(dNames, ["Deep Cut", "Fresh", "NewSong"]);
+  const metaOf = n => [0, 1, 2].map(i => run("trackMeta[" + i + "]")).find(m => m.name === n);
+  assert.equal(metaOf("Fresh").source, "Last.fm pick");
+  assert.equal(metaOf("Fresh").kind, "new-artist");
+  assert.equal(metaOf("NewSong").kind, "new-song");
+  assert.equal(metaOf("NewSong").artistPlays, 40);
+  assert.equal(metaOf("Deep Cut").source, "Similar to Seed Band");
+  assert.ok(spCalls.some(c => c.startsWith("/me/top/artists?limit=5&time_range=short_term")));
+  assert.equal(run("radioSeen.has('played||heard')"), true);  // a vetted-out song is never retried
+
+  // 12d. Discover without the user-top-read scope: the station still plays, and the app asks to reconnect
+  dReset();
+  global.spGet = async path => { if (path.startsWith("/me/top/artists")) throw Object.assign(new Error("Spotify 403"), { status: 403 }); if (path.startsWith("/me/library/contains")) return [false]; return {}; };
+  assert.equal(await run("radioFill(2)"), 2);
+  assert.equal(run("discoverNeedsReconnect"), true);
+  assert.ok([0, 1].every(i => run("trackMeta[" + i + "].source") === "Last.fm pick"));
+
+  // 12e. Discover with both sources failing gives up after a few rounds instead of looping
+  dReset();
+  global.getLastFmStation = async () => { throw new Error("down"); };
+  global.spGet = async () => ({ items: [] });
+  assert.equal(await run("radioFill(5)"), 0);
+  assert.ok(run("radioFailures") > 0);
+  assert.equal(run("radioExhausted"), false);
+
+  // 12f. an empty but healthy Discover round warns once and is retried later; it never ends the radio
+  dReset();
+  global.getLastFmStation = async () => ({ playlist: [] });
+  run("radioRefilling = false; radioExhausted = false; radioActive = true;");
+  await run("continueRadio()");
+  await run("continueRadio()");
+  assert.equal(run("radioExhausted"), false);
+  assert.equal(statuses.filter(m => /No new music found/.test(m)).length, 1);
+
+  // 12g. Up next rows show where a Discover pick came from (escaped)
+  assert.match(run("radioQueueRowHtml(3, { name: 'Song', artist: 'A', source: 'Similar to <b>' }, s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))"), /radio-chip.*Similar to &lt;b&gt;/);
+  assert.doesNotMatch(run("radioQueueRowHtml(3, { name: 'Song', artist: 'A' }, s => s)"), /radio-chip/);
+  run("radioActiveStation = 'library'");
+
+  // 12h. Mix: alternates your past and new music in the pattern of the balance; each source is vetted its own way
+  const mReset = bal => {
+    dReset();
+    run("radioActiveStation = 'mix'; radioActiveBalance = '" + bal + "'; radioTotal = 1000;");
+    let sn = 0, fn = 0;
+    global.getLastFmScrobbleAt = async () => [{ name: "Old " + (sn++), artist: { "#text": "Artist" }, date: { uts: "1400000000" } }];
+    global.getLastFmStation = async () => ({ playlist: Array.from({ length: 6 }, () => ({ name: "Fresh " + (fn++), artists: [{ name: "Newcomer" }] })) });
+    global.spGet = async path => path.startsWith("/me/library/contains") ? [false] : { items: [] };
+    global.getLastFmArtistInfo = async () => ({ artist: { bio: { summary: "" }, stats: { userplaycount: "0" } } });
+    global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "0" } });
+  };
+  const origin = i => run("trackMeta[" + i + "]").source ? "new" : "past";
+  mReset("balanced");
+  assert.equal(await run("radioFill(6)"), 6);
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map(origin), ["past", "new", "past", "new", "past", "new"]);
+  assert.equal(run("trackMeta[0].mixPast"), true);   // from your history, shown as "From 2014"
+  assert.equal(run("trackMeta[0].year"), 2014);
+  assert.equal(run("trackMeta[1].mixPast"), undefined);
+  assert.equal(run("trackMeta[1].source"), "Last.fm pick");
+  mReset("mostly-past");
+  assert.equal(await run("radioFill(8)"), 8);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map(origin), ["past", "past", "past", "new", "past", "past", "past", "new"]);
+  mReset("mostly-new");
+  assert.equal(await run("radioFill(4)"), 4);
+  assert.deepEqual([0, 1, 2, 3].map(origin), ["new", "new", "new", "past"]);
+
+  // 12i. Mix: when new music is unavailable the history keeps playing (and the other way round)
+  mReset("balanced");
+  global.getLastFmStation = async () => { throw new Error("down"); };
+  assert.equal(await run("radioFill(4)"), 4);
+  assert.deepEqual([0, 1, 2, 3].map(origin), ["past", "past", "past", "past"]);
+  mReset("balanced");
+  global.getLastFmScrobbleAt = async () => { throw new Error("rate limit"); };
+  assert.equal(await run("radioFill(3)"), 3);
+  assert.deepEqual([0, 1, 2].map(origin), ["new", "new", "new"]);
+  // ...and only when both fail is it a failure
+  mReset("balanced");
+  global.getLastFmScrobbleAt = async () => { throw new Error("x"); };
+  global.getLastFmStation = async () => { throw new Error("y"); };
+  assert.equal(await run("radioFill(2)"), 0);
+  assert.ok(run("radioFailures") > 0);
+  run("radioActiveStation = 'library'; radioActiveBalance = 'balanced';");
 
   // 13. disconnecting Spotify tears the session down
   let resets = 0;
@@ -465,7 +624,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(els.radioBackBtn.style.display, "none");
     assert.equal(els.radioPlaying.style.display, "none");
     assert.match(els.radioBtn.className, /btn-primary/);
-    assert.match(els.radioBtn.innerHTML, /Start radio/);
+    assert.match(els.radioBtn.innerHTML, /Start Library radio/);
     // reopening with nothing minimized does nothing
     els.radioView.style.display = "none"; els.homeView.style.display = "";
     run("radioReopen()");
@@ -483,7 +642,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     run("hideRadioView()");
     assert.equal(run("radioMinimized"), false);
     assert.equal(els.radioBackBtn.style.display, "none");
-    assert.match(els.radioBtn.innerHTML, /Start radio/);
+    assert.match(els.radioBtn.innerHTML, /Start Library radio/);
     // the liked state shows on both hearts: the controls row (desktop) and the title row (phones)
     run("matchedUris = { 0: 'spotify:track:abc' }; allTrackCount = 1; nowPlayingIndex = 0; likedSet = new Set(['abc']);");
     run("updateNowPlayingHeart()");

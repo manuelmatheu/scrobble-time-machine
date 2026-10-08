@@ -169,6 +169,7 @@ async function transferPlayback(token, deviceId) {
 async function spotifyPlay(token, uris, positionMs, opts) {
   const playUris = uris.slice(0, 100);
   const body = positionMs > 0 ? { uris: playUris, position_ms: positionMs } : { uris: playUris };
+  const lastUri = playUris[playUris.length - 1];
 
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
@@ -185,12 +186,18 @@ async function spotifyPlay(token, uris, positionMs, opts) {
           method: "PUT", headers: { Authorization: "Bearer " + token }
         });
       } catch {}
+      // Repeat persists on the account like shuffle: with "repeat context" left on, Spotify replays our list from the start
+      try {
+        await fetch("https://api.spotify.com/v1/me/player/repeat?state=off&device_id=" + sdkDeviceId, {
+          method: "PUT", headers: { Authorization: "Bearer " + token }
+        });
+      } catch {}
     }
     const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    if (r.ok || r.status === 204) return true;
+    if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
     // SDK play failed — fall through to remote
   }
 
@@ -206,7 +213,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
         method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
-      return r.ok || r.status === 204;
+      if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
+      return false;
     }
     // Transfer to inactive device with 800ms delay (matches SpotiMix transferPlayback)
     await transferPlayback(token, device.id);
@@ -218,12 +226,18 @@ async function spotifyPlay(token, uris, positionMs, opts) {
       method: "PUT", headers: { Authorization: "Bearer " + token }
     });
   } catch {}
+  try {
+    await fetch("https://api.spotify.com/v1/me/player/repeat?state=off&device_id=" + device.id, {
+      method: "PUT", headers: { Authorization: "Bearer " + token }
+    });
+  } catch {}
 
   const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + device.id, {
     method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  return r.ok || r.status === 204;
+  if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
+  return false;
 }
 
 async function spotifyAddToQueue(token, uri) {
