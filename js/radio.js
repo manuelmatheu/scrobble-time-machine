@@ -474,13 +474,13 @@ function radioSetPaused(paused) {
 // SDK only. A re-issue restarts the stream (device transfer + play), which stutters if it lands a few
 // seconds into a song. So new tracks wait until the last track Spotify has queued is about to end, then
 // replace the context starting at the first new track.
-function radioSeamDue(pending, nextCount, positionMs, durationMs, seamMs) {
-  return !!pending && nextCount === 0 && durationMs > 0 && durationMs - positionMs <= seamMs;
+function radioSeamDue(pending, atLastTrack, positionMs, durationMs, seamMs) {
+  return !!pending && !!atLastTrack && durationMs > 0 && durationMs - positionMs <= seamMs;
 }
 
 function radioMaybeSeam() {
   if (!(radioActive || travelActive) || !sdkReady) return;
-  if (!radioSeamDue(radioPendingReissue, _sdkNextCount, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
+  if (!radioSeamDue(radioPendingReissue, !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
   radioSeamReissue();
 }
 
@@ -506,7 +506,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false;
-  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null;
   hideRadioView();
 }
 

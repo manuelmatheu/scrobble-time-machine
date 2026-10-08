@@ -169,6 +169,7 @@ async function transferPlayback(token, deviceId) {
 async function spotifyPlay(token, uris, positionMs, opts) {
   const playUris = uris.slice(0, 100);
   const body = positionMs > 0 ? { uris: playUris, position_ms: positionMs } : { uris: playUris };
+  const lastUri = playUris[playUris.length - 1];
 
   // Prefer SDK device when ready
   if (sdkReady && sdkDeviceId) {
@@ -190,7 +191,7 @@ async function spotifyPlay(token, uris, positionMs, opts) {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    if (r.ok || r.status === 204) return true;
+    if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
     // SDK play failed — fall through to remote
   }
 
@@ -206,7 +207,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
         method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
-      return r.ok || r.status === 204;
+      if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
+      return false;
     }
     // Transfer to inactive device with 800ms delay (matches SpotiMix transferPlayback)
     await transferPlayback(token, device.id);
@@ -223,7 +225,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  return r.ok || r.status === 204;
+  if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
+  return false;
 }
 
 async function spotifyAddToQueue(token, uri) {

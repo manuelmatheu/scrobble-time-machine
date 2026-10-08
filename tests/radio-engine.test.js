@@ -13,6 +13,7 @@ load("spotify.js");
 load("ui.js");
 load("player.js");
 const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
+const realSpotifyPlay = global.spotifyPlay;
 const realShowStatus = global.showStatus;
 
 function reset() {
@@ -140,7 +141,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(played.length, 1);
 
   // 12b. with the SDK driving, a finished top-up does not touch playback: it waits for the seam
-  reset(); played = []; n = 100; run(existing); run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; _sdkNextCount = 0; _sdkDurationMs = 180000; _sdkPositionMs = 12000;");
+  reset(); played = []; n = 100; run(existing); run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 12000;");
   global.getLastFmScrobbleAt = async () => song(n++);
   await run("continueRadio()");
   assert.equal(played.length, 0);
@@ -160,6 +161,29 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioPendingReissue"), false);
   global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
   run("sdkReady = false;");
+
+  // 12b2. the swap waits for the last track we sent to Spotify, whatever Spotify reports as queued next (its autoplay can add its own)
+  reset(); played = []; run(existing);
+  run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Elsewhere'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 179500; radioPendingReissue = true;");
+  run("radioMaybeSeam()");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0);
+  assert.equal(run("radioPendingReissue"), true);  // still waiting
+  // ...and spotifyPlay remembers the end of every context it sends (Spotify caps a play at 100 URIs)
+  const realFetch = global.fetch;
+  global.fetch = async () => ({ ok: true, status: 204 });
+  run("sdkDeviceId = 'dev'; radioContextLastUri = null;");
+  assert.equal(await realSpotifyPlay("t", ["spotify:track:a", "spotify:track:b"]), true);
+  assert.equal(run("radioContextLastUri"), "spotify:track:b");
+  await realSpotifyPlay("t", Array.from({ length: 150 }, (_, i) => "spotify:track:n" + i), 0, { quick: true });
+  assert.equal(run("radioContextLastUri"), "spotify:track:n99");
+  global.fetch = async () => ({ ok: false, status: 500 });
+  run("radioContextLastUri = 'keep'; sdkReady = false;");
+  global.getSpotifyDevices = async () => [];
+  assert.equal(await realSpotifyPlay("t", ["spotify:track:z"]), false);
+  assert.equal(run("radioContextLastUri"), "keep");  // a failed play does not move it
+  global.fetch = realFetch;
+  run("sdkReady = false; radioPendingReissue = false; radioContextLastUri = null;");
 
   // 12c. Discover: vets candidates (played songs and saved songs are dropped), labels the source, mixes both sources
   const dReset = () => {
