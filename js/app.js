@@ -13,6 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const savedUser = localStorage.getItem("lastfm_username") || sessionStorage.getItem("lastfm_username");
   if (savedUser) { $("usernameInput").value = savedUser; refreshYearsForUser(); }
   refreshHomeMeta();
+  let savedStation = "library"; try { savedStation = localStorage.getItem("stm_station") || "library"; } catch {}
+  radioSetStation(savedStation);
 
   // Username: save on change, update button
   $("usernameInput").addEventListener("input", updateGoButton);

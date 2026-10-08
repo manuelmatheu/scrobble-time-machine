@@ -1,4 +1,4 @@
-// Spike: Vercel serverless proxy for Last.fm's personalized "recommended" station.
+// Vercel serverless proxy for Last.fm's personalized "recommended" station.
 // The endpoint is undocumented and blocks cross-origin requests, so the browser asks this
 // function and this function asks Last.fm. Usage: /api/lfm-station?user=<last.fm username>
 module.exports = async function handler(req, res) {
@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
       headers: { Accept: "application/json" }
     });
     const body = await upstream.text();
-    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+    res.setHeader("Cache-Control", "no-store");  // every call returns a different set; caching would replay the same one
     res.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
     res.status(upstream.status).send(body);
   } catch (e) {

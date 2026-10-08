@@ -84,15 +84,19 @@
 
   <div id="homeView">
     <section class="radio-card">
-      <span class="eyebrow">Library radio</span>
-      <h2 class="home-headline">Your library, shuffled across every year.</h2>
+      <span class="eyebrow" id="radioEyebrow">Library radio</span>
+      <h2 class="home-headline" id="homeHeadline">Your library, shuffled across every year.</h2>
       <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
+      <div class="station-picker" id="stationPicker" role="group" aria-label="Station">
+        <button class="station-opt active" data-station="library" aria-pressed="true" onclick="radioSetStation('library')"><i class="ph-fill ph-vinyl-record" aria-hidden="true"></i><span class="station-text"><span class="station-name">Library</span><span class="station-desc">Random scrobbles from every year of your history</span></span><span class="station-dot" aria-hidden="true"></span></button>
+        <button class="station-opt" data-station="discover" aria-pressed="false" onclick="radioSetStation('discover')"><i class="ph ph-compass" aria-hidden="true"></i><span class="station-text"><span class="station-name">Discover</span><span class="station-desc">New music picked from Last.fm and your Spotify taste</span></span><span class="station-dot" aria-hidden="true"></span></button>
+      </div>
       <div class="radio-playing" id="radioPlaying" style="display:none"><i class="ph-fill ph-equalizer" aria-hidden="true"></i><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
       <div class="controls">
         <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
         <button class="btn btn-spotify btn-radio" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
         <button class="btn btn-primary btn-radio" id="radioBackBtn" onclick="radioReopen()" style="display:none"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to radio</button>
-        <button class="btn btn-primary btn-radio" id="radioBtn" onclick="startRadio()" style="display:none" disabled><i class="ph-fill ph-play" aria-hidden="true"></i> Start radio</button>
+        <button class="btn btn-primary btn-radio" id="radioBtn" onclick="startRadio()" style="display:none" disabled><i class="ph-fill ph-play" aria-hidden="true"></i> Start Library radio</button>
         <button class="btn btn-ghost" id="cancelBtn" onclick="handleReset()" style="display:none">Cancel</button>
       </div>
     </section>
@@ -141,7 +145,7 @@
       <div class="go-row"><button class="btn btn-primary" id="goBtn" onclick="handleGo()" disabled>Time Travel</button></div>
     </section>
   </div>
-  <section id="radioView" class="radio-view" style="display:none" aria-label="Library radio">
+  <section id="radioView" class="radio-view" style="display:none" aria-label="Radio">
     <div class="radio-top">
       <div class="radio-top-left">
         <button class="btn-text" onclick="radioMinimize()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
@@ -156,7 +160,7 @@
       <div class="radio-hero">
         <img id="radioArt" class="radio-art" alt="">
         <div class="radio-hero-text">
-          <span class="eyebrow">Now playing</span>
+          <div class="radio-eyebrow-row"><span class="eyebrow">Now playing</span><span class="radio-chip" id="radioSource" style="display:none"><i class="ph-fill ph-sparkle" aria-hidden="true"></i><span id="radioSourceText"></span></span></div>
           <div class="radio-track" id="radioTrack">Tuning...</div>
           <div class="radio-artist" id="radioArtist"></div>
           <button class="radio-btn radio-heart-title" id="radioHeartTitle" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>

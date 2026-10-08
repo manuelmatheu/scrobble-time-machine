@@ -54,6 +54,25 @@ assert.equal(r.radioSeamDue(true, 2, 179000, 180000, 1500), false);  // Spotify 
 assert.equal(r.radioSeamDue(false, 0, 179000, 180000, 1500), false); // nothing pending
 assert.equal(r.radioSeamDue(true, 0, 0, 0, 1500), false);            // no duration yet
 
+// Discover helpers
+assert.deepEqual(r.discoverParseStation({ playlist: [{ name: "A", artists: [{ name: "X" }] }, { name: "", artists: [{ name: "Y" }] }, { name: "B", artists: [] }, null] }), [{ artist: "X", track: "A" }]);
+assert.deepEqual(r.discoverParseStation(null), []);
+assert.deepEqual(r.discoverParseSimilarArtists({ similarartists: { artist: [{ name: "P" }, { name: "Q" }] } }), ["P", "Q"]);
+assert.deepEqual(r.discoverParseSimilarArtists({ similarartists: { artist: { name: "Solo" } } }), ["Solo"]);
+assert.deepEqual(r.discoverParseSimilarArtists({}), []);
+assert.deepEqual(r.discoverParseTopTracks({ toptracks: { track: [{ name: "T1" }, { name: "T2" }] } }), ["T1", "T2"]);
+assert.deepEqual(r.discoverInterleave([1, 2, 3, 4, 5], ["a", "b"], 2), [1, 2, "a", 3, 4, "b", 5]);
+assert.deepEqual(r.discoverInterleave([], ["a"], 2), ["a"]);
+assert.deepEqual(r.discoverShuffle([1, 2, 3, 4], () => 0).sort(), [1, 2, 3, 4]);
+assert.equal(r.discoverVerdict(10, 2), "skip");
+assert.equal(r.discoverVerdict(0, 0), "new-artist");
+assert.equal(r.discoverVerdict(7, 0), "new-song");
+assert.equal(r.discoverVerdict(null, null), "unknown");
+assert.equal(r.discoverVerdict(0, null), "new-artist");
+assert.match(r.discoverStatsHtml("Band", 0, "new-artist", "Last.fm pick"), /New to you.*never played <strong>Band<\/strong>.*Picked for you by Last\.fm/);
+assert.match(r.discoverStatsHtml("Band", 12, "new-song", "Similar to Seed"), /New song.*12 times, never this one.*Similar to <strong>Seed<\/strong>/);
+assert.equal(r.discoverStatsHtml("Band", null, "unknown", ""), "");
+
 // radioCoverUrl (Spotify lists images largest first)
 const hit = { album: { images: [{ url: "big" }, { url: "mid" }, { url: "small" }] } };
 assert.equal(r.radioCoverUrl(hit), "small");

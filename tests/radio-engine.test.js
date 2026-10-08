@@ -161,6 +161,71 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
   run("sdkReady = false;");
 
+  // 12c. Discover: vets candidates (played songs and saved songs are dropped), labels the source, mixes both sources
+  const dReset = () => {
+    reset(); played = []; statuses = [];
+    run("radioActiveStation = 'discover'; discoverPool = []; discoverSeeds = null; discoverSeedRound = 0; discoverSimilarCache = {}; discoverTopCache = {}; discoverUsedArtists = new Set(); discoverNeedsReconnect = false; discoverWarnedEmpty = false;");
+    global.radioSleep = async () => {};
+    global.spotifySearch = async (token, artist, track) => ({ uri: uriFor(track), name: track, artists: [{ name: artist }], album: { images: [] } });
+  };
+  const plays = { "Newcomer": [0, 0], "Regular": [40, 0], "Played": [9, 3], "Saver": [2, 0] };  // artist plays, song plays
+  global.getLastFmArtistInfo = async (u, a) => ({ artist: { bio: { summary: "" }, stats: { userplaycount: String((plays[a] || [0, 0])[0]) } } });
+  global.getLastFmTrackInfo = async (u, a) => ({ track: { userplaycount: String((plays[a] || [0, 0])[1]) } });
+  global.getLastFmStation = async () => ({ playlist: [
+    { name: "Fresh", artists: [{ name: "Newcomer" }] }, { name: "Heard", artists: [{ name: "Played" }] },
+    { name: "Kept", artists: [{ name: "Saver" }] }, { name: "NewSong", artists: [{ name: "Regular" }] }, { name: "", artists: [] }] });
+  global.getLastFmSimilarArtists = async () => ({ similarartists: { artist: [{ name: "Sim One" }] } });
+  global.getLastFmArtistTopTracks = async () => ({ toptracks: { track: [{ name: "Deep Cut" }] } });
+  const spCalls = [];
+  global.spGet = async path => {
+    spCalls.push(path);
+    if (path.startsWith("/me/top/artists")) return { items: [{ name: "Seed Band" }] };
+    if (path.startsWith("/me/library/contains")) return [path.includes("Kept")];
+    return {};
+  };
+  dReset();
+  const dAdded = await run("radioFill(10)");
+  assert.equal(dAdded, 3);  // Fresh, NewSong, Deep Cut; "Heard" was played and "Kept" is saved
+  const dNames = [0, 1, 2].map(i => run("trackMeta[" + i + "].name")).sort();
+  assert.deepEqual(dNames, ["Deep Cut", "Fresh", "NewSong"]);
+  const metaOf = n => [0, 1, 2].map(i => run("trackMeta[" + i + "]")).find(m => m.name === n);
+  assert.equal(metaOf("Fresh").source, "Last.fm pick");
+  assert.equal(metaOf("Fresh").kind, "new-artist");
+  assert.equal(metaOf("NewSong").kind, "new-song");
+  assert.equal(metaOf("NewSong").artistPlays, 40);
+  assert.equal(metaOf("Deep Cut").source, "Similar to Seed Band");
+  assert.ok(spCalls.some(c => c.startsWith("/me/top/artists?limit=5&time_range=short_term")));
+  assert.equal(run("radioSeen.has('played||heard')"), true);  // a vetted-out song is never retried
+
+  // 12d. Discover without the user-top-read scope: the station still plays, and the app asks to reconnect
+  dReset();
+  global.spGet = async path => { if (path.startsWith("/me/top/artists")) throw Object.assign(new Error("Spotify 403"), { status: 403 }); if (path.startsWith("/me/library/contains")) return [false]; return {}; };
+  assert.equal(await run("radioFill(2)"), 2);
+  assert.equal(run("discoverNeedsReconnect"), true);
+  assert.ok([0, 1].every(i => run("trackMeta[" + i + "].source") === "Last.fm pick"));
+
+  // 12e. Discover with both sources failing gives up after a few rounds instead of looping
+  dReset();
+  global.getLastFmStation = async () => { throw new Error("down"); };
+  global.spGet = async () => ({ items: [] });
+  assert.equal(await run("radioFill(5)"), 0);
+  assert.ok(run("radioFailures") > 0);
+  assert.equal(run("radioExhausted"), false);
+
+  // 12f. an empty but healthy Discover round warns once and is retried later; it never ends the radio
+  dReset();
+  global.getLastFmStation = async () => ({ playlist: [] });
+  run("radioRefilling = false; radioExhausted = false; radioActive = true;");
+  await run("continueRadio()");
+  await run("continueRadio()");
+  assert.equal(run("radioExhausted"), false);
+  assert.equal(statuses.filter(m => /No new music found/.test(m)).length, 1);
+
+  // 12g. Up next rows show where a Discover pick came from (escaped)
+  assert.match(run("radioQueueRowHtml(3, { name: 'Song', artist: 'A', source: 'Similar to <b>' }, s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))"), /radio-chip.*Similar to &lt;b&gt;/);
+  assert.doesNotMatch(run("radioQueueRowHtml(3, { name: 'Song', artist: 'A' }, s => s)"), /radio-chip/);
+  run("radioActiveStation = 'library'");
+
   // 13. disconnecting Spotify tears the session down
   let resets = 0;
   global.handleReset = () => { resets++; };
@@ -465,7 +530,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(els.radioBackBtn.style.display, "none");
     assert.equal(els.radioPlaying.style.display, "none");
     assert.match(els.radioBtn.className, /btn-primary/);
-    assert.match(els.radioBtn.innerHTML, /Start radio/);
+    assert.match(els.radioBtn.innerHTML, /Start Library radio/);
     // reopening with nothing minimized does nothing
     els.radioView.style.display = "none"; els.homeView.style.display = "";
     run("radioReopen()");
@@ -483,7 +548,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     run("hideRadioView()");
     assert.equal(run("radioMinimized"), false);
     assert.equal(els.radioBackBtn.style.display, "none");
-    assert.match(els.radioBtn.innerHTML, /Start radio/);
+    assert.match(els.radioBtn.innerHTML, /Start Library radio/);
     // the liked state shows on both hearts: the controls row (desktop) and the title row (phones)
     run("matchedUris = { 0: 'spotify:track:abc' }; allTrackCount = 1; nowPlayingIndex = 0; likedSet = new Set(['abc']);");
     run("updateNowPlayingHeart()");
