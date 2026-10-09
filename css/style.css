@@ -240,6 +240,7 @@
   .radio-progress { align-self:stretch; }  /* in the stacked card the row must span the width, or the bar collapses to 0 */
   .radio-controls { justify-content:center; gap:20px; }
   .radio-hero-text { padding-right:52px; }
+  .radio-eyebrow-row { justify-content:flex-start; }  /* the chip sits right after NOW PLAYING, not at the far end of the row */
   .radio-hero-text .radio-heart-title { display:inline-flex; position:absolute; right:0; top:50%; transform:translateY(-50%); }
   #radioHeart { display:none; }  /* the controls row keeps prev / play / next, centered */
 }
