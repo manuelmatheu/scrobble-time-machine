@@ -570,7 +570,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 28. Home keeps the session running; the home card leads back to it
   {
     const els = {};
-    const mk = id => { const cl = new Set(); return { id, style: id === "radioView" ? { display: "none" } : { setProperty(k, v) { this[k] = v; } }, textContent: "", innerHTML: "", className: "", value: "80", children: [], cl, classList: { add: c => cl.add(c), remove: c => cl.delete(c), toggle: (c, on) => (on ? cl.add(c) : cl.delete(c)) }, getAttribute(k) { return this[k] === undefined ? null : this[k]; }, removeAttribute(k) { delete this[k]; }, appendChild(c) { this.children.push(c); } }; };
+    const mk = id => { const cl = new Set(); return { id, style: id === "radioView" ? { display: "none" } : { setProperty(k, v) { this[k] = v; } }, textContent: "", innerHTML: "", className: "", value: "80", children: [], cl, classList: { add: c => cl.add(c), remove: c => cl.delete(c), toggle: (c, on) => (on ? cl.add(c) : cl.delete(c)) }, getAttribute(k) { return this[k] === undefined ? null : this[k]; }, setAttribute(k, v) { this[k] = String(v); }, removeAttribute(k) { delete this[k]; }, appendChild(c) { this.children.push(c); } }; };
     global.document.getElementById = id => els[id] || (els[id] = mk(id));
     global.window.scrollTo = () => {};
     reset();
@@ -699,7 +699,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 31. the artist photo comes from Spotify, once per artist, and only for the artist that is playing
   {
     const els = {};
-    const mk = id => ({ id, style: {}, innerHTML: "", textContent: "", getAttribute(k) { return this[k] === undefined ? null : this[k]; }, removeAttribute(k) { delete this[k]; } });
+    const mk = id => ({ id, style: {}, innerHTML: "", textContent: "", getAttribute(k) { return this[k] === undefined ? null : this[k]; }, setAttribute(k, v) { this[k] = String(v); }, removeAttribute(k) { delete this[k]; } });
     global.document.getElementById = id => els[id] || (els[id] = mk(id));
     global.window.matchMedia = () => ({ matches: true });
     const idA = "1dfeR4HaWDbWqFHLkxsg1d", idB = "4Z8W4fKeB5YxbusRsdQVPb";

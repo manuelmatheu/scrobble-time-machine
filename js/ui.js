@@ -27,7 +27,7 @@ function renderTrackRow(t, i) {
     +'<div class="track-art-wrap" id="art-'+i+'">'+imgH+'</div>'
     +'<div class="track-info"><div class="track-name">'+escHtml(t.name)+'</div><div class="track-meta">'+escHtml(artist)+(album?' · '+escHtml(album):'')+'</div></div>'
     +'<span class="track-date">'+dt+'</span>'
-    +'<button class="heart-btn" id="heart-'+i+'" onclick="event.stopPropagation(); toggleLikeTrack('+i+')" title="Save to Liked Songs">'+HEART_EMPTY+'</button>'
+    +'<button class="heart-btn" id="heart-'+i+'" onclick="event.stopPropagation(); toggleLikeTrack('+i+')" title="Save to Liked Songs" aria-label="Like '+escHtml(t.name).replace(/"/g,"&quot;")+'" aria-pressed="false">'+HEART_EMPTY+'</button>'
     +'<span class="track-status" id="status-'+i+'"></span></div>';
 }
 

@@ -175,21 +175,21 @@
           <div class="radio-eyebrow-row"><span class="eyebrow">Now playing</span><span class="radio-chip" id="radioSource" style="display:none"><i id="radioSourceIcon" class="ph-fill ph-sparkle" aria-hidden="true"></i><span id="radioSourceText"></span></span></div>
           <div class="radio-track" id="radioTrack">Tuning...</div>
           <div class="radio-artist" id="radioArtist"></div>
-          <button class="radio-btn radio-heart-title" id="radioHeartTitle" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
+          <button class="radio-btn radio-heart-title" id="radioHeartTitle" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs" aria-pressed="false"><i class="ph ph-heart" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="radio-progress">
         <span id="radioElapsed">0:00</span>
-        <div id="radioBar" onclick="seekTo(event)"><div id="radioFill"></div></div>
+        <div class="progress-track" id="radioBar" onclick="seekTo(event)"><div class="progress-fill" id="radioFill"></div></div>
         <span id="radioDuration">0:00</span>
       </div>
       <div class="radio-controls">
-        <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs"><i class="ph ph-heart"></i></button>
+        <button class="radio-btn" id="radioHeart" onclick="toggleLikeCurrentTrack()" aria-label="Save to Liked Songs" aria-pressed="false"><i class="ph ph-heart" aria-hidden="true"></i></button>
         <button class="radio-btn" onclick="playerPrev()" aria-label="Previous"><i class="ph-fill ph-skip-back"></i></button>
         <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
         <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
         <button class="device-btn" id="radioDeviceBtn" onclick="toggleDevicePicker(this)" aria-haspopup="true" aria-expanded="false" aria-label="Choose a device"><i class="ph ph-laptop" id="radioDeviceIcon" aria-hidden="true"></i><span class="device-btn-name" id="radioDeviceName">This browser</span></button>
-        <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" aria-hidden="true"></i><input type="range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
+        <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" aria-hidden="true"></i><input type="range" class="volume-range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
       </div>
     </section>
     <div class="radio-info" id="radioInfo" style="display:none">

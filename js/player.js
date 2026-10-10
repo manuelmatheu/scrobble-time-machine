@@ -419,13 +419,16 @@ async function checkLikedTracks() {
     if (!matchedUris[i]) continue;
     const id = matchedUris[i].split(":").pop();
     const btn = $("heart-" + i);
-    if (btn) {
-      const liked = likedSet.has(id);
-      btn.classList.toggle("liked", liked);
-      btn.innerHTML = liked ? HEART_FILLED : HEART_EMPTY;
-    }
+    if (btn) setHeartBtn(btn, likedSet.has(id));
   }
   updateNowPlayingHeart();
+}
+
+// A track row's heart: icon, color and the pressed state screen readers announce
+function setHeartBtn(btn, liked) {
+  btn.classList.toggle("liked", liked);
+  btn.setAttribute("aria-pressed", liked ? "true" : "false");
+  btn.innerHTML = liked ? HEART_FILLED : HEART_EMPTY;
 }
 
 async function toggleLikeTrack(idx) {
@@ -436,7 +439,7 @@ async function toggleLikeTrack(idx) {
   // Optimistic update
   if (wasLiked) likedSet.delete(id); else likedSet.add(id);
   const btn = $("heart-" + idx);
-  if (btn) { btn.classList.toggle("liked", !wasLiked); btn.innerHTML = !wasLiked ? HEART_FILLED : HEART_EMPTY; }
+  if (btn) setHeartBtn(btn, !wasLiked);
   updateNowPlayingHeart();
 
   try {
@@ -447,7 +450,7 @@ async function toggleLikeTrack(idx) {
   } catch (e) {
     // Revert on error
     if (wasLiked) likedSet.add(id); else likedSet.delete(id);
-    if (btn) { btn.classList.toggle("liked", wasLiked); btn.innerHTML = wasLiked ? HEART_FILLED : HEART_EMPTY; }
+    if (btn) setHeartBtn(btn, wasLiked);
     updateNowPlayingHeart();
     showStatus(e.status === 403 ? "Reconnect Spotify to enable Liked Songs" : "Could not update Liked Songs", "error");
   }
@@ -463,7 +466,7 @@ function updateNowPlayingHeart() {
   const liked = likedSet.has(id);
   for (const id of ["radioHeart", "radioHeartTitle"]) {  // the controls row (desktop) and the title row (phones)
     const rh = $(id);
-    if (rh) { rh.classList.toggle("liked", liked); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart"></i>'; }
+    if (rh) { rh.classList.toggle("liked", liked); rh.setAttribute("aria-pressed", liked ? "true" : "false"); rh.innerHTML = '<i class="' + (liked ? "ph-fill" : "ph") + ' ph-heart" aria-hidden="true"></i>'; }
   }
 }
 

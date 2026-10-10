@@ -39,6 +39,9 @@ Both load from Google Fonts in `index.html`.
 | Row title | 14px / 600 | artist line 12px |
 | Eyebrow / small caps label | 12px / 700, uppercase, letter-spacing 1.5px, `--lastfm-red-text` | "NOW PLAYING", "LIBRARY RADIO" |
 | Chip, helper text | 12px / 600 | |
+| Controls (mood buttons, device button, Save as Playlist, status bar) | 13px / 600-700 | |
+
+Nothing is smaller than **12px** (row numbers, dates and the footer included); `tests/design-system.test.js` checks it.
 
 ### Color tokens
 
@@ -61,6 +64,12 @@ Defined on `:root` (dark) and overridden under `[data-theme="light"]`. Never har
 | `--lastfm-red-subtle` | `rgba(213,16,7,.08)` | `.06` | selected fills |
 | `--spotify-green` | `#1DB954` | same | Spotify-only things (connect, badge, save playlist) |
 | `--success` / `--error` / `--warning` | `#22c55e` / `#ef4444` / `#eab308` | same | match status marks |
+| `--on-accent` | `#ffffff` | same | text on a red fill (primary button) |
+| `--on-spotify` | `#0b0b0f` | same | text on a green fill (Connect Spotify) |
+| `--spotify-green-subtle` / `--spotify-green-border` | `rgba(29,185,84,.08)` / `.25` | same | Spotify badge fill and border, Save as Playlist hover |
+| `--shadow-float` | `0 12px 32px rgba(0,0,0,.35)` | `.12` alpha | floating lists only (autocomplete, device picker) |
+
+The token lines are the first two lines of `style.css` (the contrast test reads them by line number). No hex or `rgba()` appears below them; `tests/design-system.test.js` fails if one does.
 
 Rules: red is the accent for the app's own actions and highlights; green is reserved for Spotify. Red as text always uses `--lastfm-red-text`, never `--lastfm-red`. Selected = red border + `--lastfm-red-subtle` fill, never color alone (the radio dot / check also changes).
 
@@ -68,10 +77,10 @@ The dark theme adds a faint noise overlay (`body::before`, 3% opacity); it is re
 
 ### Shape, spacing, elevation
 
-- **Radii:** cards and panels 16px; list panels, station options, mode cards, segmented control 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px; chips and the play button 999px.
+- **Radii:** cards and panels 16px; list panels (Up next, Tracks), station options, mode cards, segmented control, floating lists 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px (both row families); chips and the play button 999px.
 - **Spacing:** 4px base. Common gaps 6, 8, 10, 12, 14, 16, 20, 28. Card padding 28px (20px on phones). Page container 680px, 20px side padding.
-- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating lists: the autocomplete box and the device picker.
-- **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px).
+- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating lists (`--shadow-float`, on `--bg-elevated`): the autocomplete box and the device picker.
+- **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px). A control that must look smaller (the disconnect x in the Spotify badge) keeps a 44px hit area with an invisible `::before`.
 
 ### Icons
 
@@ -79,11 +88,13 @@ Phosphor web font, regular and fill, from jsDelivr (`@phosphor-icons/web@2.1.1`)
 
 ### Motion
 
-`fade-up` 0.3s for status messages, `overlayIn` 0.2s for the changelog, 0.15s color/border transitions, `radioFill` width 0.25s linear. All animation and transitions are disabled by `prefers-reduced-motion: reduce`.
+Tokens: `--dur-fast` (0.15s, hover and color/border/background changes) and `--dur-base` (0.2s, input borders). `fade-up` 0.3s for status messages, `overlayIn` 0.2s for the changelog, the progress fill width 0.25s linear, a 0.1s press scale on player buttons. Transitions name their properties, never `transition:all`. All animation and transitions are disabled by `prefers-reduced-motion: reduce`.
 
 ---
 
 ## 3. Components
+
+**Naming.** `radio-*` classes belong to the player view (`#radioView`), which serves Library / Discover / Mix radio *and* Time Travel: the prefix means "player view", not "Library Radio". Style with classes, not ids (ids are JS hooks): the progress bar is `.progress-track` / `.progress-fill`, the volume slider `.volume-range`.
 
 ### Buttons
 - **Primary** (`.btn-primary`): red fill, white text; hover lightens and lifts 1px.
@@ -92,6 +103,22 @@ Phosphor web font, regular and fill, from jsDelivr (`@phosphor-icons/web@2.1.1`)
 - **Radio button** (`.btn-radio`): the large call to action, 56px tall, 12px radius, 18px/700. "Start Library radio" / "Start Discover radio" / "Start Mix radio"; when a radio is already running the same slot is a primary **Back to radio** plus a ghost **Start a new radio**.
 - **Text button** (`.btn-text`): Home, Again; 44px tall, no chrome.
 - **Disabled:** 40% opacity, `not-allowed` cursor.
+- Every `.btn` is at least 44px tall.
+
+### Text inputs (`.input-username`, `.mode-input-field`)
+One spec: 44px min height, 10px/14px padding, 14px text, `--bg-secondary` fill, 1px border, 8px radius. Focus: red border plus a 3px `--lastfm-red-glow` ring (instead of the global outline). Selects use the same class with a caret.
+
+### Mood / decade buttons (`.mood-btn`)
+Choice chips inside a mode's inputs (Mood, Decade): 44px tall, 13px (12px on phones), bordered. Active: red border, red text, subtle red fill.
+
+### Autocomplete (`.autocomplete-box`)
+Artist suggestions under the artist field: a floating list on `--bg-elevated` with `--shadow-float`, 12px radius, 44px rows (name, scrobble count in mono). Hover and the keyboard-highlighted row (`.ac-active`) fill `--bg-tertiary`.
+
+### Heart in list rows (`.heart-btn`)
+44px button, muted outline heart; liked = filled heart in `--lastfm-red-text`. `aria-label="Like <track>"` and `aria-pressed` carry the state (`setHeartBtn()` in `player.js`); the player hearts (`#radioHeart`, `#radioHeartTitle`) set `aria-pressed` too.
+
+### Theme toggle (`.theme-toggle`)
+44px square in the header, 1.5px border, icon at 70% opacity (full on hover).
 
 ### Station picker (`.station-picker`)
 Three full-width options stacked: Library, Discover, Mix. Each is a 64px-min card with an icon, a name, a one-line description and a radio dot on the right. Active: red border, subtle red fill, red icon and dot. It stays visible while a radio runs (it chooses the *next* radio; the running one is unaffected). The headline above it follows the picked station. Remembered in `localStorage` (`stm_station`).
@@ -115,7 +142,7 @@ A small pill that says why a track is playing. Red tint with a sparkle icon for 
 Your play counts ("You have played X n times, and this track n times") and a four-line Last.fm bio with a "Read more on Last.fm" link. In Discover the stats line becomes the reason ("New to you. You have never played X. Picked because you listen to Y and Z."). On wide desktop (>=1100px) it becomes a card with a 148px artist photo from Spotify on the left (microphone placeholder when there is none). The panel hides when there is nothing to show.
 
 ### List rows (`.radio-row`, `.track-row`)
-44px minimum, 10px/16px padding, 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check. In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
+44px minimum, 10px/16px padding, 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check (status classes `found` / `not_found` / `searching` / `skipped`, the names `setTrackStatus()` uses). In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
 
 ### Home "playing" strip (`.radio-playing`)
 Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-tertiary` pill, shown when a radio is running behind the home view.
@@ -127,7 +154,7 @@ Only errors (red) and warnings (primary text) are shown, above the content. Prog
 Chooses the Spotify Connect device the music plays on. Two entry points open the same popover: a **Play on** row under the home card's buttons (icon, device name, caret) and a device button in the now-playing controls row (icon only while it plays in this browser, icon + name in red when another device is picked; on phones it is a full-width row under previous / play / next). The popover (`--bg-elevated`, 12px radius, 1px border, shadow like the autocomplete box) has a "PLAY ON" eyebrow with a refresh button, one 48px row per device (type icon, name; the current one gets a subtle red fill, red text and a speaker icon; restricted devices are disabled), and helper text on missing devices (play something on it from the Spotify app first) and Android Auto (pick your phone). It opens below the button, or above when there is no room, and closes on outside click, Escape, scroll or resize. The pick is remembered (`stm_device`).
 
 ### Spotify badge
-Green-tinted pill "Spotify connected" with a small dot and an x to disconnect, in the header.
+Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify connected" with a small dot and an x to disconnect (20px visible, 44px hit area), in the header.
 
 ---
 
@@ -174,7 +201,9 @@ Full-screen overlay with an iframe of `changelog.html`.
 - Targets: at least 44px; the heart in the player is 44px.
 - Semantics: real `<button>` elements; the station picker and Mix balance are `role="group"` with `aria-pressed` on options; icon-only buttons have `aria-label`; the radio view has `aria-label="Radio"`.
 - Selection never relies on color alone (dot, border and fill change together).
-- Reduced motion respected. Focus: text inputs show a red border and glow, the volume slider and the device picker (button and options) a red outline; other buttons, station options and mode cards rely on the browser's default focus ring (no custom style yet, see the audit notes in section 8).
+- Focus: one global ring, `2px solid var(--lastfm-red-text)` at 2px offset, on every button, link, range input and `[tabindex]` under `:focus-visible`. Exceptions: text inputs (their red border and glow) and device picker rows (offset -2px so the scrolling list does not clip it).
+- Toggle buttons expose their state with `aria-pressed` (station picker, Mix balance, hearts).
+- Reduced motion respected.
 
 ---
 
@@ -185,5 +214,4 @@ Full-screen overlay with an iframe of `changelog.html`.
 - **Mix legend.** The Mix mockup shows a small "New / From your past" legend in the Up next header; the app does not have it yet.
 - **Library radio chip.** Library shows no source chip; adding one ("From YEAR") would need a decision on the eyebrow row.
 - **Long names.** Chips truncate at 160-170px; very long artist names make the phone title wrap onto several lines (intended). Check with real data when changing these widths.
-- **Focus styles.** Only inputs, the volume slider and the device picker have a custom focus style; everything else uses the browser default. The canvas mockups assume a red outline on all controls.
 - **Mockup-only copy.** Placeholders in the canvas (`[Track title]`, `[ARTIST]`, `[N]`) stand for real data.
