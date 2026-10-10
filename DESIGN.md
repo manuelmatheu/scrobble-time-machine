@@ -70,7 +70,7 @@ The dark theme adds a faint noise overlay (`body::before`, 3% opacity); it is re
 
 - **Radii:** cards and panels 16px; list panels, station options, mode cards, segmented control 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px; chips and the play button 999px.
 - **Spacing:** 4px base. Common gaps 6, 8, 10, 12, 14, 16, 20, 28. Card padding 28px (20px on phones). Page container 680px, 20px side padding.
-- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on the autocomplete box.
+- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating lists: the autocomplete box and the device picker.
 - **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px).
 
 ### Icons
@@ -106,7 +106,7 @@ Time Travel entry points: icon, name, one-line description; 3 columns (2 on phon
 A small pill that says why a track is playing. Red tint with a sparkle icon for new music ("Last.fm pick", "Similar to X"); neutral with a clock icon for tracks from your past ("From 2014"). Max width 170px in the hero, 160px in rows; text truncates with an ellipsis. It appears in the now-playing eyebrow row (right-aligned) and at the end of Up next rows (Discover and Mix only; Library shows no chip).
 
 ### Now-playing card (`.radio-now`)
-- **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then volume when the Web Playback SDK is active).
+- **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume only while the Web Playback SDK plays here).
 - **Phones (<=520px):** stacks. Full-width square cover, then the text block, progress, and centered controls (previous / play / next). The like heart moves beside the title; the controls row hides its own heart. The eyebrow row extends over the heart's reserved space so the chip's right edge lines up with the cover's right edge.
 - **Play button:** 56px circle, `--text-primary` fill with `--bg-primary` glyph.
 - **Progress:** 6px pill, red fill; clickable to seek.
@@ -122,6 +122,9 @@ Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-t
 
 ### Status bar
 Only errors (red) and warnings (primary text) are shown, above the content. Progress and success messages are not displayed; they clear what was there.
+
+### Device picker (`.device-btn`, `.device-picker`)
+Chooses the Spotify Connect device the music plays on. Two entry points open the same popover: a **Play on** row under the home card's buttons (icon, device name, caret) and a device button in the now-playing controls row (icon only while it plays in this browser, icon + name in red when another device is picked; on phones it is a full-width row under previous / play / next). The popover (`--bg-elevated`, 12px radius, 1px border, shadow like the autocomplete box) has a "PLAY ON" eyebrow with a refresh button, one 48px row per device (type icon, name; the current one gets a subtle red fill, red text and a speaker icon; restricted devices are disabled), and helper text on missing devices (play something on it from the Spotify app first) and Android Auto (pick your phone). It opens below the button, or above when there is no room, and closes on outside click, Escape, scroll or resize. The pick is remembered (`stm_device`).
 
 ### Spotify badge
 Green-tinted pill "Spotify connected" with a small dot and an x to disconnect, in the header.

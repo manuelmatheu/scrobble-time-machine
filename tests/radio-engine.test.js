@@ -741,5 +741,45 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
 
   global.document.getElementById = realGetElementById;
 
+  // Spotify Connect: a picked device wins over the SDK and over the active device
+  {
+    const realFetch = global.fetch, realDevices = global.getSpotifyDevices, stubPlay = global.spotifyPlay;
+    global.spotifyPlay = realSpotifyPlay;  // the fallback re-enters spotifyPlay by name
+    const calls = [];
+    global.fetch = async (url, init) => { calls.push({ url: String(url), body: init && init.body }); return { ok: true, status: 204 }; };
+    run("sdkReady = true; sdkDeviceId = 'sdk'; playbackDeviceId = null;");
+    assert.equal(run("sdkPlaying()"), true);
+    run("playbackDeviceId = 'phone'; playbackDeviceName = 'Pixel';");
+    assert.equal(run("sdkPlaying()"), false);
+    global.getSpotifyDevices = async () => [{ id: "laptop", is_active: true }, { id: "phone", is_active: true }];
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
+    const play = calls.find(c => /me\/player\/play/.test(c.url));
+    assert.ok(/device_id=phone/.test(play.url), "plays on the picked device, not the SDK or the other active one");
+    assert.ok(!calls.some(c => /device_id=sdk/.test(c.url)));
+    // an inactive picked device is transferred to first
+    calls.length = 0;
+    global.getSpotifyDevices = async () => [{ id: "laptop", is_active: true }, { id: "phone", is_active: false }];
+    await realSpotifyPlay("t", ["spotify:track:a"]);
+    assert.ok(calls.some(c => /\/me\/player$/.test(c.url) && /"phone"/.test(c.body)), "transfers to the picked device");
+    // a picked device that is gone: the pick is cleared, with a warning, and the SDK plays
+    calls.length = 0; const warns = [];
+    global.showStatus = (m, t) => { if (t === "warn") warns.push(m); };
+    global.getSpotifyDevices = async () => [{ id: "laptop", is_active: true }];
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
+    assert.equal(run("playbackDeviceId"), null);
+    assert.ok(/Pixel/.test(warns[0]));
+    assert.ok(calls.some(c => /me\/player\/play\?device_id=sdk/.test(c.url)));
+    global.showStatus = () => {};
+    // with another device picked, SDK state events are ignored (polling follows the device)
+    run("playbackDeviceId = 'phone'; nowPlayingIndex = -1; uriToIndices = { 'spotify:track:x': [0] };");
+    let highlighted = null; const realHl = global.highlightNowPlaying;
+    global.highlightNowPlaying = i => { highlighted = i; };
+    run("onSDKStateChange({ paused: true, position: 0, duration: 1000, track_window: { current_track: { uri: 'spotify:track:x' } } })");
+    assert.equal(highlighted, null);
+    global.highlightNowPlaying = realHl;
+    run("playbackDeviceId = null; playbackDeviceName = ''; sdkReady = false; sdkDeviceId = null;");
+    global.fetch = realFetch; global.getSpotifyDevices = realDevices; global.spotifyPlay = stubPlay;
+  }
+
   console.log("radio engine: ok");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -449,7 +449,7 @@ async function continueRadio() {
       } else if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
-    if (radioPaused || sdkReady) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK: swap at the seam (radioMaybeSeam)
+    if (radioPaused || sdkPlaying()) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK: swap at the seam (radioMaybeSeam)
     await radioReissue();
   } finally {
     if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
@@ -459,20 +459,20 @@ async function continueRadio() {
 // Re-issue playback from the current track so the queued tracks include the new ones
 async function radioReissue() {
   const sid = radioSession;
-  const currentUri = sdkReady ? _sdkCurrentUri : radioCurrentUri;
+  const currentUri = sdkPlaying() ? _sdkCurrentUri : radioCurrentUri;
   if (!currentUri) return;
   const uris = radioUrisFrom(matchedUris, allTrackCount, currentUri);
   if (!uris.length) return;
   const token = await getSpotifyToken();
   if (!token || sid !== radioSession) return;
-  await spotifyPlay(token, uris, sdkReady ? _sdkPositionMs : radioLastPos);
+  await spotifyPlay(token, uris, sdkPlaying() ? _sdkPositionMs : radioLastPos);
   checkLikedTracks();
 }
 
 // Track the play/pause state; a top-up that finished while paused re-issues on resume
 function radioSetPaused(paused) {
   radioPaused = paused;
-  if (!paused && radioPendingReissue && !sdkReady) { radioPendingReissue = false; radioReissue(); }
+  if (!paused && radioPendingReissue && !sdkPlaying()) { radioPendingReissue = false; radioReissue(); }
 }
 
 // SDK only. A re-issue restarts the stream (device transfer + play), which stutters if it lands a few
@@ -489,7 +489,7 @@ function radioUnsentUris() {
   return radioUrisFrom(matchedUris, allTrackCount, radioContextLastUri).slice(1);
 }
 function radioMaybeSeam() {
-  if (!(radioActive || travelActive) || !sdkReady || radioSeaming) return;
+  if (!(radioActive || travelActive) || !sdkPlaying() || radioSeaming) return;
   const atLast = !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri;
   if (!radioSeamDue(radioPendingReissue || (atLast && radioUnsentUris().length > 0), atLast, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
   radioSeamReissue();
@@ -550,8 +550,8 @@ let radioVolumeSynced = false;
 function radioSyncVolume() {
   const wrap = $("radioVolumeWrap");
   if (!wrap) return;
-  wrap.classList.toggle("sdk", !!sdkReady);
-  if (!sdkReady || radioVolumeSynced || !window._stmPlayer || !window._stmPlayer.getVolume) return;
+  wrap.classList.toggle("sdk", sdkPlaying());
+  if (!sdkPlaying() || radioVolumeSynced || !window._stmPlayer || !window._stmPlayer.getVolume) return;
   radioVolumeSynced = true;
   Promise.resolve(window._stmPlayer.getVolume()).then(v => {
     const el = $("radioVolume");

@@ -46,6 +46,8 @@ let lastRefreshedUser = "";
 let sdkReady = false;
 let sdkDeviceId = null;
 let sdkNeedsRetransfer = false;
+// Spotify Connect: the device the user picked to play on (null = automatic: this browser through the SDK, else the active device)
+let playbackDeviceId = null, playbackDeviceName = "", playbackDeviceType = "";
 let likedSet = new Set();
 
 // Library Radio

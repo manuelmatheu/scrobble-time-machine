@@ -171,8 +171,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
   const body = positionMs > 0 ? { uris: playUris, position_ms: positionMs } : { uris: playUris };
   const lastUri = playUris[playUris.length - 1];
 
-  // Prefer SDK device when ready
-  if (sdkReady && sdkDeviceId) {
+  // Prefer SDK device when ready (unless the user picked another Spotify Connect device)
+  if (sdkPlaying() && sdkDeviceId) {
     if (!(opts && opts.quick)) {
       await fetch("https://api.spotify.com/v1/me/player", {
         method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
@@ -201,9 +201,20 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     // SDK play failed — fall through to remote
   }
 
-  // Remote fallback: find active device, or transfer to an available one
+  // Remote: the device the user picked, else the active device, else transfer to an available one
   const devices = await getSpotifyDevices(token);
-  let device = devices.find(d => d.is_active);
+  let device = null;
+  if (playbackDeviceId) {
+    device = devices.find(d => d.id === playbackDeviceId);
+    if (!device) {
+      // Gone (switched off, or Spotify closed on it): back to automatic, and through the SDK if this browser has it
+      const name = playbackDeviceName;
+      setPlaybackDevice(null);
+      showStatus(name + " is not available right now. Playing here instead.", "warn");
+      if (sdkPlaying() && sdkDeviceId) return spotifyPlay(token, uris, positionMs, opts);
+    } else if (!device.is_active) await transferPlayback(token, device.id);
+  }
+  if (!device) device = devices.find(d => d.is_active);
 
   if (!device) {
     device = devices.find(d => !d.is_restricted) || devices[0];
@@ -246,6 +257,9 @@ async function spotifyAddToQueue(token, uri) {
   return r.ok || r.status === 204;
 }
 
+// The in-browser SDK device drives playback (ready, and the user has not sent the music to another device)
+function sdkPlaying() { return sdkReady && !playbackDeviceId; }
+
 async function getSpotifyDevices(token) {
   const r = await fetch("https://api.spotify.com/v1/me/player/devices", { headers:{Authorization:"Bearer "+token} });
   if (!r.ok) return []; return (await r.json()).devices || [];
@@ -279,9 +293,10 @@ function initSDKPlayer() {
     const reconnecting = sdkNeedsRetransfer;
     sdkDeviceId = device_id;
     sdkReady = true;
-    stopPolling();
+    if (!playbackDeviceId) stopPolling();  // another Connect device picked: polling keeps following it
+    renderDeviceButtons();
     // Re-transfer playback to SDK device after auth error recovery
-    if (reconnecting && sessionQueue.size > 0 && !sessionPaused) {
+    if (reconnecting && sessionQueue.size > 0 && !sessionPaused && !playbackDeviceId) {
       sdkNeedsRetransfer = false;
       getSpotifyToken().then(t => { if (t) transferPlayback(t, sdkDeviceId).catch(() => {}); });
     }
@@ -290,6 +305,7 @@ function initSDKPlayer() {
     sdkReady = false;
     sdkDeviceId = null;
     if (sessionQueue.size > 0) startPolling();
+    renderDeviceButtons();
   });
   player.addListener('player_state_changed', state => {
     if (state) onSDKStateChange(state);

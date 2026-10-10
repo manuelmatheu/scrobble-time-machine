@@ -247,6 +247,43 @@
 
 @media (max-width:720px) { .radio-volume.sdk { display:none; } }
 
+/* Spotify Connect device picker */
+.device-btn { display:inline-flex; align-items:center; gap:6px; min-height:44px; min-width:44px; justify-content:center; padding:0 10px; background:none; border:none; border-radius:8px; color:var(--text-secondary); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.15s, color 0.15s; }
+.device-btn i { font-size:20px; flex-shrink:0; }
+.device-btn:hover { background:var(--bg-tertiary); color:var(--text-primary); }
+.device-btn:focus-visible { outline:2px solid var(--lastfm-red-text); outline-offset:2px; }
+.device-btn.remote { color:var(--lastfm-red-text); }
+.device-btn-name { max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.radio-controls .device-btn { margin-left:auto; }
+.radio-controls .device-btn + .radio-volume { margin-left:0; }
+.radio-controls .device-btn:not(.remote) .device-btn-name { display:none; }  /* desktop: just the icon while it plays here */
+.home-device { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--text-tertiary); }
+.home-device .device-btn { padding:0 8px; color:var(--text-primary); }
+.home-device .device-btn.remote { color:var(--lastfm-red-text); }
+.home-device .device-btn i.ph-caret-down { font-size:14px; }
+/* a floating list like the autocomplete box, so it is the other surface allowed a shadow */
+.device-picker { position:fixed; z-index:50; box-sizing:border-box; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.35); }
+.device-picker-head { display:flex; align-items:center; justify-content:space-between; padding:0 0 4px 10px; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--lastfm-red-text); }
+.device-picker .device-refresh { width:36px; height:36px; font-size:18px; color:var(--text-secondary); }
+.device-list { display:flex; flex-direction:column; max-height:min(320px, 50vh); overflow-y:auto; }
+.device-opt { display:flex; align-items:center; gap:12px; min-height:48px; padding:0 10px; background:none; border:none; border-radius:8px; color:var(--text-primary); font-family:inherit; font-size:14px; font-weight:500; text-align:left; cursor:pointer; }
+.device-opt:hover:not(:disabled) { background:var(--bg-tertiary); }
+.device-opt:disabled { opacity:0.45; cursor:not-allowed; }
+.device-opt > i:first-child { font-size:22px; color:var(--text-secondary); flex-shrink:0; }
+.device-opt:focus-visible { outline:2px solid var(--lastfm-red-text); outline-offset:-2px; }
+.device-opt.active { background:var(--lastfm-red-subtle); }  /* selected: fill + speaker icon + color, never color alone */
+.device-opt.active, .device-opt.active > i:first-child { color:var(--lastfm-red-text); font-weight:700; }
+.device-opt-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.device-opt-on { font-size:16px; color:var(--lastfm-red-text); }
+.device-empty { padding:12px 10px; font-size:14px; color:var(--text-secondary); }
+.device-hint { margin:6px 10px 4px; font-size:12px; line-height:1.4; color:var(--text-tertiary); }
+@media (max-width:520px) {
+  .radio-controls { flex-wrap:wrap; row-gap:4px; }
+  .radio-controls .device-btn { order:10; flex-basis:100%; margin-left:0; }
+  .radio-controls .device-btn:not(.remote) .device-btn-name { display:inline; }
+  .device-btn-name { max-width:220px; }
+}
+
 /* Reduced motion: everything collapses to static */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
