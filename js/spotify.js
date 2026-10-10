@@ -206,6 +206,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
   let device = null;
   if (playbackDeviceId) {
     device = devices.find(d => d.id === playbackDeviceId);
+    // Not listed is not always gone: Spotify leaves some devices it is playing on out of the list (many Sonos)
+    if (!device && await spotifyPlayDirect(token, body, playbackDeviceId)) { radioContextLastUri = lastUri; return true; }
     if (!device) {
       // Gone (switched off, or Spotify closed on it): back to automatic, and through the SDK if this browser has it
       const name = playbackDeviceName;
@@ -215,6 +217,9 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     } else if (!device.is_active) await transferPlayback(token, device.id);
   }
   if (!device) device = devices.find(d => d.is_active);
+  // Nothing listed as active: Spotify may still be playing on a device it does not list (moved there from the
+  // Spotify app, e.g. a Sonos). A play without device_id goes to that device; only if there is none, pick one
+  if (!device && devices.length && await spotifyPlayDirect(token, body)) { radioContextLastUri = lastUri; return true; }
 
   if (!device) {
     device = devices.find(d => !d.is_restricted) || devices[0];
@@ -251,6 +256,17 @@ async function spotifyPlay(token, uris, positionMs, opts) {
   return false;
 }
 
+// One play request (on deviceId, or wherever Spotify is playing when it is omitted): true when Spotify took it
+async function spotifyPlayDirect(token, body, deviceId) {
+  try {
+    const r = await fetch("https://api.spotify.com/v1/me/player/play" + (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : ""), {
+      method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    return r.ok || r.status === 204;
+  } catch { return false; }
+}
+
 async function spotifyAddToQueue(token, uri) {
   const r = await fetch("https://api.spotify.com/v1/me/player/queue?" + new URLSearchParams({uri}), {
     method:"POST", headers:{Authorization:"Bearer "+token} });
@@ -265,9 +281,10 @@ async function getSpotifyDevices(token) {
   if (!r.ok) return []; return (await r.json()).devices || [];
 }
 
+// /me/player rather than /currently-playing: same item / is_playing / progress_ms, plus the device it plays on
 async function getCurrentlyPlaying(token) {
   try {
-    const r = await fetch("https://api.spotify.com/v1/me/player/currently-playing", { headers:{Authorization:"Bearer "+token} });
+    const r = await fetch("https://api.spotify.com/v1/me/player", { headers:{Authorization:"Bearer "+token} });
     if (r.status === 204 || !r.ok) return null;
     return await r.json();
   } catch { return null; }
@@ -309,6 +326,7 @@ function initSDKPlayer() {
   });
   player.addListener('player_state_changed', state => {
     if (state) onSDKStateChange(state);
+    else if (sdkPlaying() && sessionQueue.size > 0) sdkLostPlayback();  // moved to another device (e.g. from the Spotify app)
   });
   player.addListener('initialization_error', () => {
     sdkReady = false;

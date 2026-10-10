@@ -761,15 +761,37 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     global.getSpotifyDevices = async () => [{ id: "laptop", is_active: true }, { id: "phone", is_active: false }];
     await realSpotifyPlay("t", ["spotify:track:a"]);
     assert.ok(calls.some(c => /\/me\/player$/.test(c.url) && /"phone"/.test(c.body)), "transfers to the picked device");
-    // a picked device that is gone: the pick is cleared, with a warning, and the SDK plays
+    // a picked device Spotify does not list but still plays on (many Sonos): played directly, the pick stays
+    calls.length = 0;
+    global.getSpotifyDevices = async () => [{ id: "laptop", is_active: true }];
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
+    assert.equal(run("playbackDeviceId"), "phone");
+    assert.ok(calls.some(c => /me\/player\/play\?device_id=phone/.test(c.url)));
+    // a picked device that is gone (Spotify refuses it): the pick is cleared, with a warning, and the SDK plays
     calls.length = 0; const warns = [];
     global.showStatus = (m, t) => { if (t === "warn") warns.push(m); };
-    global.getSpotifyDevices = async () => [{ id: "laptop", is_active: true }];
+    global.fetch = async (url, init) => { calls.push({ url: String(url), body: init && init.body }); return /device_id=phone/.test(String(url)) ? { ok: false, status: 404 } : { ok: true, status: 204 }; };
     assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
     assert.equal(run("playbackDeviceId"), null);
     assert.ok(/Pixel/.test(warns[0]));
     assert.ok(calls.some(c => /me\/player\/play\?device_id=sdk/.test(c.url)));
     global.showStatus = () => {};
+    global.fetch = async (url, init) => { calls.push({ url: String(url), body: init && init.body }); return { ok: true, status: 204 }; };
+    // automatic, nothing listed as active: play where Spotify is playing (no device_id) before picking a device
+    run("sdkReady = false; playbackDeviceId = null;"); calls.length = 0;
+    global.getSpotifyDevices = async () => [{ id: "laptop", is_active: false }];
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
+    assert.ok(/me\/player\/play$/.test(calls[0].url), "no device_id first");
+    assert.ok(!calls.some(c => /\/me\/player$/.test(c.url)), "no transfer away from an unlisted active device");
+    run("sdkReady = true;");
+    // the session moved to another device outside STM: follow it; back on the SDK device: automatic again
+    run("sessionQueue = new Set(['spotify:track:x']);");
+    run("followPlaybackDevice({ device: { id: 'sonos', name: 'Living Room', type: 'Speaker' }, item: { uri: 'spotify:track:x' } })");
+    assert.equal(run("playbackDeviceId"), "sonos");
+    run("followPlaybackDevice({ device: { id: 'other' }, item: { uri: 'spotify:track:not-ours' } })");
+    assert.equal(run("playbackDeviceId"), "sonos", "not our session: ignored");
+    run("followPlaybackDevice({ device: { id: 'sdk' }, item: { uri: 'spotify:track:x' } })");
+    assert.equal(run("playbackDeviceId"), null);
     // with another device picked, SDK state events are ignored (polling follows the device)
     run("playbackDeviceId = 'phone'; nowPlayingIndex = -1; uriToIndices = { 'spotify:track:x': [0] };");
     let highlighted = null; const realHl = global.highlightNowPlaying;

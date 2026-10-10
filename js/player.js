@@ -19,6 +19,7 @@ async function pollNowPlaying() {
   if (!data || !data.item) return;
 
   const playingUri = data.item.uri;
+  followPlaybackDevice(data);
 
   // Session check: is Spotify playing one of our queued tracks?
   if (sessionQueue.size > 0 && !sessionQueue.has(playingUri)) {
@@ -545,6 +546,8 @@ async function refreshDevicePicker() {
   // This browser's SDK device first (Spotify may not list it until it has played)
   devices = devices.filter(d => d.id !== sdkDeviceId);
   if (sdkReady && sdkDeviceId) devices.unshift({ id: sdkDeviceId, name: "This browser", type: "Computer", browser: true });
+  // A followed device Spotify does not list (many Sonos) still shows as the current one
+  if (playbackDeviceId && !devices.some(d => d.id === playbackDeviceId)) devices.push({ id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType });
   const current = playbackDeviceId || (sdkReady ? sdkDeviceId : (devices.find(d => d.is_active) || {}).id);
   list.innerHTML = devices.length ? devices.map((d, i) =>
     '<button class="device-opt' + (d.id === current ? " active" : "") + '" data-i="' + i + '"' + (d.is_restricted ? " disabled" : "") + '>' +
@@ -585,6 +588,25 @@ async function selectPlaybackDevice(dev) {
   if (!ok) { showStatus("Could not switch to " + (dev.name || "that device") + ". Open Spotify on it and try again.", "error"); return; }
   if (toBrowser) stopPolling();
   else { clearInterval(_sdkProgressTimer); startPolling(); setTimeout(pollNowPlaying, 1500); }
+}
+
+// The session was moved to another device outside STM (the Spotify app, a speaker's own app): follow it, so
+// top-ups go there instead of pulling the music back. Devices Spotify does not list (many Sonos) are followed too.
+function followPlaybackDevice(data) {
+  const d = data && data.device;
+  if (!d || !d.id || !data.item || !sessionQueue.has(data.item.uri)) return;
+  if (d.id === sdkDeviceId) { if (playbackDeviceId) setPlaybackDevice(null); return; }
+  if (d.id !== playbackDeviceId) setPlaybackDevice({ id: d.id, name: d.name, type: d.type });
+}
+// SDK: our device stopped being the player. If the session plays elsewhere now, follow it and poll it
+async function sdkLostPlayback() {
+  await new Promise(r => setTimeout(r, 1000));  // let Spotify settle on the new device
+  if (!sdkPlaying() || sessionQueue.size === 0) return;
+  const token = await getSpotifyToken();
+  const data = token ? await getCurrentlyPlaying(token) : null;
+  if (!data || !data.device || data.device.id === sdkDeviceId) return;
+  followPlaybackDevice(data);
+  if (!sdkPlaying()) { clearInterval(_sdkProgressTimer); startPolling(); }
 }
 
 if (typeof window !== "undefined" && window.addEventListener) {
