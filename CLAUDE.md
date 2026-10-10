@@ -29,6 +29,7 @@ No build step, no package manager, no linter -- there is nothing to install or c
 
 ```
 index.html          -- Page shell, script load order
+DESIGN.md           -- Design reference: tokens, components, screens, breakpoints (code wins over the canvas mockups)
 css/
   style.css         -- All styles; single file; CSS custom properties for theming
 tests/              -- node test scripts (see Development)
