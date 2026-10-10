@@ -174,7 +174,7 @@ Full-screen overlay with an iframe of `changelog.html`.
 - Targets: at least 44px; the heart in the player is 44px.
 - Semantics: real `<button>` elements; the station picker and Mix balance are `role="group"` with `aria-pressed` on options; icon-only buttons have `aria-label`; the radio view has `aria-label="Radio"`.
 - Selection never relies on color alone (dot, border and fill change together).
-- Reduced motion respected. Focus: text inputs show a red border and glow, the volume slider a red outline; buttons, station options and mode cards rely on the browser's default focus ring (no custom style yet, see the audit notes in section 8).
+- Reduced motion respected. Focus: text inputs show a red border and glow, the volume slider and the device picker (button and options) a red outline; other buttons, station options and mode cards rely on the browser's default focus ring (no custom style yet, see the audit notes in section 8).
 
 ---
 
@@ -185,5 +185,5 @@ Full-screen overlay with an iframe of `changelog.html`.
 - **Mix legend.** The Mix mockup shows a small "New / From your past" legend in the Up next header; the app does not have it yet.
 - **Library radio chip.** Library shows no source chip; adding one ("From YEAR") would need a decision on the eyebrow row.
 - **Long names.** Chips truncate at 160-170px; very long artist names make the phone title wrap onto several lines (intended). Check with real data when changing these widths.
-- **Focus styles.** Only inputs and the volume slider have a custom focus style; everything else uses the browser default. The canvas mockups assume a red outline on all controls.
+- **Focus styles.** Only inputs, the volume slider and the device picker have a custom focus style; everything else uses the browser default. The canvas mockups assume a red outline on all controls.
 - **Mockup-only copy.** Placeholders in the canvas (`[Track title]`, `[ARTIST]`, `[N]`) stand for real data.
