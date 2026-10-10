@@ -258,6 +258,7 @@ async function spotifyPlay(token, uris, positionMs, opts) {
 
 // One play request (on deviceId, or wherever Spotify is playing when it is omitted): true when Spotify took it
 async function spotifyPlayDirect(token, body, deviceId) {
+  if (isUnlistedDeviceId(deviceId)) deviceId = null;  // no real id to send: Spotify plays on the device it is already on
   try {
     const r = await fetch("https://api.spotify.com/v1/me/player/play" + (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : ""), {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },

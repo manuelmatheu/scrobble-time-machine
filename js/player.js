@@ -475,12 +475,17 @@ function updateNowPlayingHeart() {
 const DEVICE_ICONS = { computer: "ph-laptop", smartphone: "ph-device-mobile", tablet: "ph-device-tablet", speaker: "ph-speaker-hifi", tv: "ph-television", automobile: "ph-car", castaudio: "ph-speaker-hifi", castvideo: "ph-television", gameconsole: "ph-game-controller" };
 function deviceIcon(type) { return DEVICE_ICONS[String(type || "").toLowerCase()] || "ph-speaker-simple-high"; }
 
+// Some devices (many Sonos) come back from /me/player with device.id null. They get a stand-in id so they can be
+// followed; it is never sent to Spotify (spotifyPlayDirect omits device_id) nor remembered across reloads.
+const UNLISTED_PREFIX = "unlisted:";
+function isUnlistedDeviceId(id) { return typeof id === "string" && id.indexOf(UNLISTED_PREFIX) === 0; }
+
 function setPlaybackDevice(dev) {
   playbackDeviceId = dev ? dev.id : null;
   playbackDeviceName = dev ? dev.name || "" : "";
   playbackDeviceType = dev ? dev.type || "" : "";
   try {
-    if (dev) localStorage.setItem("stm_device", JSON.stringify({ id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType }));
+    if (dev && !isUnlistedDeviceId(dev.id)) localStorage.setItem("stm_device", JSON.stringify({ id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType }));
     else localStorage.removeItem("stm_device");
   } catch {}
   renderDeviceButtons();
@@ -594,9 +599,11 @@ async function selectPlaybackDevice(dev) {
 // top-ups go there instead of pulling the music back. Devices Spotify does not list (many Sonos) are followed too.
 function followPlaybackDevice(data) {
   const d = data && data.device;
-  if (!d || !d.id || !data.item || !sessionQueue.has(data.item.uri)) return;
-  if (d.id === sdkDeviceId) { if (playbackDeviceId) setPlaybackDevice(null); return; }
-  if (d.id !== playbackDeviceId) setPlaybackDevice({ id: d.id, name: d.name, type: d.type });
+  if (!d || !data.item || !sessionQueue.has(data.item.uri)) return;
+  const id = d.id || (d.name ? UNLISTED_PREFIX + d.name : null);
+  if (!id) return;
+  if (id === sdkDeviceId) { if (playbackDeviceId) setPlaybackDevice(null); return; }
+  if (id !== playbackDeviceId) setPlaybackDevice({ id, name: d.name, type: d.type });
 }
 // SDK: our device stopped being the player. If the session plays elsewhere now, follow it and poll it
 async function sdkLostPlayback() {
@@ -609,7 +616,20 @@ async function sdkLostPlayback() {
   if (!sdkPlaying()) { clearInterval(_sdkProgressTimer); startPolling(); }
 }
 
+// The SDK does not always send its null state when the music is moved away (a Sonos taken over from the Spotify
+// app never did), so while the SDK is the player and a session runs, check now and then that it still has a state.
+let _sdkWatchBusy = false;
+async function sdkWatchPlayback() {
+  if (_sdkWatchBusy || !sdkPlaying() || sessionQueue.size === 0 || !window._stmPlayer) return;
+  _sdkWatchBusy = true;
+  try {
+    const st = await window._stmPlayer.getCurrentState();
+    if (!st) await sdkLostPlayback();
+  } catch {} finally { _sdkWatchBusy = false; }
+}
+
 if (typeof window !== "undefined" && window.addEventListener) {
+  setInterval(sdkWatchPlayback, POLL_INTERVAL);
   window.addEventListener("resize", () => closeDevicePicker());
   window.addEventListener("scroll", () => closeDevicePicker(), { passive: true });
 }
