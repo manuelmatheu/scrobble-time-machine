@@ -2,7 +2,15 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.8 (current) ✅
+## v2.9 (current) ✅
+
+- [x] Spotify Connect device picker ("Play on") on the home card and in the radio controls; switching mid-session keeps the queue and position
+- [x] Follows the session when it is moved to another device from the Spotify app, including devices Spotify returns without an id (many Sonos), which are shown but cannot be controlled from STM
+- [x] A watchdog notices when the SDK loses playback without sending its null state
+
+---
+
+## v2.8 ✅
 
 - [x] Stations on the home card: Library (your history), Discover (new music) and Mix (both, with a balance control)
 - [x] Discover: Last.fm's personalized station plus artists similar to your top artists of the last month; songs you played or saved are skipped
@@ -86,6 +94,8 @@ A living document tracking planned features, improvements, and ideas for future 
 ---
 
 ## Next up (v2.x)
+
+- [ ] Sonos: Spotify answers `403 "Restricted device"` to `play` and `next` on it, so STM cannot skip, play from a row or top up the queue there, and a failed play falls back to this browser. Show a clear message instead of moving the music, and/or send up to 100 tracks in the first play so the queue lasts longer
 
 ---
 
