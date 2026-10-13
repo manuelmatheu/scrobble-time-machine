@@ -201,6 +201,10 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     // SDK play failed — fall through to remote
   }
 
+  // The swap at the seam on another device: no device list, transfer or resets (the session's first play did them); straight to the
+  // picked device, or wherever Spotify is already playing. If that fails the full logic below runs.
+  if (opts && opts.quick && !sdkPlaying() && await spotifyPlayDirect(token, body, playbackDeviceId)) { radioContextLastUri = lastUri; return true; }
+
   // Remote: the device the user picked, else the active device, else transfer to an available one
   const devices = await getSpotifyDevices(token);
   let device = null;

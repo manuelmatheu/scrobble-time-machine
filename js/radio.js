@@ -449,7 +449,7 @@ async function continueRadio() {
       } else if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
-    if (radioPaused || sdkPlaying()) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK: swap at the seam (radioMaybeSeam)
+    if (radioPaused || radioCanSeam()) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK or a polled device: swap at the seam (radioMaybeSeam / radioRemoteTick)
     await radioReissue();
   } finally {
     if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
@@ -472,7 +472,7 @@ async function radioReissue() {
 // Track the play/pause state; a top-up that finished while paused re-issues on resume
 function radioSetPaused(paused) {
   radioPaused = paused;
-  if (!paused && radioPendingReissue && !sdkPlaying()) { radioPendingReissue = false; radioReissue(); }
+  if (!paused && radioPendingReissue && !radioCanSeam()) { radioPendingReissue = false; radioReissue(); }
 }
 
 // SDK only. A re-issue restarts the stream (device transfer + play), which stutters if it lands a few
@@ -488,6 +488,31 @@ function radioUnsentUris() {
   if (!radioContextLastUri) return [];
   return radioUrisFrom(matchedUris, allTrackCount, radioContextLastUri).slice(1);
 }
+// Polling (the music plays on another Connect device): is there a recent reading to time a swap from?
+function radioCanSeam() { return sdkPlaying() || (!!remoteNow && Date.now() - remoteNow.at < REMOTE_FRESH_MS); }
+// ms left in the track of a /me/player reading, extrapolated from when it was taken (null: unknown)
+function radioRemoteLeft(r, now) {
+  if (!r || !(r.dur > 0)) return null;
+  return r.dur - (r.pos + (r.playing ? now - r.at : 0));
+}
+// The 250ms tick for another device (the SDK timer does not exist there): when the last track we sent is about to end and
+// we hold tracks Spotify was not sent, swap them in. Near the end it re-reads /me/player every second, since the position
+// is only as exact as the last reading.
+function radioRemoteTick() {
+  if (!(radioActive || travelActive) || sdkPlaying() || radioSeaming || radioPaused || !remoteNow || !remoteNow.playing) return;
+  if (!radioContextLastUri || remoteNow.uri !== radioContextLastUri || !radioUnsentUris().length) return;
+  const now = Date.now(), left = radioRemoteLeft(remoteNow, now);
+  if (left === null || now - remoteSeamAt < 3000) return;
+  if (radioSeamDue(true, true, remoteNow.dur - left, remoteNow.dur, RADIO_REMOTE_SEAM_MS)) { remoteSeamAt = now; radioSeamReissue(); return; }
+  if (left <= 12000 && now - remoteFastAt >= 1000 && typeof pollNowPlaying === "function") { remoteFastAt = now; pollNowPlaying(); }
+}
+// Spotify ran past the last track we sent (we missed the swap) and moved on to something else: put the tracks back now
+function radioRecoverRunOff(prevUri) {
+  if (!(radioActive || travelActive) || radioSeaming || !radioContextLastUri || prevUri !== radioContextLastUri || !radioUnsentUris().length) return false;
+  radioLog("run-off: Spotify moved past the last queued track, re-issuing late");
+  radioSeamReissue();
+  return true;
+}
 function radioMaybeSeam() {
   if (!(radioActive || travelActive) || !sdkPlaying() || radioSeaming) return;
   const atLast = !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri;
@@ -500,7 +525,8 @@ async function radioSeamReissue() {
   radioPendingReissue = false;
   try {
     const sid = radioSession;
-    const uris = radioUrisFrom(matchedUris, allTrackCount, _sdkCurrentUri).slice(1);  // drop the track that is ending
+    const ending = sdkPlaying() ? _sdkCurrentUri : radioContextLastUri;  // another device: the swap only fires at the last track we sent
+    const uris = radioUrisFrom(matchedUris, allTrackCount, ending).slice(1);  // drop the track that is ending
     radioLog("seam: swapping in", uris.length, "tracks");
     if (!uris.length) return;
     const token = await getSpotifyToken();
@@ -522,7 +548,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false;
-  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null;
   hideRadioView();
 }
 
@@ -855,5 +881,5 @@ async function radioPlayFrom(idx) {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt };
+  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt, radioRemoteLeft };
 }

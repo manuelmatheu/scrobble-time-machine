@@ -7,6 +7,8 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Spotify Connect device picker ("Play on") on the home card and in the radio controls; switching mid-session keeps the queue and position
 - [x] Follows the session when it is moved to another device from the Spotify app, including devices Spotify returns without an id (many Sonos), which are shown but cannot be controlled from STM
 - [x] A watchdog notices when the SDK loses playback without sending its null state
+- [x] New tracks reach a speaker or other Connect device at the end of the last queued song (like in the browser), instead of restarting the music mid-song
+- [x] The device list refreshes by itself while open, has a labelled Refresh button and explains why Chromecast, Nest and Sonos speakers may be missing
 
 ---
 
