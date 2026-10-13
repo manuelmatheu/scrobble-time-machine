@@ -560,8 +560,9 @@ function placeDevicePicker() {
 
 // What the picker says under the list: Google Cast and Sonos speakers are only listed by Spotify after something has played on them
 function deviceHintText(others, any) {
-  const how = "Chromecast, Google Nest and Sonos speakers show up here only after something has played on them from the Spotify app. Start a song there and this list updates by itself. For Android Auto, pick your phone.";
-  return others ? "Missing a speaker? " + how : (any ? "Only this browser is listed. " : "Spotify lists no devices right now. ") + how;
+  if (others) return "Missing a speaker? Play something on it from the Spotify app first.";
+  return any ? "Only this browser is listed. Nest, Chromecast and Sonos appear after you play something on them from the Spotify app."
+             : "No devices listed. Play something from the Spotify app first.";
 }
 let devicePickerSig = "";
 async function refreshDevicePicker(quiet) {
