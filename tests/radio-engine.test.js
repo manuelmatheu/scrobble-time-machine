@@ -42,6 +42,8 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(meta0.name, "Song 0");
   assert.ok(meta0.page >= 1 && meta0.page <= 1000);
   assert.equal(meta0.year, 2017);
+  assert.equal(meta0.fromPast, true);  // a Library pick is from your history: "From 2017" in the hero and the Up next row
+  assert.match(run("radioQueueRowHtml(0, trackMeta[0], s => s)"), /radio-chip past.*From 2017/);
 
   // 2. the same scrobble picked twice is queued once
   reset(); const seq = [0, 0, 1, 2]; let c = 0;
@@ -356,9 +358,9 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   mReset("balanced");
   assert.equal(await run("radioFill(6)"), 6);
   assert.deepEqual([0, 1, 2, 3, 4, 5].map(origin), ["past", "new", "past", "new", "past", "new"]);
-  assert.equal(run("trackMeta[0].mixPast"), true);   // from your history, shown as "From 2014"
+  assert.equal(run("trackMeta[0].fromPast"), true);   // from your history, shown as "From 2014"
   assert.equal(run("trackMeta[0].year"), 2014);
-  assert.equal(run("trackMeta[1].mixPast"), undefined);
+  assert.equal(run("trackMeta[1].fromPast"), undefined);
   assert.equal(run("trackMeta[1].source"), "Last.fm pick");
   mReset("mostly-past");
   assert.equal(await run("radioFill(8)"), 8);

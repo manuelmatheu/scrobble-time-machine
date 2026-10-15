@@ -130,7 +130,7 @@ Only visible when Mix is picked. Label "How much is new" above a 3-option segmen
 Time Travel entry points: icon, name, one-line description; 3 columns (2 on phones). Selecting one reveals its input block below the grid. Active uses the same red-border treatment as station options.
 
 ### Source chip (`.radio-chip`)
-A small pill that says why a track is playing. Red tint with a sparkle icon for new music ("Last.fm pick", "Similar to X"); neutral with a clock icon for tracks from your past ("From 2014"). Max width 170px in the hero, 160px in rows; text truncates with an ellipsis. It appears in the now-playing eyebrow row (right-aligned) and at the end of Up next rows (Discover and Mix only; Library shows no chip).
+A small pill that says why a track is playing. Red tint with a sparkle icon for new music ("Last.fm pick", "Similar to X"); neutral with a clock icon for tracks from your past ("From 2014"; every Library pick has it, and the past half of a Mix). Max width 170px in the hero, 160px in rows; text truncates with an ellipsis. It appears in the now-playing eyebrow row (right-aligned) and at the end of Up next rows (Library, Discover and Mix).
 
 ### Now-playing card (`.radio-now`)
 - **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume only while the Web Playback SDK plays here).
@@ -212,6 +212,5 @@ Full-screen overlay with an iframe of `changelog.html`.
 - **Heart alignment on phones.** The mockups for Discover and Mix now put the like heart at the top, aligned with the song title. The app still centers it vertically on the text block. Pending.
 - **Chip position on phones.** Right-aligned with the cover's right edge (applied, PR #8). Alternatives tried and rejected: chip directly after "NOW PLAYING"; chip on the artist line; no "NOW PLAYING" label; a compact player without the large cover.
 - **Mix legend.** The Mix mockup shows a small "New / From your past" legend in the Up next header; the app does not have it yet.
-- **Library radio chip.** Library shows no source chip; adding one ("From YEAR") would need a decision on the eyebrow row.
 - **Long names.** Chips truncate at 160-170px; very long artist names make the phone title wrap onto several lines (intended). Check with real data when changing these widths.
 - **Mockup-only copy.** Placeholders in the canvas (`[Track title]`, `[ARTIST]`, `[N]`) stand for real data.

@@ -368,7 +368,7 @@ async function radioFill(want) {
           lfmArtist: p.artist, lfmTrack: p.track  // the scrobble's own names, for Last.fm getInfo lookups
         };
         if (p.source) Object.assign(trackMeta[idx], { source: p.source, kind: p.kind, artistPlays: p.artistPlays });
-        else if (station === "mix") trackMeta[idx].mixPast = true;  // from your history, in a mix
+        else trackMeta[idx].fromPast = true;  // from your history (Library, and the past half of a Mix): shown as "From YEAR"
         added++;
       }
       await radioSleep(SEARCH_DELAY);
@@ -831,7 +831,7 @@ function radioRenderNow(track, paused) {
   radioNowLabel = (track.name || (meta && meta.name) || "") + (artists ? " \u00b7 " + artists : "");
   radioNowPaused = !!paused;
   radioSyncVolume();
-  const fromPast = radioActive && meta && meta.mixPast && meta.year;
+  const fromPast = radioActive && meta && meta.fromPast && meta.year;
   radioShowSource(radioActive && meta && meta.source ? meta.source : fromPast ? "From " + meta.year : "", !!fromPast);
   if (radioMinimized) radioSyncHome();
   radioSyncInfo();
@@ -846,7 +846,7 @@ function radioQueueRowHtml(idx, m, esc) {
     ? '<img class="radio-row-art" src="' + m.art + '" alt="" loading="lazy">'
     : '<div class="radio-row-art"></div>';
   const chip = m.source ? '<span class="radio-chip"><i class="ph-fill ph-sparkle" aria-hidden="true"></i><span>' + esc(m.source) + '</span></span>'
-    : m.mixPast && m.year ? '<span class="radio-chip past"><i class="ph ph-clock" aria-hidden="true"></i><span>From ' + esc(String(m.year)) + '</span></span>' : '';
+    : m.fromPast && m.year ? '<span class="radio-chip past"><i class="ph ph-clock" aria-hidden="true"></i><span>From ' + esc(String(m.year)) + '</span></span>' : '';
   return '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + idx + ')">' + art
     + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div>' + chip + '</div>';
 }
