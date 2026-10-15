@@ -47,6 +47,12 @@ assert.equal(r.radioShouldRefill({ ...s, exhausted: true }, 2), false);
 assert.equal(r.radioShouldRefill({ ...s, active: false }, 2), false);
 assert.equal(r.radioShouldRefill({ ...s, remaining: Infinity }, 2), false);
 
+// radioRemoteLeft: ms left in a track from a /me/player reading, extrapolated between polls (another Connect device)
+assert.equal(r.radioRemoteLeft({ pos: 100000, dur: 180000, playing: true, at: 1000 }, 6000), 75000);   // 5s since the reading
+assert.equal(r.radioRemoteLeft({ pos: 100000, dur: 180000, playing: false, at: 1000 }, 6000), 80000);  // paused: the clock does not run
+assert.equal(r.radioRemoteLeft({ pos: 0, dur: 0, playing: true, at: 0 }, 5), null);                    // no duration yet
+assert.equal(r.radioRemoteLeft(null, 5), null);
+
 // radioSeamDue: swap new tracks in only at the end of the last queued track
 assert.equal(r.radioSeamDue(true, true, 178500, 180000, 1500), true);
 assert.equal(r.radioSeamDue(true, true, 10000, 180000, 1500), false);   // mid-song: never

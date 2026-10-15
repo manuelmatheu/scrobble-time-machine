@@ -11,18 +11,26 @@ function stopPolling() {
   nowPlayingIndex = -1;
 }
 
+let _pollBusy = false;
 async function pollNowPlaying() {
-  if (sdkPlaying()) return;
+  if (sdkPlaying() || _pollBusy) return;
+  _pollBusy = true;
+  try { await pollNowPlayingOnce(); } finally { _pollBusy = false; }
+}
+async function pollNowPlayingOnce() {
   const token = await getSpotifyToken();
   if (!token) return;
   const data = await getCurrentlyPlaying(token);
   if (!data || !data.item) return;
 
   const playingUri = data.item.uri;
+  const prevUri = remoteNow && remoteNow.uri;
+  remoteNow = { uri: playingUri, pos: data.progress_ms || 0, dur: data.item.duration_ms || 0, playing: !!data.is_playing, at: Date.now() };
   followPlaybackDevice(data);
 
   // Session check: is Spotify playing one of our queued tracks?
   if (sessionQueue.size > 0 && !sessionQueue.has(playingUri)) {
+    if (radioRecoverRunOff(prevUri)) return;  // it ran past the last track we sent: the swap was missed, put our tracks back
     if (!sessionPaused) {
       sessionPaused = true;
       highlightNowPlaying(-1);
@@ -119,7 +127,7 @@ async function continueMatching() {
       if (tok2) {
         // With the SDK, swap the new tracks in at the end of the last queued track: a re-issue
         // mid-song restarts the stream and stutters (see radioMaybeSeam)
-        if (sdkPlaying()) radioPendingReissue = true;
+        if (radioCanSeam()) radioPendingReissue = true;
         else await spotifyPlay(tok2, remainingUris, _sdkPositionMs || 0);
         remainingUris.forEach(u => sessionQueue.add(u));
       }
@@ -526,8 +534,13 @@ async function toggleDevicePicker(btn) {
   btn.setAttribute("aria-expanded", "true");
   placeDevicePicker();
   await refreshDevicePicker();
+  // A speaker appears once something plays on it from the Spotify app: look again by itself while the list is open
+  clearInterval(devicePickerTimer);
+  devicePickerTimer = setInterval(() => refreshDevicePicker(true), 4000);
 }
+let devicePickerTimer = null;
 function closeDevicePicker() {
+  clearInterval(devicePickerTimer); devicePickerTimer = null;
   const pop = $("devicePicker");
   if (pop) pop.style.display = "none";
   if (devicePickerAnchor) devicePickerAnchor.setAttribute("aria-expanded", "false");
@@ -545,10 +558,17 @@ function placeDevicePicker() {
   pop.style.top = (below ? r.bottom + 8 : r.top - 8 - h) + "px";
 }
 
-async function refreshDevicePicker() {
+// What the picker says under the list: Google Cast and Sonos speakers are only listed by Spotify after something has played on them
+function deviceHintText(others, any) {
+  if (others) return "Missing a speaker? Play something on it from the Spotify app first.";
+  return any ? "Only this browser is listed. Nest, Chromecast and Sonos appear after you play something on them from the Spotify app."
+             : "No devices listed. Play something from the Spotify app first.";
+}
+let devicePickerSig = "";
+async function refreshDevicePicker(quiet) {
   const list = $("deviceList");
   if (!list) return;
-  list.innerHTML = '<div class="device-empty">Looking for devices...</div>';
+  if (!quiet) { devicePickerSig = ""; list.innerHTML = '<div class="device-empty">Looking for devices...</div>'; }
   const token = await getSpotifyToken();
   let devices = token ? await getSpotifyDevices(token).catch(() => []) : [];
   // This browser's SDK device first (Spotify may not list it until it has played)
@@ -557,6 +577,13 @@ async function refreshDevicePicker() {
   // A followed device Spotify does not list (many Sonos) still shows as the current one
   if (playbackDeviceId && !devices.some(d => d.id === playbackDeviceId)) devices.push({ id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType });
   const current = playbackDeviceId || (sdkReady ? sdkDeviceId : (devices.find(d => d.is_active) || {}).id);
+  const others = devices.some(d => !d.browser);
+  const hint = $("deviceHint");
+  if (hint) { hint.textContent = deviceHintText(others, devices.length > 0); hint.classList.toggle("empty", !others); }
+  // The quiet refresh leaves the list alone when nothing changed (a click must not land on a list that was just rebuilt)
+  const sig = devices.map(d => d.id + "|" + d.name + "|" + (d.is_restricted ? 1 : 0)).join(",") + ">" + current;
+  if (quiet && sig === devicePickerSig) return;
+  devicePickerSig = sig;
   list.innerHTML = devices.length ? devices.map((d, i) =>
     '<button class="device-opt' + (d.id === current ? " active" : "") + '" data-i="' + i + '"' + (d.is_restricted ? " disabled" : "") + '>' +
     '<i class="ph ' + deviceIcon(d.type) + '" aria-hidden="true"></i><span class="device-opt-name">' + escHtml(d.name || "Unnamed device") + '</span>' +
@@ -633,6 +660,7 @@ async function sdkWatchPlayback() {
 
 if (typeof window !== "undefined" && window.addEventListener) {
   setInterval(sdkWatchPlayback, POLL_INTERVAL);
+  setInterval(() => radioRemoteTick(), 250);  // radio.js loads after this file: look the function up at each tick
   window.addEventListener("resize", () => closeDevicePicker());
   window.addEventListener("scroll", () => closeDevicePicker(), { passive: true });
 }

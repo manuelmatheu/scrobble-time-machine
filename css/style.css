@@ -245,7 +245,7 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 /* a floating list like the autocomplete box, so it is the other surface allowed a shadow */
 .device-picker { position:fixed; z-index:50; box-sizing:border-box; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); }
 .device-picker-head { display:flex; align-items:center; justify-content:space-between; padding:0 0 4px 10px; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--lastfm-red-text); }
-.device-picker .device-refresh { width:36px; height:36px; font-size:18px; color:var(--text-secondary); }
+.device-picker .device-refresh { padding:0 10px; font-size:13px; font-weight:600; letter-spacing:0; text-transform:none; }  /* a labelled text button: the list also refreshes by itself while open */
 .device-list { display:flex; flex-direction:column; max-height:min(320px, 50vh); overflow-y:auto; }
 .device-opt { display:flex; align-items:center; gap:12px; min-height:48px; padding:0 10px; background:none; border:none; border-radius:8px; color:var(--text-primary); font-family:inherit; font-size:14px; font-weight:500; text-align:left; cursor:pointer; }
 .device-opt:hover:not(:disabled) { background:var(--bg-tertiary); }
@@ -257,7 +257,8 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .device-opt-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .device-opt-on { font-size:16px; color:var(--lastfm-red-text); }
 .device-empty { padding:12px 10px; font-size:14px; color:var(--text-secondary); }
-.device-hint { margin:6px 10px 4px; font-size:12px; line-height:1.4; color:var(--text-tertiary); }
+.device-hint { margin:6px 10px 4px; font-size:13px; line-height:1.4; color:var(--text-secondary); }
+.device-hint.empty { padding:10px 12px; border-radius:8px; background:var(--bg-tertiary); }  /* nothing but this browser listed: the explanation matters more */
 @media (max-width:520px) {
   .radio-controls { flex-wrap:wrap; row-gap:4px; }
   .radio-controls .device-btn { order:10; flex-basis:100%; margin-left:0; }

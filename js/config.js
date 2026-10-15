@@ -67,6 +67,11 @@ let radioSeaming = false;      // a seam swap is in flight (the 250ms timer must
 let radioDebug = true;         // one-line [STM radio] messages in the console at top-ups and seams (set false in tests)
 let radioContextLastUri = null;  // last URI of the most recent play we issued: after it Spotify has nothing of ours (set by spotifyPlay)
 const RADIO_SEAM_MS = 1500;     // with the SDK, swap in the new tracks this close to the end of the last queued track
+// Music on another Connect device (polling): the last /me/player reading, so the position can be extrapolated between polls
+let remoteNow = null;           // { uri, pos, dur, playing, at } or null
+let remoteFastAt = 0, remoteSeamAt = 0;  // throttles: the 1s re-sync polls near the end, and retries of a failed swap
+const RADIO_REMOTE_SEAM_MS = 2500;  // on another device the swap lands this close to the end (the position is only as exact as the last poll)
+const REMOTE_FRESH_MS = 20000;      // a reading older than this is not trusted for a seam
 // Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays
 let radioStation = "library", radioActiveStation = "library";  // "library" | "discover" | "mix"
 let radioBalance = "balanced", radioActiveBalance = "balanced";  // Mix: "mostly-past" | "balanced" | "mostly-new"

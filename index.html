@@ -217,9 +217,9 @@
     </div>
   </section>
   <div class="device-picker" id="devicePicker" style="display:none" role="dialog" aria-label="Choose a device">
-    <div class="device-picker-head"><span>Play on</span><button class="radio-btn device-refresh" onclick="refreshDevicePicker()" aria-label="Refresh devices" title="Refresh"><i class="ph ph-arrows-clockwise"></i></button></div>
+    <div class="device-picker-head"><span>Play on</span><button class="btn-text device-refresh" onclick="refreshDevicePicker()" title="Look for devices again"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Refresh</button></div>
     <div class="device-list" id="deviceList"></div>
-    <p class="device-hint">Don't see a device? Play something on it once from the Spotify app (Sonos and other speakers on your Wi-Fi need this), then refresh. For Android Auto, pick your phone.</p>
+    <p class="device-hint" id="deviceHint"></p>
   </div>
 </div>
 <div class="footer">

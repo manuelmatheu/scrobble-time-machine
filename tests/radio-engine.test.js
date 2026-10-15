@@ -163,6 +163,49 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
   run("sdkReady = false;");
 
+  // 12b1. another Connect device (polling): a finished top-up waits for the end of the last track we sent, then swaps quick
+  reset(); played = []; n = 100; run(existing);
+  run("sdkReady = false; radioActive = true; radioSeaming = false; radioContextLastUri = 'spotify:track:Existing'; remoteSeamAt = 0; remoteFastAt = 0; remoteNow = { uri: 'spotify:track:Existing', pos: 12000, dur: 180000, playing: true, at: Date.now() };");
+  global.getLastFmScrobbleAt = async () => song(n++);
+  await run("continueRadio()");
+  assert.equal(played.length, 0);                       // mid-song on a polled device: no re-issue
+  assert.equal(run("radioPendingReissue"), true);
+  let polls = 0; const realPoll = global.pollNowPlaying; global.pollNowPlaying = () => { polls++; };
+  run("radioRemoteTick()");                             // 168s left: nothing, no fast poll
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0); assert.equal(polls, 0);
+  run("remoteNow.pos = 170000; remoteNow.at = Date.now();");  // 10s left: re-sync every second, still no swap
+  run("radioRemoteTick(); radioRemoteTick();");
+  assert.equal(polls, 1);
+  assert.equal(played.length, 0);
+  global.pollNowPlaying = realPoll;
+  global.spotifyPlay = async (token, uris, pos, opts) => { played.push(uris); playOpts = opts; return true; };
+  run("remoteNow.pos = 178500; remoteNow.at = Date.now();");  // 1.5s left: inside the window
+  run("radioRemoteTick(); radioRemoteTick();");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);                       // one swap even with two ticks
+  assert.notEqual(played[0][0], "spotify:track:Existing");
+  assert.deepEqual(playOpts, { quick: true });
+  run("radioRemoteTick();");                            // a failed or repeated swap is not retried inside 3s
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  // missed it: Spotify moved on to a track that is not ours. The late recovery re-issues once
+  played = []; run("radioContextLastUri = 'spotify:track:Existing'; radioSeaming = false;");
+  assert.equal(run("radioRecoverRunOff('spotify:track:Elsewhere')"), false);     // we were not at the last track before
+  assert.equal(run("radioRecoverRunOff('spotify:track:Existing')"), true);
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  run("radioContextLastUri = 'spotify:track:Existing'; radioPaused = true;");     // paused: the tick stays quiet
+  played = []; run("radioSeaming = false; remoteSeamAt = 0; remoteNow = { uri: 'spotify:track:Existing', pos: 179000, dur: 180000, playing: true, at: Date.now() }; radioRemoteTick();");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0);
+  // no recent reading to time a swap from: the old behaviour (re-issue now) stays
+  reset(); played = []; n = 200; run(existing); run("radioPaused = false; remoteNow = null; sdkReady = false;");
+  global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
+  await run("continueRadio()");
+  assert.equal(played.length, 1);
+  run("radioActive = false; radioPaused = false; remoteNow = null; radioContextLastUri = null;");
+
   // 12b2. the swap waits for the last track we sent to Spotify, whatever Spotify reports as queued next (its autoplay can add its own)
   reset(); played = []; run(existing);
   run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Elsewhere'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 179500; radioPendingReissue = true;");
@@ -192,6 +235,27 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("radioContextLastUri"), "keep");  // a failed play does not move it
   global.fetch = realFetch;
   run("sdkReady = false; radioPendingReissue = false; radioContextLastUri = null;");
+
+  // 12b2b. a quick play on another device goes straight to it: no device list, no transfer, no shuffle/repeat resets; it falls back to the full logic if refused
+  {
+    const f0 = global.fetch, calls = [];
+    run("sdkReady = false; playbackDeviceId = 'cast1'; radioContextLastUri = null;");
+    global.fetch = async (url) => { calls.push(String(url)); return { ok: true, status: 204 }; };
+    let listed = 0; global.getSpotifyDevices = async () => { listed++; return []; };
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a", "spotify:track:b"], 0, { quick: true }), true);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0], /me\/player\/play\?device_id=cast1/);
+    assert.equal(listed, 0);
+    assert.equal(run("radioContextLastUri"), "spotify:track:b");
+    // refused: the full device logic runs (the device list is read)
+    calls.length = 0; let first = true;
+    global.fetch = async (url) => { calls.push(String(url)); if (first) { first = false; return { ok: false, status: 404 }; } return { ok: true, status: 204 }; };
+    global.getSpotifyDevices = async () => { listed++; return [{ id: "cast1", name: "Nest", is_active: true }]; };
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:c"], 0, { quick: true }), true);
+    assert.ok(listed >= 1);
+    global.fetch = f0;
+    run("playbackDeviceId = null; radioContextLastUri = null;");
+  }
 
   // 12b3. the swap is driven by the tracks we hold, not by a flag: it fires with the flag lost, and not when nothing is unsent
   reset(); played = []; run(existing);
