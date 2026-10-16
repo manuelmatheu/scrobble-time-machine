@@ -32,7 +32,7 @@ Scrobble Time Machine connects your Last.fm scrobble history with Spotify playba
 
 ## How it works
 
-No build step, no backend, no dependencies. Everything runs client-side in your browser (plain HTML, CSS and JS files).
+No build step, no dependencies. Everything runs client-side in your browser (plain HTML, CSS and JS files), except one small serverless function (`api/lfm-station.js`) that proxies Last.fm's recommended station for Discover, since Last.fm doesn't allow it to be fetched from the browser (CORS).
 
 1. Enter your Last.fm username
 2. Connect your Spotify account (OAuth PKCE - no secrets stored)
@@ -53,7 +53,7 @@ If you want to run your own instance:
    const LASTFM_API_KEY = "your_lastfm_key";
    const SPOTIFY_CLIENT_ID = "your_spotify_client_id";
    ```
-4. **Deploy** - push to GitHub Pages, or any static hosting (Netlify, Cloudflare Pages, Vercel, etc.)
+4. **Deploy** - Vercel serves both the static files and `api/lfm-station.js` with no configuration. Any static host (GitHub Pages, Netlify, Cloudflare Pages) also works, but without the function Discover only plays artists similar to your top artists; the Last.fm station source is skipped.
 
 ### Spotify Development Mode
 
