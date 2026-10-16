@@ -300,6 +300,28 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
   }
 
+  // 12b2c. a prewarmed device is not prepared twice: the transfer and the shuffle/repeat resets happen once, the play follows at once
+  {
+    const f0 = global.fetch, calls = [];
+    run("sdkReady = true; sdkDeviceId = 'dev'; playbackDeviceId = null; radioContextLastUri = null;");
+    global.fetch = async (url, o) => { calls.push((o && o.method || "GET") + " " + String(url).replace("https://api.spotify.com/v1", "")); return { ok: true, status: 204 }; };
+    const warm = run("spotifyPrewarm('t')");
+    assert.ok(warm && typeof warm.then === "function", "the prewarm returns a promise");
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
+    const prep = calls.filter(c => /PUT \/me\/player( |$)|shuffle|repeat/.test(c));
+    assert.equal(prep.length, 3, "one transfer, one shuffle, one repeat, not a second set: " + calls.join(" | "));
+    assert.equal(calls.filter(c => /\/me\/player\/play/.test(c)).length, 1);
+    // the next full play prepares again (nothing is warm any more)
+    calls.length = 0;
+    await realSpotifyPlay("t", ["spotify:track:b"]);
+    assert.equal(calls.filter(c => /shuffle|repeat/.test(c)).length, 2);
+    // a remote device is not prewarmed (it needs the device list)
+    run("playbackDeviceId = 'cast1';");
+    assert.equal(run("spotifyPrewarm('t')"), null);
+    global.fetch = f0;
+    run("sdkReady = false; playbackDeviceId = null; radioContextLastUri = null;");
+  }
+
   // 12b3. the swap is driven by the tracks we hold, not by a flag: it fires with the flag lost, and not when nothing is unsent
   reset(); played = []; run(existing);
   run("matchedUris[1] = 'spotify:track:Later'; matchedUris[2] = 'spotify:track:Latest'; allTrackCount = 3; uriToIndices['spotify:track:Later'] = [1]; uriToIndices['spotify:track:Latest'] = [2];");
