@@ -173,7 +173,7 @@ Top bar: **Home** on the left, the station label (LIBRARY / DISCOVER / MIX RADIO
 Same view with the label "TIME TRAVEL · <moment>", an **Again** button next to Home, and a full **Tracks** list (with match count and Save as Playlist) instead of Up next; no volume or context panel changes beyond that.
 
 ### Changelog overlay
-Full-screen overlay with an iframe of `changelog.html`.
+Full-screen overlay (title and close button in its own header) with an iframe of `changelog.html`. Inside the overlay the page hides its own title block and back link (a `framed` class set before first paint), so the title appears once; standalone, the title, subtitle, back link and entries share one 680px column and one left edge.
 
 ---
 
