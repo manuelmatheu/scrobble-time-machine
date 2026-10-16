@@ -51,7 +51,7 @@ let playbackDeviceId = null, playbackDeviceName = "", playbackDeviceType = "";
 let likedSet = new Set();
 
 // Library Radio
-const RADIO_INITIAL = 8;        // tracks matched before playback starts
+const RADIO_START_TRACKS = 1;   // tracks matched before playback starts: the first sound should not wait for a full queue
 const RADIO_REFILL = 8;         // tracks added per top-up
 const RADIO_CONCURRENCY = 4;    // parallel Last.fm requests per round
 const RADIO_MAX_ATTEMPTS = 40;  // Last.fm fetches per fill before giving up
@@ -64,6 +64,10 @@ let radioSeen = new Set();      // artist||track keys already picked this sessio
 let radioRefilling = false, radioExhausted = false, radioFailures = 0;
 let radioCurrentUri = null, radioLastPos = 0;  // now-playing fallback when the SDK is not driving state
 let radioPaused = false, radioPendingReissue = false;  // new tracks not in Spotify's context yet: re-issue on resume (no SDK) or at the end of the last queued track (SDK)
+let radioCarry = [];           // picks a fill collected but did not use because it was done: the next fill uses them first
+let radioStartedAt = 0;        // when the session's first play went out (for a few seconds there is no position reading to time a swap from)
+let homeTotalCache = { user: "", total: 0, at: 0 };  // the scrobble count the home card already fetched (startRadio reuses it)
+const HOME_TOTAL_FRESH_MS = 10 * 60 * 1000;
 let radioSeaming = false;      // a seam swap is in flight (the 250ms timer must not start another)
 let radioContextLastUri = null;  // last URI of the most recent play we issued: after it Spotify has nothing of ours (set by spotifyPlay)
 const RADIO_SEAM_MS = 1500;     // with the SDK, swap in the new tracks this close to the end of the last queued track

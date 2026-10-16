@@ -4,6 +4,7 @@ A living document tracking planned features, improvements, and ideas for future 
 
 ## v2.10 (current) ✅
 
+- [x] Faster start: the first song plays as soon as it is matched (about 1.5s instead of 8s with typical latencies for Library, 2-3s for Discover and Mix); the rest of the queue fills behind it
 - [x] New tracks reach a speaker or other Connect device at the end of the last queued song (like in the browser), instead of restarting the music mid-song
 - [x] Errors and warnings are toasts (bottom center, auto-dismiss, close button) instead of a status bar that never went away
 - [x] Wide desktop shows 8 Up next rows (6 on smaller screens); the phone like heart sits on the first line of the title; the console logs are gone

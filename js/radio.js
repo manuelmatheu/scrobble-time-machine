@@ -335,7 +335,9 @@ async function radioFill(want) {
   lastSearchError = null;
   let added = 0, attempts = 0;
   while (added < want && attempts < (fresh ? DISCOVER_MAX_ROUNDS : RADIO_MAX_ATTEMPTS)) {
-    const batch = station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid) : await radioCollectBatch(user);
+    // picks a previous fill collected but did not need come first (they were already vetted: Discover and Mix pay for that)
+    const batch = radioCarry.length ? { picks: radioCarry.splice(0), failed: 0, total: 1 }
+      : station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid) : await radioCollectBatch(user);
     if (sid !== radioSession) return added;
     attempts += fresh ? 1 : batch.total;
     if (batch.failed === batch.total) {
@@ -345,8 +347,9 @@ async function radioFill(want) {
       continue;
     }
     radioFailures = 0;
-    for (const p of batch.picks) {
-      if (added >= want) break;
+    for (let pi = 0; pi < batch.picks.length; pi++) {
+      const p = batch.picks[pi];
+      if (added >= want) { radioCarry.push(...batch.picks.slice(pi)); break; }
       const key = radioTrackKey(p.artist, p.track);
       if (radioSeen.has(key)) continue;
       radioSeen.add(key);
@@ -368,7 +371,9 @@ async function radioFill(want) {
         if (p.source) Object.assign(trackMeta[idx], { source: p.source, kind: p.kind, artistPlays: p.artistPlays });
         else trackMeta[idx].fromPast = true;  // from your history (Library, and the past half of a Mix): shown as "From YEAR"
         added++;
+        radioRenderQueue();  // Up next fills as the tracks arrive, not when the whole fill is done
       }
+      if (added >= want) { radioCarry.push(...batch.picks.slice(pi + 1)); return added; }  // done: no pause before leaving
       await radioSleep(SEARCH_DELAY);
       if (sid !== radioSession) return added;
     }
@@ -388,25 +393,29 @@ async function startRadio() {
   matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; skippedPlan = []; isContinuing = false;
   trackMeta = {}; radioSeen = new Set(); radioFailures = 0; radioRefilling = false; radioExhausted = false;
   radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioUser = user; radioActive = true;
+  radioCarry = []; radioStartedAt = 0;
   const sid = ++radioSession;
   try {
+    // Get the device ready (transfer, shuffle and repeat off) while the first song is being picked
+    const token0 = await getSpotifyToken();
+    if (token0) spotifyPrewarm(token0);
     let totalScrobbles = 0;
     if (!discover) {
-      showStatus("Reading your Last.fm library...");
-      ({ totalScrobbles } = await getLastFmTotalPages(user));
+      // the home card already counted the scrobbles: one request less before the first pick
+      if (homeTotalCache.user === user && homeTotalCache.total && Date.now() - homeTotalCache.at < HOME_TOTAL_FRESH_MS) totalScrobbles = homeTotalCache.total;
+      else ({ totalScrobbles } = await getLastFmTotalPages(user));
       if (sid !== radioSession) return;
       if (!totalScrobbles) throw new Error("No scrobbles found");
       radioTotal = totalScrobbles;
     }
     showRadioView();
-    showStatus(discover ? "Tuning new music..." : "Tuning your library...");
-    const added = await radioFill(RADIO_INITIAL);
+    // Playback starts with the first match; the rest of the queue is fetched while it plays (see the top-up below)
+    const added = await radioFill(RADIO_START_TRACKS);
     if (sid !== radioSession) return;
     if (!added) throw new Error(spotifyBlockedFor() > 0 ? spotifyLimitMessage() : "No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : ""));
     radioRenderQueue();
     const token = await getSpotifyToken();
     if (!token) throw new Error("Spotify expired. Reconnect.");
-    showStatus("Starting playback...");
     const ok = await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, null));
     if (sid !== radioSession) return;
     if (!ok) {
@@ -416,9 +425,11 @@ async function startRadio() {
     currentPhase = "done";
     showStatus("▶ " + RADIO_STATIONS[radioActiveStation].title + (!discover && totalScrobbles < 200 ? " · small library, new tracks may run out" : ""), "success");
     if (fresh && discoverNeedsReconnect) showStatus("Reconnect Spotify to get picks based on what you play lately.", "warn");
+    radioStartedAt = Date.now();
     startPolling();
     checkLikedTracks();
     endSessionUI();
+    continueRadio();  // fills the queue behind the first song; the new tracks join at the end of the last one we sent (the seam)
   } catch (err) {
     if (sid !== radioSession) return;
     radioStop(); currentPhase = "error"; showStatus(err.message, "error"); endSessionUI();
@@ -485,7 +496,9 @@ function radioUnsentUris() {
   return radioUrisFrom(matchedUris, allTrackCount, radioContextLastUri).slice(1);
 }
 // Polling (the music plays on another Connect device): is there a recent reading to time a swap from?
-function radioCanSeam() { return sdkPlaying() || (!!remoteNow && Date.now() - remoteNow.at < REMOTE_FRESH_MS); }
+function radioCanSeam() {
+  return sdkPlaying() || (!!remoteNow && Date.now() - remoteNow.at < REMOTE_FRESH_MS) || (radioStartedAt > 0 && Date.now() - radioStartedAt < REMOTE_FRESH_MS);
+}
 // ms left in the track of a /me/player reading, extrapolated from when it was taken (null: unknown)
 function radioRemoteLeft(r, now) {
   if (!r || !(r.dur > 0)) return null;
@@ -546,7 +559,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false;
-  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0;
   hideRadioView();
 }
 
@@ -559,6 +572,7 @@ async function refreshHomeMeta() {
   if (!user) { el.textContent = "Enter your Last.fm username to start."; return; }
   try {
     const { totalScrobbles } = await getLastFmTotalPages(user);
+    homeTotalCache = { user, total: totalScrobbles, at: Date.now() };
     if ($("usernameInput").value.trim() !== user) return;
     el.textContent = user + " · " + totalScrobbles.toLocaleString("en-US") + " scrobbles";
   } catch (e) {

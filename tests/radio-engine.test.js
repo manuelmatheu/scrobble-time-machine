@@ -4,7 +4,7 @@ const vm = require("node:vm");
 const assert = require("node:assert/strict");
 
 global.window = { location: { origin: "http://localhost", pathname: "/" } };
-global.document = { getElementById: () => null };
+global.document = { getElementById: () => null, createElement: () => ({ set textContent(v) { this.t = String(v); }, get innerHTML() { return this.t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); } }) };  // enough for escHtml
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..", "js", f), "utf8"), { filename: f });
 const run = code => vm.runInThisContext(code);
 load("config.js");
@@ -17,7 +17,7 @@ const realSpotifyPlay = global.spotifyPlay;
 const realShowStatus = global.showStatus;
 
 function reset() {
-  run("matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {}; radioBuf = { past: [], new: [] }; radioMixCursor = 0;");
+  run("radioCarry = []; matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; trackMeta = {}; sessionQueue = new Set(); radioSeen = new Set(); radioTotal = 1000; radioFailures = 0; radioUser = 'tester'; radioActive = true; radioExhausted = false; radioRefilling = false; radioPaused = false; radioPendingReissue = false; sdkReady = false; lastSearchError = null; radioArtistCache = {}; radioTrackCache = {}; radioBuf = { past: [], new: [] }; radioMixCursor = 0;");
 }
 const song = n => [{ name: "Song " + n, artist: { "#text": "Artist" }, date: { uts: "1500000000" } }];
 const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
@@ -256,6 +256,48 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.ok(listed >= 1);
     global.fetch = f0;
     run("playbackDeviceId = null; radioContextLastUri = null;");
+  }
+
+  // 12b4. the first sound does not wait for a full queue: playback starts with the first match, the rest is fetched behind it
+  {
+    reset(); n = 0; played = []; let lfmCalls = 0;
+    global.getLastFmScrobbleAt = async () => { lfmCalls++; return song(n++); };
+    // a fill that is done leaves what it already collected (and vetted) for the next one instead of throwing it away
+    assert.equal(await run("radioFill(1)"), 1);
+    const callsAfterFirst = lfmCalls;
+    assert.equal(run("radioCarry.length"), 3, "the other three scrobbles of the batch are kept");
+    assert.equal(await run("radioFill(3)"), 3);
+    assert.equal(lfmCalls, callsAfterFirst, "the next fill uses the kept picks before asking Last.fm again");
+    assert.equal(run("radioCarry.length"), 0);
+    // startRadio: one track in the first play, the queue grows behind it, and the swap waits for the end of the first song
+    reset(); n = 0; lfmCalls = 0; played = [];
+    const els = {};
+    global.document.getElementById = id => els[id] || (els[id] = { id, style: {}, className: "", innerHTML: "", textContent: "", value: id === "usernameInput" ? "tester" : "", children: [], classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, removeAttribute() {}, setAttribute() {}, addEventListener() {} });
+    global.beginSession = () => {}; global.endSessionUI = () => {}; global.startPolling = () => {}; global.checkLikedTracks = () => {};
+    global.getLastFmTotalPages = async () => { lfmCalls += 100; return { totalScrobbles: 5000 }; };
+    global.spotifyPlay = async (token, uris) => { played.push(uris); run("radioContextLastUri = " + JSON.stringify(uris[uris.length - 1])); return true; };  // like the real one
+    run("spotifyToken = 't'; radioStation = 'library'; homeTotalCache = { user: 'tester', total: 4321, at: Date.now() };");
+    let startErr = ""; const keepShow = global.showStatus; global.showStatus = (m, t) => { if (t === "error") startErr = m; };
+    await run("startRadio()");
+    global.showStatus = keepShow;
+    assert.equal(startErr, "", "startRadio failed: " + startErr);
+    assert.equal(played.length, 1);
+    assert.equal(played[0].length, 1, "the first play carries only the first match");
+    assert.ok(lfmCalls < 100, "the scrobble count the home card fetched is reused");
+    assert.equal(run("radioTotal"), 4321);
+    for (let i = 0; i < 200 && run("allTrackCount") < 9; i++) await new Promise(r => setImmediate(r));  // the background fill
+    assert.ok(run("allTrackCount") >= 9, "the queue fills behind the first song");
+    assert.equal(played.length, 1, "no restart mid-song: the new tracks wait for the end of the last one we sent");
+    assert.equal(run("radioPendingReissue"), true);
+    assert.equal(run("radioUnsentUris().length"), run("allTrackCount") - 1);
+    // an old count is not reused
+    reset(); lfmCalls = 0; played = [];
+    run("homeTotalCache = { user: 'tester', total: 4321, at: Date.now() - 3600000 };");
+    await run("startRadio()");
+    assert.ok(lfmCalls >= 100, "a stale count is fetched again");
+    run("radioStop()");  // the background fill of the last start must not leak into the next tests
+    await new Promise(r => setImmediate(r));
+    global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
   }
 
   // 12b3. the swap is driven by the tracks we hold, not by a flag: it fires with the flag lost, and not when nothing is unsent
