@@ -142,7 +142,7 @@ A small pill that says why a track is playing. Red tint with a sparkle icon for 
 Your play counts ("You have played X n times, and this track n times") and a four-line Last.fm bio with a "Read more on Last.fm" link. In Discover the stats line becomes the reason ("New to you. You have never played X. Picked because you listen to Y and Z."). On wide desktop (>=1100px) it becomes a card with a 148px artist photo from Spotify on the left (microphone placeholder when there is none). The panel hides when there is nothing to show.
 
 ### List rows (`.radio-row`, `.track-row`)
-44px minimum, 10px/16px padding, 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check (status classes `found` / `not_found` / `searching` / `skipped`, the names `setTrackStatus()` uses). In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
+44px minimum, 10px/16px padding (5px/16px in the wide list panel, where a row is 50px), 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check (status classes `found` / `not_found` / `searching` / `skipped`, the names `setTrackStatus()` uses). In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
 
 ### Home "playing" strip (`.radio-playing`)
 Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-tertiary` pill, shown when a radio is running behind the home view.
@@ -184,7 +184,7 @@ Full-screen overlay with an iframe of `changelog.html`.
 | **<= 520px** | Mode grid 2 columns; radio card padding 20px; now-playing card stacks (see above); buttons full width in `.controls`; header brand 16px; date column hidden in lists |
 | **<= 720px** | Volume slider hidden (phones cannot use the SDK anyway) |
 | **521-1099px** | One column, 680px container, now-playing card horizontal at 224px |
-| **>= 1100px** | 1120px container. Home two columns (420px + rest). Radio / Time Travel two columns: player + artist panel (640px) on the left, the list as a panel of equal height on the right (min 468px). Up next rows share the panel height equally (`--upnext-rows`); the Tracks list scrolls inside and keeps the playing row visible. Artist photo shown |
+| **>= 1100px** | 1120px container. Home two columns (420px + rest). Radio / Time Travel two columns: player + artist panel (640px) on the left, the list as a panel of equal height on the right (min 468px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum); the Tracks list scrolls inside and keeps the playing row visible. Artist photo shown |
 
 ---
 

@@ -759,6 +759,16 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 3);
     assert.match(q.innerHTML, /Tuning/, "a Tuning row fills a free slot while topping up");
     run("radioRefilling = false;");
+    // wide desktop (1100px and up): 8 rows, and the top-up threshold follows
+    global.window.matchMedia = q => ({ matches: /1100/.test(q) });
+    run("trackMeta = " + JSON.stringify(meta) + "; allTrackCount = 9; nowPlayingIndex = 0;");
+    assert.equal(run("radioUpNextRows()"), run("RADIO_UPNEXT_ROWS_WIDE"));
+    assert.equal(run("RADIO_UPNEXT_ROWS_WIDE"), 8);
+    run("radioRenderQueue()");
+    assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 8);
+    assert.equal(q.style["--upnext-rows"], 8);
+    delete global.window.matchMedia;
+    assert.equal(run("radioUpNextRows()"), run("RADIO_UPNEXT_ROWS"));  // no media query support: the phone count
   }
 
   // 31. the artist photo comes from Spotify, once per artist, and only for the artist that is playing

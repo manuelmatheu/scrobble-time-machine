@@ -533,10 +533,15 @@ async function radioSeamReissue() {
 }
 
 // Called from the SDK state handler and the polling fallback on every track change
+// Rows in the Up next list: more on wide desktop. The top-up threshold follows it (a full list must stay queued)
+function radioUpNextRows() {
+  const wide = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(min-width:1100px)").matches;
+  return wide ? RADIO_UPNEXT_ROWS_WIDE : RADIO_UPNEXT_ROWS;
+}
 function radioMaybeRefill(currentUri, positionMs) {
   radioCurrentUri = currentUri; radioLastPos = positionMs || 0;
   const remaining = radioRemaining(matchedUris, allTrackCount, currentUri);
-  if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, RADIO_LOW_WATER)) continueRadio();
+  if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1)) continueRadio();
 }
 
 function radioStop() {
@@ -848,15 +853,16 @@ function radioQueueRowHtml(idx, m, esc) {
 function radioRenderQueue() {
   const box = $("radioUpNext");
   if (!box) return;
-  if (box.style && box.style.setProperty) box.style.setProperty("--upnext-rows", RADIO_UPNEXT_ROWS);  // wide layout: every row is 1/N of the panel
+  if (box.style && box.style.setProperty) box.style.setProperty("--upnext-rows", radioUpNextRows());  // wide layout: every row is 1/N of the panel
+  const upRows = radioUpNextRows();
   let html = "", shown = 0;
-  for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < RADIO_UPNEXT_ROWS; i++) {
+  for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < upRows; i++) {
     const m = trackMeta[i];
     if (!m) continue;
     html += radioQueueRowHtml(i, m, escHtml);
     shown++;
   }
-  if (radioRefilling && shown < RADIO_UPNEXT_ROWS) {  // the Tuning row only takes a free slot
+  if (radioRefilling && shown < upRows) {  // the Tuning row only takes a free slot
     html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
   }
   box.innerHTML = html;
