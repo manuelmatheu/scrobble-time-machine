@@ -82,7 +82,6 @@
     <code>LASTFM_API_KEY</code> &rarr; <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api</a><br>
     <code>SPOTIFY_CLIENT_ID</code> &rarr; <a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Dashboard</a>
     (set redirect URI to <code id="currentUrl"></code>)</div>
-  <div id="statusSlotHome"><div class="status-bar" id="statusBar" style="display:none"></div></div>
 
   <div id="homeView">
     <section class="radio-card">
@@ -165,7 +164,6 @@
       </div>
       <h2 class="radio-title" id="radioTitle">Library radio</h2>
     </div>
-    <div id="radioStatusSlot"></div>
     <div class="radio-cols">
     <div class="radio-col-main">
     <section class="radio-now" aria-label="Now playing">
@@ -222,6 +220,7 @@
     <p class="device-hint" id="deviceHint"></p>
   </div>
 </div>
+<div class="toast-host" id="toastHost" role="status" aria-live="polite"></div>
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>

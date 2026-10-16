@@ -35,9 +35,6 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .btn-disconnect { position:relative; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; background:none; border:none; border-radius:4px; cursor:pointer; color:var(--spotify-green); opacity:0.7; font-size:12px; line-height:1; }
 .btn-disconnect::before { content:""; position:absolute; inset:-12px; }
 .btn-disconnect:hover { opacity:1; }
-.status-bar { text-align:center; margin-bottom:20px; font-size:13px; color:var(--text-secondary); animation:fade-up 0.3s ease-out; }
-.status-bar.error { color:var(--error); } .status-bar.warn { color:var(--text-primary); }
-@keyframes fade-up { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 .track-list-wrapper { margin-bottom:48px; }
 .track-list-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 4px; }
 .track-list-header h3 { font-size:22px; font-weight:700; color:var(--text-primary); }
@@ -289,7 +286,6 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .btn-text:disabled { opacity:0.4; cursor:not-allowed; }
 .radio-row-play { cursor:pointer; transition:background var(--dur-fast); }
 .radio-row-play:hover { background:var(--bg-tertiary); }
-.radio-view .status-bar { text-align:left; margin-bottom:16px; }
 
 /* Wide desktop (1100px and up): a 1120px container. Home: the radio card on the left (420px), the Time Travel modes on the right.
    Radio / Time Travel: player + artist panel on the left (640px), the list on the right as a panel of the same height
@@ -317,3 +313,16 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
   .radio-col-list .radio-upnext .radio-row { flex:0 0 calc(100% / var(--upnext-rows, 6)); }  /* every row keeps the same height, even with fewer tracks queued */
   .radio-col-list .track-list { position:relative; overflow-y:auto; }
 }
+
+/* Toasts: errors and warnings, bottom center, one at a time (showStatus() in ui.js). Inverted like the play button; errors take the accent fill. */
+.toast-host { position:fixed; left:0; right:0; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); z-index:1100; display:flex; justify-content:center; padding:0 16px; pointer-events:none; }
+.toast { pointer-events:auto; display:flex; align-items:center; gap:10px; box-sizing:border-box; max-width:min(520px, 100%); padding:10px 6px 10px 16px; border-radius:12px; background:var(--text-primary); color:var(--bg-primary); box-shadow:var(--shadow-float); font-size:14px; line-height:1.4; animation:toast-in 0.28s cubic-bezier(0.34,1.56,0.64,1); }
+.toast.error { background:var(--lastfm-red); color:var(--on-accent); }
+.toast.leaving { animation:toast-out var(--dur-base) ease-in forwards; }
+.toast > i { font-size:20px; flex-shrink:0; }
+.toast-text { min-width:0; overflow-wrap:anywhere; }
+.toast-close { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; margin:-10px 0; background:none; border:none; border-radius:8px; color:inherit; font-size:18px; cursor:pointer; opacity:0.75; }
+.toast-close:hover { opacity:1; }
+.toast-close:focus-visible { outline-color:currentColor; }  /* the global ring is red: not visible on the red error fill */
+@keyframes toast-in { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+@keyframes toast-out { to { opacity:0; transform:translateY(12px); } }

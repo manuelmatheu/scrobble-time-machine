@@ -252,9 +252,9 @@ Start radio plays an endless stream, from one of three stations (Library, Discov
 
 ---
 
-## Status bar
+## Status messages (toasts)
 
-`showStatus(msg, type)` (ui.js) only displays `"error"` and `"warn"` messages (error in red, warn in the primary text color). Progress and success messages (`""`, `"success"`) are not shown: they just clear whatever message was up, so an old error does not linger. Keep using `showStatus` for failures, rate-limit notices (`spotifyLimitMessage()`, type `"error"`) and things the user must act on (type `"warn"`); the interface itself (hero "Tuning...", Cancel button, now-playing row) shows loading and success state.
+`showStatus(msg, type)` (ui.js) shows `"error"` and `"warn"` messages as a toast (`#toastHost`, a persistent `role="status"` live region at the bottom of the page; the toast is built with `textContent`, never parsed as HTML). One toast at a time: a new message replaces the current one, the same message again only re-arms its timer. Warnings go away after 6s, errors after 9s (`TOAST_MS`), hovering or focusing holds it, and the close button (`hideStatus()`) dismisses it. `"success"` dismisses the current toast (the problem it reported is over: e.g. playback resumed); plain progress text (`""`) is ignored. The interface itself (hero "Tuning...", Cancel button, now-playing row) shows loading and success state, so keep `showStatus` for failures, rate-limit notices (`spotifyLimitMessage()`, type `"error"`) and things the user must act on (type `"warn"`).
 
 ---
 
@@ -283,7 +283,7 @@ Start radio plays an endless stream, from one of three stations (Library, Discov
 
 10. **Disconnect button** -- `spotifyBadge` (in `index.html`) contains a `✕` button wired via inline `onclick="disconnectSpotify()"`, which clears the `localStorage` tokens and disconnects the SDK player, then calls `updateSpotifyUI(false)`. It does **not** auto re-trigger auth -- the user clicks "Connect Spotify" (`onclick="initiateSpotifyAuth()"`) again, which always passes `show_dialog: true` so Spotify shows the account picker instead of silently re-using the last session. Both buttons are wired via inline `onclick` in `index.html`, not `addEventListener` in `app.js`.
 
-11. **Spotify 429 cooldown** -- `runSpotifySearch()` waits out a `Retry-After` of 5 seconds or less (up to 2 retries); a longer one sets `spotifyBlockedUntil` instead of sleeping. While `spotifyBlockedFor() > 0`, `spotifySearch()` returns `null` without calling Spotify, `smartMatch`, `continueMatching` and `radioFill` stop their batch, and the unsearched tracks go back to `skippedPlan` with status "skipped" (never "not_found"). The status bar shows `spotifyLimitMessage()` ("Spotify is limiting searches. Try again in about N ..."), and `continueRadio()` does not treat a cooldown as an exhausted library. Matching starts with `BATCH_SIZE` (5) searches and loads more as you listen, to stay well under the limit.
+11. **Spotify 429 cooldown** -- `runSpotifySearch()` waits out a `Retry-After` of 5 seconds or less (up to 2 retries); a longer one sets `spotifyBlockedUntil` instead of sleeping. While `spotifyBlockedFor() > 0`, `spotifySearch()` returns `null` without calling Spotify, `smartMatch`, `continueMatching` and `radioFill` stop their batch, and the unsearched tracks go back to `skippedPlan` with status "skipped" (never "not_found"). The an error toast shows `spotifyLimitMessage()` ("Spotify is limiting searches. Try again in about N ..."), and `continueRadio()` does not treat a cooldown as an exhausted library. Matching starts with `BATCH_SIZE` (5) searches and loads more as you listen, to stay well under the limit.
 
 ---
 
@@ -315,7 +315,7 @@ Bump the version only for a release (a new feature set or a user-visible change 
 | `toggleLikeTrack(idx)` | player.js | Like or unlike a track by index |
 | `highlightNowPlaying(index)` | ui.js | Update now-playing row highlight |
 | `renderTrackRow(t, i)` | ui.js | Build HTML for a single track row |
-| `showStatus(msg, type)` | ui.js | Show status bar message |
+| `showStatus(msg, type)` | ui.js | Show an error/warn toast; success dismisses it |
 | `handleGo()` | modes.js | Dispatch to active mode handler |
 | `handleReset()` | ui.js | Full reset of state and UI |
 | `registerUri(uri, index)` | player.js | Populate uriToIndices reverse map |

@@ -11,7 +11,7 @@ The design of Scrobble Time Machine (STM): principles, tokens, components, scree
 1. **Music first, chrome second.** One focused player card; everything else (artist info, queue) supports it.
 2. **Dark by default, light as a full theme.** Both ship with the same structure; only tokens change.
 3. **One column on phones, two columns when there is room.** Same components, rearranged. No separate "mobile app".
-4. **Honest states.** Loading shows "Tuning..."; errors go to the status bar in plain words; no page numbers or technical jargon in the UI.
+4. **Honest states.** Loading shows "Tuning..."; errors and warnings appear as a toast in plain words; no page numbers or technical jargon in the UI.
 5. **Touch-safe.** Every interactive target is at least 44px tall; text meets WCAG AA contrast (checked by `tests/contrast.test.js`).
 6. **Quiet motion.** Short transitions only; everything is switched off under `prefers-reduced-motion`.
 
@@ -39,7 +39,7 @@ Both load from Google Fonts in `index.html`.
 | Row title | 14px / 600 | artist line 12px |
 | Eyebrow / small caps label | 12px / 700, uppercase, letter-spacing 1.5px, `--lastfm-red-text` | "NOW PLAYING", "LIBRARY RADIO" |
 | Chip, helper text | 12px / 600 | |
-| Controls (mood buttons, device button, Save as Playlist, status bar) | 13px / 600-700 | |
+| Controls (mood buttons, device button, Save as Playlist, toasts) | 13px / 600-700 | |
 
 Nothing is smaller than **12px** (row numbers, dates and the footer included); `tests/design-system.test.js` checks it.
 
@@ -147,8 +147,8 @@ Your play counts ("You have played X n times, and this track n times") and a fou
 ### Home "playing" strip (`.radio-playing`)
 Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-tertiary` pill, shown when a radio is running behind the home view.
 
-### Status bar
-Only errors (red) and warnings (primary text) are shown, above the content. Progress and success messages are not displayed; they clear what was there.
+### Toast (`.toast`, `showStatus()`)
+Errors and warnings float at the bottom center of the screen (16px from the edge, above everything, max 520px, full width minus 16px gutters on phones), one at a time; a new message replaces the current one and the same message again only keeps it up longer. Neutral warnings invert the page (`--text-primary` fill, `--bg-primary` text, like the play button); errors take the accent (`--lastfm-red` fill, `--on-accent` text, checked in `tests/contrast.test.js`). Each has an icon (info or warning circle), the text (wraps, never truncated), and a 44px close button. It slides up on a short spring (`toast-in`, 0.28s) and slides away; warnings stay 6s and errors 9s, hovering or focusing it holds it, leaving re-arms 2.5s. It lives in a persistent polite live region (`#toastHost`, `role="status"`), so screen readers announce it when it appears. Progress text is not shown, and a success message dismisses the current toast (the problem it reported is over).
 
 ### Device picker (`.device-btn`, `.device-picker`)
 Chooses the Spotify Connect device the music plays on. Two entry points open the same popover: a **Play on** row under the home card's buttons (icon, device name, caret) and a device button in the now-playing controls row (icon only while it plays in this browser, icon + name in red when another device is picked; on phones it is a full-width row under previous / play / next). The popover (`--bg-elevated`, 12px radius, 1px border, shadow like the autocomplete box) has a "PLAY ON" eyebrow with a labelled **Refresh** text button (the open list also looks again by itself every 4 seconds, and only redraws when something changed), one 48px row per device (type icon, name; the current one gets a subtle red fill, red text and a speaker icon; restricted devices are disabled), and one short line of helper text under the list (with other devices listed: "Missing a speaker? Play something on it from the Spotify app first."; with only this browser: it names Nest, Chromecast and Sonos and turns into a filled `--bg-tertiary` note). It opens below the button, or above when there is no room, and closes on outside click, Escape, scroll or resize. The pick is remembered (`stm_device`).

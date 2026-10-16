@@ -30,5 +30,12 @@ for (const [theme, t] of [["dark", dark], ["light", light]]) {
     if (r < 4.5) failures.push(theme + ": " + tx + " on " + sf + " = " + r.toFixed(2));
   }
 }
+// Toasts: neutral ones invert the page (bg on text), errors put --on-accent on the red fill
+for (const [theme, t] of [["dark", dark], ["light", light]]) {
+  for (const [fg, bg] of [["bg-primary", "text-primary"], ["on-accent", "lastfm-red"]]) {
+    const r = ratio(t[fg], t[bg]);
+    if (r < 4.5) failures.push(theme + ": toast " + fg + " on " + bg + " = " + r.toFixed(2));
+  }
+}
 assert.deepEqual(failures, [], "Contrast below 4.5:1:\n" + failures.join("\n"));
 console.log("contrast: ok");

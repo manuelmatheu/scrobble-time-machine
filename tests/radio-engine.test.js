@@ -515,13 +515,11 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   await run("radioPlayFrom(1)");
   assert.equal(played.length, 1);
 
-  // 25. the status bar sits between the bio and the list in the radio view, and goes back home with it
+  // 25. showing the radio view and going back home
   const slotEls = {};
   global.document.getElementById = id => slotEls[id] || (slotEls[id] = { id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
   run('showRadioView("travel")');
-  assert.ok(slotEls.radioStatusSlot.children.includes(slotEls.statusBar), "status bar should move into the radio view");
   run("hideRadioView()");
-  assert.ok(slotEls.statusSlotHome.children.includes(slotEls.statusBar), "status bar should return to the home slot");
 
   // 26. time travel searches BATCH_SIZE (5) tracks first and loads the rest in batches of 5
   const ttTracks = Array.from({ length: 12 }, (_, i) => ({ name: "TT Song " + i, artist: { "#text": "TT Artist " + i } }));
@@ -647,7 +645,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(els.homeView.style.display, "");
     assert.equal(run("radioActive"), true, "minimizing must not stop the radio");
     assert.equal(run("radioMinimized"), true);
-    assert.ok(els.statusSlotHome.children.includes(els.statusBar));
     // the home card: Back to radio + Playing now + a secondary Start a new radio
     assert.equal(els.radioBackBtn.style.display, "");
     assert.equal(els.radioPlaying.style.display, "");
@@ -685,7 +682,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(els.radioView.style.display, "");
     assert.equal(els.homeView.style.display, "none");
     assert.equal(run("radioMinimized"), false);
-    assert.ok(els.radioStatusSlot.children.includes(els.statusBar));
     assert.equal(els.radioBackBtn.style.display, "none");
     assert.equal(els.radioPlaying.style.display, "none");
     assert.match(els.radioBtn.className, /btn-primary/);
@@ -720,22 +716,62 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(els.savePlaylistBtn, undefined, "the radio view does not create or show the save button");
   }
 
-  // 29. the status bar only shows errors and warnings; progress and success messages clear it
+  // 29. toasts: only errors and warnings show, one at a time; success dismisses; they expire on their own
   {
-    const els = {};
-    global.document.getElementById = id => els[id] || (els[id] = { id, style: {}, className: "", innerHTML: "", textContent: "" });
+    const host = { id: "toastHost", children: [], appendChild(el) { el.parent = this; this.children.push(el); } };
+    const mk = () => { const l = {}; const el = { className: "", textContent: "", innerHTML: "", children: [], attrs: {}, listeners: l,
+      classList: { add(c) { el.className += " " + c; }, contains: c => (" " + el.className + " ").includes(" " + c + " ") },
+      setAttribute(k, v) { el.attrs[k] = v; }, addEventListener(e, f) { l[e] = f; },
+      append(...n) { el.children.push(...n); }, remove() { if (el.parent) el.parent.children = el.parent.children.filter(c => c !== el); } }; return el; };
+    global.document.getElementById = id => (id === "toastHost" ? host : null);
+    global.document.createElement = () => mk();
+    const timers = []; const realSet = global.setTimeout, realClear = global.clearTimeout;
+    global.setTimeout = (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length - 1; };
+    global.clearTimeout = id => { if (timers[id]) timers[id].live = false; };
+    const fire = () => { const t = [...timers].reverse().find(x => x.live); if (t) { t.live = false; t.fn(); } };
     const savedShow = global.showStatus; global.showStatus = realShowStatus;
+    const text = () => host.children.map(e => e.children[1].textContent);
     global.showStatus("Reading your Last.fm library...", "");
-    assert.equal(els.statusBar.style.display, "none", "progress messages are not shown");
+    assert.deepEqual(text(), [], "progress messages are not shown");
     global.showStatus("Spotify is limiting searches.", "error");
-    assert.equal(els.statusBar.style.display, "");
-    assert.match(els.statusBar.className, /error/);
-    assert.equal(els.statusBar.innerHTML, "Spotify is limiting searches.");
-    global.showStatus("▶ Library radio", "success");
-    assert.equal(els.statusBar.style.display, "none", "a success message clears an old error");
+    assert.deepEqual(text(), ["Spotify is limiting searches."]);
+    assert.match(host.children[0].className, /toast error/);
+    assert.equal(host.children[0].children[2].attrs["aria-label"], "Dismiss message");
+    global.showStatus("Reading your Last.fm library...", "");
+    assert.equal(host.children.length, 1, "progress text does not dismiss a problem");
+    global.showStatus("Spotify is limiting searches.", "error");
+    assert.equal(host.children.length, 1, "the same message again is not stacked");
     global.showStatus("Playback moved to another session", "warn");
-    assert.equal(els.statusBar.style.display, "");
-    assert.match(els.statusBar.className, /warn/);
+    assert.deepEqual(text(), ["Playback moved to another session"], "a new message replaces the old one");
+    assert.match(host.children[0].className, /toast warn/);
+    global.showStatus("▶ Library radio", "success");
+    assert.match(host.children[0].className, /leaving/, "a success message dismisses a problem (it slides away)");
+    fire();  // the removal after the exit animation
+    assert.deepEqual(text(), []);
+    // it goes away by itself: errors stay longer than warnings
+    global.showStatus("Spotify is limiting searches.", "error");
+    const errMs = timers.filter(t => t.live).pop().ms;
+    global.showStatus("Could not switch devices.", "warn");
+    const warnMs = timers.filter(t => t.live).pop().ms;
+    assert.ok(errMs > warnMs && warnMs >= 5000, "errors stay longer than warnings");
+    fire();  // the dismissal timer
+    assert.match(host.children[0].className, /leaving/);
+    fire(); assert.deepEqual(text(), []);
+    // hovering holds it; leaving re-arms a short timer
+    global.showStatus("Hold me", "warn");
+    host.children[0].listeners.mouseenter();
+    assert.equal(timers.filter(t => t.live).length, 0, "hovering cancels the dismissal");
+    host.children[0].listeners.mouseleave();
+    assert.equal(timers.filter(t => t.live).pop().ms, 2500);
+    // the close button dismisses at once
+    host.children[0].children[2].listeners.click();
+    assert.match(host.children[0].className, /leaving/);
+    fire(); assert.deepEqual(text(), []);
+    // text is never parsed as HTML
+    global.showStatus("<b>x</b>", "warn");
+    assert.equal(host.children[0].children[1].textContent, "<b>x</b>");
+    global.setTimeout = realSet; global.clearTimeout = realClear;
+    run("removeToast(true)");
     global.showStatus = savedShow;
   }
 

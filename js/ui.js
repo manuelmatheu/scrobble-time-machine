@@ -4,11 +4,51 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // Only errors and warnings are shown. Progress and success messages are dropped (the interface already shows that
 // state) and clear whatever message was up, so an old error does not linger once things move on.
+// Toasts: errors and warnings float at the bottom, one at a time, and go away on their own.
+// "success" means the problem they reported is over, so it dismisses the current one; plain progress text ("") is not shown.
+const TOAST_MS = { warn: 6000, error: 9000 };  // how long each stays; hovering or focusing it holds it
+let toastEl = null, toastTimer = null, toastKey = "";
 function showStatus(msg, type) {
-  if (type !== "error" && type !== "warn") { hideStatus(); return; }
-  const e = $("statusBar"); e.style.display = ""; e.className = "status-bar " + type; e.innerHTML = msg;
+  if (type === "success") { hideStatus(); return; }
+  if (type !== "error" && type !== "warn") return;
+  const host = $("toastHost");
+  if (!host || !msg) return;
+  const key = type + "|" + msg;
+  if (toastEl && key === toastKey) { armToast(type); return; }  // the same message again: keep it up a little longer
+  removeToast(true);
+  const el = document.createElement("div");
+  el.className = "toast " + type;
+  const icon = document.createElement("i");
+  icon.className = "ph " + (type === "error" ? "ph-warning-circle" : "ph-info"); icon.setAttribute("aria-hidden", "true");
+  const text = document.createElement("span");
+  text.className = "toast-text"; text.textContent = msg;
+  const close = document.createElement("button");
+  close.className = "toast-close"; close.setAttribute("aria-label", "Dismiss message");
+  close.innerHTML = '<i class="ph ph-x" aria-hidden="true"></i>';
+  close.addEventListener("click", () => hideStatus());
+  el.append(icon, text, close);
+  el.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+  el.addEventListener("mouseleave", () => armToast(type, 2500));
+  el.addEventListener("focusin", () => clearTimeout(toastTimer));
+  el.addEventListener("focusout", () => armToast(type, 2500));
+  host.appendChild(el);
+  toastEl = el; toastKey = key;
+  armToast(type);
 }
-function hideStatus() { $("statusBar").style.display = "none"; }
+function armToast(type, ms) {
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => removeToast(false), ms || TOAST_MS[type] || TOAST_MS.warn);
+}
+// Dismiss the current toast: slides away (or goes at once when another replaces it or motion is reduced)
+function removeToast(now) {
+  clearTimeout(toastTimer);
+  const el = toastEl; toastEl = null; toastKey = "";
+  if (!el) return;
+  if (now) { el.remove(); return; }
+  el.classList.add("leaving");
+  setTimeout(() => el.remove(), 250);  // not animationend: with reduced motion there is no animation to end
+}
+function hideStatus() { removeToast(false); }
 function escHtml(s) { const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
 function fmtDate(uts) { return new Date(parseInt(uts)*1000).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
 

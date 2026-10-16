@@ -651,7 +651,6 @@ function showRadioView(mode) {
   travelActive = travel; radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
-  $("radioStatusSlot").appendChild($("statusBar"));  // status messages sit between the bio and the list
   $("radioTitle").textContent = travel ? "Time travel" : RADIO_STATIONS[radioActiveStation].title;
   $("radioAgainBtn").style.display = travel ? "" : "none";
   $("radioUpNextBlock").style.display = travel ? "none" : "";
@@ -662,7 +661,6 @@ function showRadioView(mode) {
 
 function hideRadioView() {
   travelActive = false; radioMinimized = false; radioSyncHome();
-  $("statusSlotHome").appendChild($("statusBar"));  // back to the home view's slot
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   $("radioUpNext").innerHTML = "";
@@ -673,7 +671,6 @@ function hideRadioView() {
 function radioMinimize() {
   if (!(radioActive || travelActive) || $("radioView").style.display === "none") return;
   radioMinimized = true; radioSyncHome();
-  $("statusSlotHome").appendChild($("statusBar"));
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
 }
@@ -684,7 +681,6 @@ function radioReopen() {
   radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
-  $("radioStatusSlot").appendChild($("statusBar"));
   window.scrollTo(0, 0);
 }
 
