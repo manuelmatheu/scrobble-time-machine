@@ -14,9 +14,16 @@
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const theme = saved || (prefersDark ? 'dark' : 'light');
     if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+    if (window.self !== window.top) document.documentElement.classList.add("framed");  // inside the app's overlay, which has its own title and close button
   </script>
   <style>
-    .changelog { max-width:680px; margin:0 auto; padding:0 20px; }
+    /* One 680px column, one left edge: the title, the subtitle, the back link and every entry line up (the overlay frames it) */
+    .container { max-width:680px; }
+    .header { padding:40px 0 24px; }
+    .header p { margin:4px 0 0; color:var(--text-tertiary); font-size:14px; }
+    .changelog { margin:0; padding:0; }
+    .framed .header, .framed .back-link { display:none; }
+    .framed .changelog { padding-top:20px; }
     .changelog-entry { margin-bottom:32px; }
     .changelog-version { display:flex; align-items:baseline; gap:12px; margin-bottom:8px; }
     .changelog-version h2 { font-size:20px; font-weight:700; color:var(--text-primary); margin:0; }
@@ -42,7 +49,22 @@
 
   <div class="changelog">
     <a href="./" class="back-link" id="backLink">← Back to app</a>
-    <script>if (window.self !== window.top) document.getElementById("backLink").style.display = "none";</script>
+
+    <div class="changelog-entry">
+      <div class="changelog-version">
+        <h2>v2.10</h2>
+        <span class="date">2026-10-16</span>
+        <span class="tag tag-feature">Feature</span>
+      </div>
+      <ul class="changelog-list">
+        <li><strong>Faster start</strong>: the radio starts playing as soon as the first song is found instead of waiting for eight, so the music begins in a second or two; the Up next list fills in behind it</li>
+        <li><strong>No more cuts on speakers</strong>: when new tracks join the radio on another device (Nest, Chromecast, a phone), they are swapped in at the end of the last queued song instead of restarting the music in the middle</li>
+        <li><strong>Device list</strong>: it refreshes by itself while open, has a Refresh button, and says why Chromecast, Nest and Sonos speakers may be missing (Spotify only lists them after something has played on them from its app)</li>
+        <li><strong>Library radio year</strong>: each song shows a "From YEAR" chip, as in Mix, so you see which year of your history it came from</li>
+        <li><strong>Toasts</strong>: errors and warnings now float at the bottom of the screen and go away by themselves (with a close button), instead of staying on the page</li>
+        <li><strong>More songs in view</strong>: on a wide screen the Up next list shows 8 songs instead of 6</li>
+      </ul>
+    </div>
 
     <div class="changelog-entry">
       <div class="changelog-version">
@@ -53,9 +75,6 @@
       <ul class="changelog-list">
         <li><strong>Play on</strong>: choose where the music plays, from the home card or the radio controls: this browser or any Spotify Connect device (phone, speaker, TV). Switching mid-session keeps your queue and position, and the choice is remembered</li>
         <li><strong>Follows the music</strong>: if you move the session to another device from the Spotify app, STM now follows it and shows that device, including speakers Spotify does not list, such as many Sonos</li>
-        <li><strong>No more cuts on speakers</strong>: when new tracks join the radio on another device (Nest, Chromecast, a phone), they are swapped in at the end of the last queued song instead of restarting the music in the middle</li>
-        <li><strong>Library radio year</strong>: each song shows a "From YEAR" chip, as in Mix, so you see which year of your history it came from</li>
-        <li><strong>Device list</strong>: it refreshes by itself while open, has a Refresh button, and says why Chromecast, Nest and Sonos speakers may be missing (Spotify only lists them after something has played on them from its app)</li>
         <li><strong>Sonos limits</strong>: Spotify does not let apps control Sonos remotely, so skipping, picking a track and queue top-ups do not work there. Use the Spotify app to control it; STM keeps showing what is playing</li>
       </ul>
     </div>

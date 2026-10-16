@@ -11,7 +11,7 @@ The design of Scrobble Time Machine (STM): principles, tokens, components, scree
 1. **Music first, chrome second.** One focused player card; everything else (artist info, queue) supports it.
 2. **Dark by default, light as a full theme.** Both ship with the same structure; only tokens change.
 3. **One column on phones, two columns when there is room.** Same components, rearranged. No separate "mobile app".
-4. **Honest states.** Loading shows "Tuning..."; errors go to the status bar in plain words; no page numbers or technical jargon in the UI.
+4. **Honest states.** Loading shows "Tuning..."; errors and warnings appear as a toast in plain words; no page numbers or technical jargon in the UI.
 5. **Touch-safe.** Every interactive target is at least 44px tall; text meets WCAG AA contrast (checked by `tests/contrast.test.js`).
 6. **Quiet motion.** Short transitions only; everything is switched off under `prefers-reduced-motion`.
 
@@ -39,7 +39,7 @@ Both load from Google Fonts in `index.html`.
 | Row title | 14px / 600 | artist line 12px |
 | Eyebrow / small caps label | 12px / 700, uppercase, letter-spacing 1.5px, `--lastfm-red-text` | "NOW PLAYING", "LIBRARY RADIO" |
 | Chip, helper text | 12px / 600 | |
-| Controls (mood buttons, device button, Save as Playlist, status bar) | 13px / 600-700 | |
+| Controls (mood buttons, device button, Save as Playlist, toasts) | 13px / 600-700 | |
 
 Nothing is smaller than **12px** (row numbers, dates and the footer included); `tests/design-system.test.js` checks it.
 
@@ -134,7 +134,7 @@ A small pill that says why a track is playing. Red tint with a sparkle icon for 
 
 ### Now-playing card (`.radio-now`)
 - **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume only while the Web Playback SDK plays here).
-- **Phones (<=520px):** stacks. Full-width square cover, then the text block, progress, and centered controls (previous / play / next). The like heart moves beside the title; the controls row hides its own heart. The eyebrow row extends over the heart's reserved space so the chip's right edge lines up with the cover's right edge.
+- **Phones (<=520px):** stacks. Full-width square cover, then the text block, progress, and centered controls (previous / play / next). The like heart moves beside the title, centered on its first line (the eyebrow row keeps a 24px minimum height so it sits at the same place with or without a chip); the controls row hides its own heart. The eyebrow row extends over the heart's reserved space so the chip's right edge lines up with the cover's right edge.
 - **Play button:** 56px circle, `--text-primary` fill with `--bg-primary` glyph.
 - **Progress:** 6px pill, red fill; clickable to seek.
 
@@ -142,13 +142,13 @@ A small pill that says why a track is playing. Red tint with a sparkle icon for 
 Your play counts ("You have played X n times, and this track n times") and a four-line Last.fm bio with a "Read more on Last.fm" link. In Discover the stats line becomes the reason ("New to you. You have never played X. Picked because you listen to Y and Z."). On wide desktop (>=1100px) it becomes a card with a 148px artist photo from Spotify on the left (microphone placeholder when there is none). The panel hides when there is nothing to show.
 
 ### List rows (`.radio-row`, `.track-row`)
-44px minimum, 10px/16px padding, 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check (status classes `found` / `not_found` / `searching` / `skipped`, the names `setTrackStatus()` uses). In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
+44px minimum, 10px/16px padding (5px/16px in the wide list panel, where a row is 50px), 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check (status classes `found` / `not_found` / `searching` / `skipped`, the names `setTrackStatus()` uses). In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
 
 ### Home "playing" strip (`.radio-playing`)
 Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-tertiary` pill, shown when a radio is running behind the home view.
 
-### Status bar
-Only errors (red) and warnings (primary text) are shown, above the content. Progress and success messages are not displayed; they clear what was there.
+### Toast (`.toast`, `showStatus()`)
+Errors and warnings float at the bottom center of the screen (16px from the edge, above everything, max 520px, full width minus 16px gutters on phones), one at a time; a new message replaces the current one and the same message again only keeps it up longer. Neutral warnings invert the page (`--text-primary` fill, `--bg-primary` text, like the play button); errors take the accent (`--lastfm-red` fill, `--on-accent` text, checked in `tests/contrast.test.js`). Each has an icon (info or warning circle), the text (wraps, never truncated), and a 44px close button. It slides up on a short spring (`toast-in`, 0.28s) and slides away; warnings stay 6s and errors 9s, hovering or focusing it holds it, leaving re-arms 2.5s. It lives in a persistent polite live region (`#toastHost`, `role="status"`), so screen readers announce it when it appears. Progress text is not shown, and a success message dismisses the current toast (the problem it reported is over).
 
 ### Device picker (`.device-btn`, `.device-picker`)
 Chooses the Spotify Connect device the music plays on. Two entry points open the same popover: a **Play on** row under the home card's buttons (icon, device name, caret) and a device button in the now-playing controls row (icon only while it plays in this browser, icon + name in red when another device is picked; on phones it is a full-width row under previous / play / next). The popover (`--bg-elevated`, 12px radius, 1px border, shadow like the autocomplete box) has a "PLAY ON" eyebrow with a labelled **Refresh** text button (the open list also looks again by itself every 4 seconds, and only redraws when something changed), one 48px row per device (type icon, name; the current one gets a subtle red fill, red text and a speaker icon; restricted devices are disabled), and one short line of helper text under the list (with other devices listed: "Missing a speaker? Play something on it from the Spotify app first."; with only this browser: it names Nest, Chromecast and Sonos and turns into a filled `--bg-tertiary` note). It opens below the button, or above when there is no room, and closes on outside click, Escape, scroll or resize. The pick is remembered (`stm_device`).
@@ -173,7 +173,7 @@ Top bar: **Home** on the left, the station label (LIBRARY / DISCOVER / MIX RADIO
 Same view with the label "TIME TRAVEL · <moment>", an **Again** button next to Home, and a full **Tracks** list (with match count and Save as Playlist) instead of Up next; no volume or context panel changes beyond that.
 
 ### Changelog overlay
-Full-screen overlay with an iframe of `changelog.html`.
+Full-screen overlay (title and close button in its own header) with an iframe of `changelog.html`. Inside the overlay the page hides its own title block and back link (a `framed` class set before first paint), so the title appears once; standalone, the title, subtitle, back link and entries share one 680px column and one left edge.
 
 ---
 
@@ -184,7 +184,7 @@ Full-screen overlay with an iframe of `changelog.html`.
 | **<= 520px** | Mode grid 2 columns; radio card padding 20px; now-playing card stacks (see above); buttons full width in `.controls`; header brand 16px; date column hidden in lists |
 | **<= 720px** | Volume slider hidden (phones cannot use the SDK anyway) |
 | **521-1099px** | One column, 680px container, now-playing card horizontal at 224px |
-| **>= 1100px** | 1120px container. Home two columns (420px + rest). Radio / Time Travel two columns: player + artist panel (640px) on the left, the list as a panel of equal height on the right (min 468px). Up next rows share the panel height equally (`--upnext-rows`); the Tracks list scrolls inside and keeps the playing row visible. Artist photo shown |
+| **>= 1100px** | 1120px container. Home two columns (420px + rest). Radio / Time Travel two columns: player + artist panel (640px) on the left, the list as a panel of equal height on the right (min 468px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum); the Tracks list scrolls inside and keeps the playing row visible. Artist photo shown |
 
 ---
 
@@ -209,7 +209,6 @@ Full-screen overlay with an iframe of `changelog.html`.
 
 ## 8. Not applied yet / open decisions
 
-- **Heart alignment on phones.** The mockups for Discover and Mix now put the like heart at the top, aligned with the song title. The app still centers it vertically on the text block. Pending.
 - **Chip position on phones.** Right-aligned with the cover's right edge (applied, PR #8). Alternatives tried and rejected: chip directly after "NOW PLAYING"; chip on the artist line; no "NOW PLAYING" label; a compact player without the large cover.
 - **Mix legend.** The Mix mockup shows a small "New / From your past" legend in the Up next header; the app does not have it yet.
 - **Long names.** Chips truncate at 160-170px; very long artist names make the phone title wrap onto several lines (intended). Check with real data when changing these widths.

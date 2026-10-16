@@ -2,14 +2,22 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.9 (current) ✅
+## v2.10 (current) ✅
+
+- [x] Faster start: the first song plays as soon as it is matched (about 1.5s instead of 8s with typical latencies for Library, 2-3s for Discover and Mix); the rest of the queue fills behind it
+- [x] New tracks reach a speaker or other Connect device at the end of the last queued song (like in the browser), instead of restarting the music mid-song
+- [x] Errors and warnings are toasts (bottom center, auto-dismiss, close button) instead of a status bar that never went away
+- [x] Wide desktop shows 8 Up next rows (6 on smaller screens); the phone like heart sits on the first line of the title; the console logs are gone
+- [x] Library radio shows the "From YEAR" chip too (hero and Up next), like the past half of a Mix
+- [x] The device list refreshes by itself while open, has a labelled Refresh button and explains why Chromecast, Nest and Sonos speakers may be missing
+
+---
+
+## v2.9 ✅
 
 - [x] Spotify Connect device picker ("Play on") on the home card and in the radio controls; switching mid-session keeps the queue and position
 - [x] Follows the session when it is moved to another device from the Spotify app, including devices Spotify returns without an id (many Sonos), which are shown but cannot be controlled from STM
 - [x] A watchdog notices when the SDK loses playback without sending its null state
-- [x] New tracks reach a speaker or other Connect device at the end of the last queued song (like in the browser), instead of restarting the music mid-song
-- [x] Library radio shows the "From YEAR" chip too (hero and Up next), like the past half of a Mix
-- [x] The device list refreshes by itself while open, has a labelled Refresh button and explains why Chromecast, Nest and Sonos speakers may be missing
 
 ---
 

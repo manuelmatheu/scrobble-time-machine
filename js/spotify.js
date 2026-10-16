@@ -165,6 +165,33 @@ async function transferPlayback(token, deviceId) {
   await new Promise(r => setTimeout(r, 800));
 }
 
+// Making this browser the player takes several requests: transfer, a short wait, then shuffle and repeat off (both persist on the
+// account: with shuffle left on our queue is reordered, with "repeat context" left on Spotify replays our list from the start).
+async function spotifyPrepareSdk(token, deviceId) {
+  await fetch("https://api.spotify.com/v1/me/player", {
+    method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ device_ids: [deviceId], play: false })
+  });
+  await new Promise(r => setTimeout(r, 300));
+  await spotifyResetPlayMode(token, deviceId);
+}
+// Shuffle and repeat off, together (neither waits for the other)
+function spotifyResetPlayMode(token, deviceId) {
+  const put = (what, state) => fetch("https://api.spotify.com/v1/me/player/" + what + "?state=" + state + "&device_id=" + encodeURIComponent(deviceId), {
+    method: "PUT", headers: { Authorization: "Bearer " + token }
+  }).catch(() => {});
+  return Promise.all([put("shuffle", "false"), put("repeat", "off")]);
+}
+// The radio calls this as soon as it starts, so the device is ready by the time the first song is picked (only this browser:
+// another device keeps the full logic in spotifyPlay, which has to look at the device list)
+let spotifyPrepared = null, spotifyPrewarmP = null;
+function spotifyPrewarm(token) {
+  if (!sdkPlaying() || !sdkDeviceId) return null;
+  const id = sdkDeviceId;
+  spotifyPrewarmP = spotifyPrepareSdk(token, id).then(() => { spotifyPrepared = { id, at: Date.now() }; }).catch(() => {}).then(() => { spotifyPrewarmP = null; });
+  return spotifyPrewarmP;
+}
+
 // opts.quick: already playing on the SDK device, so skip the transfer and shuffle reset (a shorter seam)
 async function spotifyPlay(token, uris, positionMs, opts) {
   const playUris = uris.slice(0, 100);
@@ -174,24 +201,10 @@ async function spotifyPlay(token, uris, positionMs, opts) {
   // Prefer SDK device when ready (unless the user picked another Spotify Connect device)
   if (sdkPlaying() && sdkDeviceId) {
     if (!(opts && opts.quick)) {
-      await fetch("https://api.spotify.com/v1/me/player", {
-        method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ device_ids: [sdkDeviceId], play: false })
-      });
-      await new Promise(r => setTimeout(r, 300));
-      // Disable shuffle on the SDK device too -- otherwise a shuffle state left on
-      // from a previous session (it persists on the user's account) reorders our queue
-      try {
-        await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + sdkDeviceId, {
-          method: "PUT", headers: { Authorization: "Bearer " + token }
-        });
-      } catch {}
-      // Repeat persists on the account like shuffle: with "repeat context" left on, Spotify replays our list from the start
-      try {
-        await fetch("https://api.spotify.com/v1/me/player/repeat?state=off&device_id=" + sdkDeviceId, {
-          method: "PUT", headers: { Authorization: "Bearer " + token }
-        });
-      } catch {}
+      if (spotifyPrewarmP) await spotifyPrewarmP;  // the radio started getting the device ready while it picked the first song
+      const warm = spotifyPrepared && spotifyPrepared.id === sdkDeviceId && Date.now() - spotifyPrepared.at < 60000;
+      spotifyPrepared = null;
+      if (!warm) await spotifyPrepareSdk(token, sdkDeviceId);
     }
     const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + sdkDeviceId, {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
@@ -240,17 +253,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     await transferPlayback(token, device.id);
   }
 
-  // Disable shuffle on the remote device to preserve scrobble order
-  try {
-    await fetch("https://api.spotify.com/v1/me/player/shuffle?state=false&device_id=" + device.id, {
-      method: "PUT", headers: { Authorization: "Bearer " + token }
-    });
-  } catch {}
-  try {
-    await fetch("https://api.spotify.com/v1/me/player/repeat?state=off&device_id=" + device.id, {
-      method: "PUT", headers: { Authorization: "Bearer " + token }
-    });
-  } catch {}
+  // Shuffle and repeat off on the remote device too (preserves our order; see spotifyPrepareSdk)
+  await spotifyResetPlayMode(token, device.id);
 
   const r = await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + device.id, {
     method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
