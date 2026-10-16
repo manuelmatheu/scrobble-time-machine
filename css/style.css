@@ -223,7 +223,8 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
   .radio-controls { justify-content:center; gap:20px; }
   .radio-hero-text { padding-right:52px; }
   .radio-eyebrow-row { margin-right:-52px; }  /* the text column keeps 52px for the heart below; this row ignores it so the chip lines up with the right edge of the cover */
-  .radio-hero-text .radio-heart-title { display:inline-flex; position:absolute; right:0; top:50%; transform:translateY(-50%); }
+  .radio-eyebrow-row { min-height:24px; }  /* the chip is 24px tall: the row keeps that height without one, so the title (and the heart beside it) sits at the same place */
+  .radio-hero-text .radio-heart-title { display:inline-flex; position:absolute; right:0; top:20px; }  /* centered on the first line of the title (24px row + 4px + half a 28px line - half the 44px button) */
   #radioHeart { display:none; }  /* the controls row keeps prev / play / next, centered */
 }
 

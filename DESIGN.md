@@ -134,7 +134,7 @@ A small pill that says why a track is playing. Red tint with a sparkle icon for 
 
 ### Now-playing card (`.radio-now`)
 - **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume only while the Web Playback SDK plays here).
-- **Phones (<=520px):** stacks. Full-width square cover, then the text block, progress, and centered controls (previous / play / next). The like heart moves beside the title; the controls row hides its own heart. The eyebrow row extends over the heart's reserved space so the chip's right edge lines up with the cover's right edge.
+- **Phones (<=520px):** stacks. Full-width square cover, then the text block, progress, and centered controls (previous / play / next). The like heart moves beside the title, centered on its first line (the eyebrow row keeps a 24px minimum height so it sits at the same place with or without a chip); the controls row hides its own heart. The eyebrow row extends over the heart's reserved space so the chip's right edge lines up with the cover's right edge.
 - **Play button:** 56px circle, `--text-primary` fill with `--bg-primary` glyph.
 - **Progress:** 6px pill, red fill; clickable to seek.
 
@@ -209,7 +209,6 @@ Full-screen overlay with an iframe of `changelog.html`.
 
 ## 8. Not applied yet / open decisions
 
-- **Heart alignment on phones.** The mockups for Discover and Mix now put the like heart at the top, aligned with the song title. The app still centers it vertically on the text block. Pending.
 - **Chip position on phones.** Right-aligned with the cover's right edge (applied, PR #8). Alternatives tried and rejected: chip directly after "NOW PLAYING"; chip on the artist line; no "NOW PLAYING" label; a compact player without the large cover.
 - **Mix legend.** The Mix mockup shows a small "New / From your past" legend in the Up next header; the app does not have it yet.
 - **Long names.** Chips truncate at 160-170px; very long artist names make the phone title wrap onto several lines (intended). Check with real data when changing these widths.

@@ -198,7 +198,6 @@ function radioCoverUrl(hit, size) {
 // LIBRARY RADIO - engine (uses globals from config.js, spotify.js, player.js)
 // =============================================================================
 function radioSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-function radioLog(...args) { if (radioDebug && typeof console !== "undefined") console.info("[STM radio]", ...args); }
 
 // Fire RADIO_CONCURRENCY single-scrobble requests in parallel
 async function radioCollectBatch(user) {
@@ -339,7 +338,6 @@ async function radioFill(want) {
     const batch = station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid) : await radioCollectBatch(user);
     if (sid !== radioSession) return added;
     attempts += fresh ? 1 : batch.total;
-    radioLog("round", attempts, station, "picks", batch.picks.length, "failed", batch.failed + "/" + batch.total);
     if (batch.failed === batch.total) {
       radioFailures++;
       await radioSleep(Math.min(1000 * radioFailures, 8000));
@@ -433,11 +431,9 @@ async function continueRadio() {
   if (!radioActive || radioRefilling || radioExhausted) return;
   const sid = radioSession;
   radioRefilling = true; radioRenderQueue();
-  radioLog("top-up start", radioActiveStation, "queued after current:", radioRemaining(matchedUris, allTrackCount, radioCurrentUri));
   try {
     const added = await radioFill(RADIO_REFILL);
     if (sid !== radioSession) return;
-    radioLog("top-up done: added", added, "| pool", discoverPool.length, "| buffered past/new", radioBuf.past.length + "/" + radioBuf.new.length, "| failures", radioFailures, "| search error", lastSearchError || "none", "| 429 wait ms", spotifyBlockedFor());
     if (!added) {
       // Only a healthy Last.fm + Spotify round that found nothing new means the library is exhausted;
       // a failing search or a missing token is transient and must stay retryable
@@ -509,7 +505,6 @@ function radioRemoteTick() {
 // Spotify ran past the last track we sent (we missed the swap) and moved on to something else: put the tracks back now
 function radioRecoverRunOff(prevUri) {
   if (!(radioActive || travelActive) || radioSeaming || !radioContextLastUri || prevUri !== radioContextLastUri || !radioUnsentUris().length) return false;
-  radioLog("run-off: Spotify moved past the last queued track, re-issuing late");
   radioSeamReissue();
   return true;
 }
@@ -527,14 +522,12 @@ async function radioSeamReissue() {
     const sid = radioSession;
     const ending = sdkPlaying() ? _sdkCurrentUri : radioContextLastUri;  // another device: the swap only fires at the last track we sent
     const uris = radioUrisFrom(matchedUris, allTrackCount, ending).slice(1);  // drop the track that is ending
-    radioLog("seam: swapping in", uris.length, "tracks");
     if (!uris.length) return;
     const token = await getSpotifyToken();
     if (!token || sid !== radioSession) return;
     let ok = false;
     try { ok = await spotifyPlay(token, uris, 0, { quick: true }); } catch {}
     if (!ok && sid === radioSession) ok = await spotifyPlay(token, uris);  // full device logic as a fallback
-    radioLog("seam:", ok ? "done" : "FAILED");
     if (ok) checkLikedTracks();
   } finally { radioSeaming = false; }
 }

@@ -12,7 +12,6 @@ load("radio.js");
 load("spotify.js");
 load("ui.js");
 load("player.js");
-run("radioDebug = false;");
 const realSpotifySearch = global.spotifySearch;  // the real one, before the tests stub it
 const realSpotifyPlay = global.spotifyPlay;
 const realShowStatus = global.showStatus;
