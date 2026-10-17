@@ -375,6 +375,7 @@ async function playerPrev() {
   playerRest("prev");
 }
 async function playerNext() {
+  if (radioSkipHandled()) return;
   if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
@@ -382,6 +383,7 @@ async function playerNext() {
 async function setVolume(el) {
   const v = Math.min(Math.max(parseInt(el.value, 10) || 0, 0), 100);
   el.style.setProperty("--vol", v + "%");
+  if (typeof radioSetVolumeIcon === "function") radioSetVolumeIcon(v);
   if (window._stmPlayer && sdkPlaying()) window._stmPlayer.setVolume(v / 100);
 }
 function seekTo(e) {
@@ -479,15 +481,14 @@ function updateNowPlayingHeart() {
 }
 
 // =========================================================================
-// SPOTIFY CONNECT DEVICES
+// SPOTIFY CONNECT (follow only)
 // =========================================================================
-// Pick where the music plays (a speaker, the TV, your phone -- which is how it reaches Android Auto) without
-// opening the Spotify app. The pick is remembered; if the device is gone at play time, spotifyPlay() falls back.
-const DEVICE_ICONS = { computer: "ph-laptop", smartphone: "ph-device-mobile", tablet: "ph-device-tablet", speaker: "ph-speaker-hifi", tv: "ph-television", automobile: "ph-car", castaudio: "ph-speaker-hifi", castvideo: "ph-television", gameconsole: "ph-game-controller" };
-function deviceIcon(type) { return DEVICE_ICONS[String(type || "").toLowerCase()] || "ph-speaker-simple-high"; }
+// There is no device picker: the music plays in this browser. If the session is moved to another device from the
+// Spotify app (or a speaker's own app), we follow it, so top-ups go there instead of pulling the music back.
+// The followed device lives in memory only; a pick saved by an older version (stm_device) is dropped on load.
 
 // Some devices (many Sonos) come back from /me/player with device.id null. They get a stand-in id so they can be
-// followed; it is never sent to Spotify (spotifyPlayDirect omits device_id) nor remembered across reloads.
+// followed; it is never sent to Spotify (spotifyPlayDirect omits device_id).
 const UNLISTED_PREFIX = "unlisted:";
 function isUnlistedDeviceId(id) { return typeof id === "string" && id.indexOf(UNLISTED_PREFIX) === 0; }
 
@@ -495,134 +496,10 @@ function setPlaybackDevice(dev) {
   playbackDeviceId = dev ? dev.id : null;
   playbackDeviceName = dev ? dev.name || "" : "";
   playbackDeviceType = dev ? dev.type || "" : "";
-  try {
-    if (dev && !isUnlistedDeviceId(dev.id)) localStorage.setItem("stm_device", JSON.stringify({ id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType }));
-    else localStorage.removeItem("stm_device");
-  } catch {}
-  renderDeviceButtons();
-}
-function loadPlaybackDevice() {
-  try {
-    const d = JSON.parse(localStorage.getItem("stm_device") || "null");
-    if (d && d.id) { playbackDeviceId = d.id; playbackDeviceName = d.name || ""; playbackDeviceType = d.type || ""; }
-  } catch {}
-  renderDeviceButtons();
-}
-
-// The label on both device buttons: the picked device, or where automatic playback goes
-function renderDeviceButtons() {
-  const remote = !!playbackDeviceId;
-  const name = remote ? playbackDeviceName : (sdkReady ? "This browser" : "Automatic");
-  const icon = remote ? deviceIcon(playbackDeviceType) : (sdkReady ? "ph-laptop" : "ph-speaker-simple-high");
-  [["radioDeviceBtn", "radioDeviceName", "radioDeviceIcon"], ["homeDeviceBtn", "homeDeviceName", "homeDeviceIcon"]].forEach(([b, n, i]) => {
-    const btn = $(b); if (!btn) return;
-    btn.classList.toggle("remote", remote);
-    btn.title = "Playing on " + name + ". Choose a device";
-    if ($(n)) $(n).textContent = name;
-    if ($(i)) $(i).className = "ph " + icon;
-  });
   if (typeof radioSyncVolume === "function") radioSyncVolume();
 }
-
-let devicePickerAnchor = null;
-async function toggleDevicePicker(btn) {
-  const pop = $("devicePicker");
-  if (!pop) return;
-  if (pop.style.display !== "none" && devicePickerAnchor === btn) { closeDevicePicker(); return; }
-  devicePickerAnchor = btn;
-  pop.style.display = "";
-  btn.setAttribute("aria-expanded", "true");
-  placeDevicePicker();
-  await refreshDevicePicker();
-  // A speaker appears once something plays on it from the Spotify app: look again by itself while the list is open
-  clearInterval(devicePickerTimer);
-  devicePickerTimer = setInterval(() => refreshDevicePicker(true), 4000);
-}
-let devicePickerTimer = null;
-function closeDevicePicker() {
-  clearInterval(devicePickerTimer); devicePickerTimer = null;
-  const pop = $("devicePicker");
-  if (pop) pop.style.display = "none";
-  if (devicePickerAnchor) devicePickerAnchor.setAttribute("aria-expanded", "false");
-  devicePickerAnchor = null;
-}
-// Fixed position under the button (or above it when there is no room below)
-function placeDevicePicker() {
-  const pop = $("devicePicker"), btn = devicePickerAnchor;
-  if (!pop || !btn) return;
-  const r = btn.getBoundingClientRect(), w = Math.min(320, window.innerWidth - 32);
-  pop.style.width = w + "px";
-  pop.style.left = Math.max(16, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 16)) + "px";
-  const h = pop.offsetHeight || 240;
-  const below = r.bottom + 8 + h <= window.innerHeight || r.top - 8 - h < 0;
-  pop.style.top = (below ? r.bottom + 8 : r.top - 8 - h) + "px";
-}
-
-// What the picker says under the list: Google Cast and Sonos speakers are only listed by Spotify after something has played on them
-function deviceHintText(others, any) {
-  if (others) return "Missing a speaker? Play something on it from the Spotify app first.";
-  return any ? "Only this browser is listed. Nest, Chromecast and Sonos appear after you play something on them from the Spotify app."
-             : "No devices listed. Play something from the Spotify app first.";
-}
-let devicePickerSig = "";
-async function refreshDevicePicker(quiet) {
-  const list = $("deviceList");
-  if (!list) return;
-  if (!quiet) { devicePickerSig = ""; list.innerHTML = '<div class="device-empty">Looking for devices...</div>'; }
-  const token = await getSpotifyToken();
-  let devices = token ? await getSpotifyDevices(token).catch(() => []) : [];
-  // This browser's SDK device first (Spotify may not list it until it has played)
-  devices = devices.filter(d => d.id !== sdkDeviceId);
-  if (sdkReady && sdkDeviceId) devices.unshift({ id: sdkDeviceId, name: "This browser", type: "Computer", browser: true });
-  // A followed device Spotify does not list (many Sonos) still shows as the current one
-  if (playbackDeviceId && !devices.some(d => d.id === playbackDeviceId)) devices.push({ id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType });
-  const current = playbackDeviceId || (sdkReady ? sdkDeviceId : (devices.find(d => d.is_active) || {}).id);
-  const others = devices.some(d => !d.browser);
-  const hint = $("deviceHint");
-  if (hint) { hint.textContent = deviceHintText(others, devices.length > 0); hint.classList.toggle("empty", !others); }
-  // The quiet refresh leaves the list alone when nothing changed (a click must not land on a list that was just rebuilt)
-  const sig = devices.map(d => d.id + "|" + d.name + "|" + (d.is_restricted ? 1 : 0)).join(",") + ">" + current;
-  if (quiet && sig === devicePickerSig) return;
-  devicePickerSig = sig;
-  list.innerHTML = devices.length ? devices.map((d, i) =>
-    '<button class="device-opt' + (d.id === current ? " active" : "") + '" data-i="' + i + '"' + (d.is_restricted ? " disabled" : "") + '>' +
-    '<i class="ph ' + deviceIcon(d.type) + '" aria-hidden="true"></i><span class="device-opt-name">' + escHtml(d.name || "Unnamed device") + '</span>' +
-    (d.id === current ? '<i class="ph-fill ph-speaker-high device-opt-on" aria-label="Playing here"></i>' : "") + '</button>'
-  ).join("") : '<div class="device-empty">No devices found.</div>';
-  list.querySelectorAll(".device-opt").forEach(b => b.addEventListener("click", () => selectPlaybackDevice(devices[+b.dataset.i])));
-  placeDevicePicker();
-}
-
-// Switch to a device; a running session moves there and keeps playing from the same spot
-async function selectPlaybackDevice(dev) {
-  closeDevicePicker();
-  if (!dev) return;
-  const wasSdk = sdkPlaying();
-  const toBrowser = !!dev.browser || dev.id === sdkDeviceId;
-  if (toBrowser ? wasSdk : dev.id === playbackDeviceId) return;
-  setPlaybackDevice(toBrowser ? null : dev);
-  if (sessionQueue.size === 0) return;  // nothing playing yet: the next play goes there
-  const token = await getSpotifyToken();
-  if (!token) return;
-  let ok = false;
-  try {
-    const cur = wasSdk ? _sdkCurrentUri : radioCurrentUri;
-    if (wasSdk && !radioPaused && cur && (radioPendingReissue || radioUnsentUris().length > 0)) {
-      // Tracks waiting for the seam would never reach the new device: send the whole list from here
-      radioPendingReissue = false;
-      ok = await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), _sdkPositionMs);
-    } else {
-      // A transfer keeps Spotify's queue and position as they are
-      const r = await fetch("https://api.spotify.com/v1/me/player", {
-        method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ device_ids: [toBrowser ? sdkDeviceId : dev.id], play: !radioPaused })
-      });
-      ok = r.ok || r.status === 204;
-    }
-  } catch {}
-  if (!ok) { showStatus("Could not switch to " + (dev.name || "that device") + ". Open Spotify on it and try again.", "error"); return; }
-  if (toBrowser) stopPolling();
-  else { clearInterval(_sdkProgressTimer); startPolling(); setTimeout(pollNowPlaying, 1500); }
+function loadPlaybackDevice() {
+  try { localStorage.removeItem("stm_device"); } catch {}
 }
 
 // The session was moved to another device outside STM (the Spotify app, a speaker's own app): follow it, so
@@ -661,6 +538,4 @@ async function sdkWatchPlayback() {
 if (typeof window !== "undefined" && window.addEventListener) {
   setInterval(sdkWatchPlayback, POLL_INTERVAL);
   setInterval(() => radioRemoteTick(), 250);  // radio.js loads after this file: look the function up at each tick
-  window.addEventListener("resize", () => closeDevicePicker());
-  window.addEventListener("scroll", () => closeDevicePicker(), { passive: true });
 }

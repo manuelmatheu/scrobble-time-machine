@@ -456,9 +456,11 @@ async function continueRadio() {
       } else if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
       return;
     }
+    if (radioSkipWanted) { radioSkipWanted = false; await radioSeamReissue(); return; }  // Next was pressed while this top-up ran
     if (radioPaused || radioCanSeam()) { radioPendingReissue = true; return; }  // paused: do not resume it; SDK or a polled device: swap at the seam (radioMaybeSeam / radioRemoteTick)
     await radioReissue();
   } finally {
+    radioSkipWanted = false;
     if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
   }
 }
@@ -528,6 +530,19 @@ function radioMaybeSeam() {
   radioSeamReissue();
 }
 
+// Next on the last track Spotify holds would run off the end of its context and stop the music (the first song of a session plays
+// alone until the rest is swapped in). Swap the tracks it does not have in right now instead; true when the skip was handled here.
+let radioSkipWanted = false;  // Next was pressed on the last sent track while the queue was still filling: swap as soon as it has tracks
+function radioSkipHandled() {
+  if (!(radioActive || travelActive) || !radioContextLastUri) return false;
+  const cur = sdkPlaying() ? _sdkCurrentUri : remoteNow && remoteNow.uri;
+  if (cur !== radioContextLastUri) return false;
+  if (radioSeaming) return true;
+  if (radioUnsentUris().length) { radioSeamReissue(); return true; }
+  if (radioRefilling) { radioSkipWanted = true; return true; }
+  return false;
+}
+
 async function radioSeamReissue() {
   radioSeaming = true;  // first, so the next 250ms tick does not fire it again
   radioPendingReissue = false;
@@ -585,6 +600,17 @@ async function refreshHomeMeta() {
 // =============================================================================
 // Volume slider: shown (on wide screens, via CSS) only while the SDK device plays; it starts from the player's real volume
 let radioVolumeSynced = false;
+// Speaker glyph for a 0-100 volume: off, minimum, normal or loud
+const RADIO_VOLUME_ICONS = ["ph-speaker-x", "ph-speaker-none", "ph-speaker-low", "ph-speaker-high"];
+function radioVolumeIcon(v) { return RADIO_VOLUME_ICONS[v <= 0 ? 0 : v <= 33 ? 1 : v <= 66 ? 2 : 3]; }
+function radioSetVolumeIcon(v) {
+  const ic = $("radioVolumeIcon");
+  if (!ic || !ic.classList || !ic.classList.contains) return;
+  const next = radioVolumeIcon(v);
+  if (ic.classList.contains(next)) return;
+  RADIO_VOLUME_ICONS.forEach(c => ic.classList.remove(c));
+  ic.classList.add(next);
+}
 function radioSyncVolume() {
   const wrap = $("radioVolumeWrap");
   if (!wrap) return;
@@ -593,7 +619,7 @@ function radioSyncVolume() {
   radioVolumeSynced = true;
   Promise.resolve(window._stmPlayer.getVolume()).then(v => {
     const el = $("radioVolume");
-    if (el && typeof v === "number") { el.value = Math.round(v * 100); el.style.setProperty("--vol", el.value + "%"); }
+    if (el && typeof v === "number") { el.value = Math.round(v * 100); el.style.setProperty("--vol", el.value + "%"); radioSetVolumeIcon(Math.round(v * 100)); }
   }).catch(() => { radioVolumeSynced = false; });
 }
 
@@ -610,6 +636,7 @@ function radioSyncHome() {
   }
   const state = $("radioPlayingState"), track = $("radioPlayingTrack");
   if (state) state.textContent = radioNowPaused ? "Paused" : "Playing now";
+  if (box && box.classList && box.classList.toggle) box.classList.toggle("paused", !!radioNowPaused);
   if (track) track.textContent = radioNowLabel || "Tuning...";
 }
 
@@ -617,7 +644,7 @@ function radioResetHero() {
   radioHeroLive = false; radioNowLabel = ""; radioNowPaused = false;
   $("radioTrack").textContent = "Tuning...";
   $("radioArtist").textContent = "";
-  $("radioArt").removeAttribute("src");
+  $("radioArt").removeAttribute("src"); radioArtUrl = "";
   $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
   $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioInfoIdx = -1; radioHideInfo();
@@ -678,6 +705,8 @@ function hideRadioView() {
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   $("radioUpNext").innerHTML = "";
+  radioQueueShown = []; radioHeroKey = "";
+  restartClass($("homeView"), "view-in");
   radioResetHero();
 }
 
@@ -687,6 +716,7 @@ function radioMinimize() {
   radioMinimized = true; radioSyncHome();
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
+  restartClass($("homeView"), "view-in");
 }
 
 // Back to radio: return to the session that is still running (the hero and queue kept updating while hidden)
@@ -824,13 +854,43 @@ function radioSyncInfo() {
   });
 }
 
+// Motion helpers: CSS does the animating, these only restart a class (a no-op where the DOM is stubbed)
+function restartClass(el, cls) {
+  if (!el || !el.classList) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;  // reflow, so the animation plays again
+  el.classList.add(cls);
+}
+
+// Cover: a new URL starts the loading pulse, which ends when the image arrives (or fails)
+let radioArtUrl = "";
+function radioSetArt(url) {
+  const el = $("radioArt");
+  if (url === radioArtUrl) return;
+  radioArtUrl = url;
+  if (el.classList && url) {
+    el.classList.add("loading");
+    el.onload = el.onerror = () => { if (radioArtUrl === url) el.classList.remove("loading"); };
+  }
+  if (url) el.src = url; else el.removeAttribute("src");
+}
+
+let radioHeroKey = "";  // the track the hero last faded in for
+function radioHeroSwap(key) {
+  if (key === radioHeroKey) return;
+  const first = !radioHeroKey;
+  radioHeroKey = key;
+  if (!first) restartClass(document.querySelector && document.querySelector(".radio-now"), "hero-swap");
+}
+
 // Hero: the playing track (SDK track object or Spotify currently-playing item)
 function radioRenderNow(track, paused) {
   radioSetPaused(paused);
   radioHeroLive = true;
   const meta = trackMeta[nowPlayingIndex];
   const img = track.album && track.album.images && track.album.images[0];
-  $("radioArt").src = img ? img.url : (meta && meta.art) || "";
+  radioHeroSwap(track.uri || track.id || track.name || "");
+  radioSetArt(img ? img.url : (meta && meta.art) || "");
   $("radioTrack").textContent = track.name || (meta && meta.name) || "";
   const artists = (track.artists || []).map(a => a.name).join(", ");
   const album = track.album && track.album.name;
@@ -866,17 +926,26 @@ function radioRenderQueue() {
   if (box.style && box.style.setProperty) box.style.setProperty("--upnext-rows", radioUpNextRows());  // wide layout: every row is 1/N of the panel
   const upRows = radioUpNextRows();
   let html = "", shown = 0;
+  const idxs = [];
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < upRows; i++) {
     const m = trackMeta[i];
     if (!m) continue;
     html += radioQueueRowHtml(i, m, escHtml);
+    idxs.push(i);
     shown++;
   }
   if (radioRefilling && shown < upRows) {  // the Tuning row only takes a free slot
-    html += '<div class="radio-row radio-row-tuning"><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
+    html += '<div class="radio-row radio-row-tuning"><div class="radio-row-art skeleton"></div><div class="radio-row-text"><div class="radio-row-title">Tuning...</div></div></div>';
   }
   box.innerHTML = html;
+  // rows are rebuilt on every player event: only a track that was not listed before slides in, and never the first fill
+  const prev = radioQueueShown;
+  radioQueueShown = idxs;
+  if (prev.length && box.children && box.children.length) {
+    idxs.forEach((idx, n) => { if (!prev.includes(idx) && box.children[n] && box.children[n].classList) box.children[n].classList.add("radio-row-in"); });
+  }
 }
+let radioQueueShown = [];  // track indices listed in Up next at the last render
 
 // Play the radio from a queued track onward (the Up next rows call this)
 async function radioPlayFrom(idx) {
@@ -890,5 +959,5 @@ async function radioPlayFrom(idx) {
 
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt, radioRemoteLeft };
+  module.exports = { radioVolumeIcon, radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt, radioRemoteLeft };
 }

@@ -18,11 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let savedBalance = "balanced"; try { savedBalance = localStorage.getItem("stm_mix_balance") || "balanced"; } catch {}
   radioSetBalance(savedBalance);
   loadPlaybackDevice();
-  // The device picker closes on a click outside it
-  document.addEventListener("click", e => {
-    if (!devicePickerAnchor || $("devicePicker").contains(e.target) || devicePickerAnchor.contains(e.target)) return;
-    closeDevicePicker();
-  });
 
   // Username: save on change, update button
   $("usernameInput").addEventListener("input", updateGoButton);
@@ -82,7 +77,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Global keyboard shortcuts
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && devicePickerAnchor) { closeDevicePicker(); return; }
     if (e.key === "Escape" && $("changelogOverlay").style.display !== "none") { closeChangelog(); return; }
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }
   });

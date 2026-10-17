@@ -67,7 +67,7 @@ Defined on `:root` (dark) and overridden under `[data-theme="light"]`. Never har
 | `--on-accent` | `#ffffff` | same | text on a red fill (primary button) |
 | `--on-spotify` | `#0b0b0f` | same | text on a green fill (Connect Spotify) |
 | `--spotify-green-subtle` / `--spotify-green-border` | `rgba(29,185,84,.08)` / `.25` | same | Spotify badge fill and border, Save as Playlist hover |
-| `--shadow-float` | `0 12px 32px rgba(0,0,0,.35)` | `.12` alpha | floating lists only (autocomplete, device picker) |
+| `--shadow-float` | `0 12px 32px rgba(0,0,0,.35)` | `.12` alpha | floating lists only (autocomplete) |
 
 The token lines are the first two lines of `style.css` (the contrast test reads them by line number). No hex or `rgba()` appears below them; `tests/design-system.test.js` fails if one does.
 
@@ -79,7 +79,7 @@ The dark theme adds a faint noise overlay (`body::before`, 3% opacity); it is re
 
 - **Radii:** cards and panels 16px; list panels (Up next, Tracks), station options, mode cards, segmented control, floating lists 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px (both row families); chips and the play button 999px.
 - **Spacing:** 4px base. Common gaps 6, 8, 10, 12, 14, 16, 20, 28. Card padding 28px (20px on phones). Page container 680px, 20px side padding.
-- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating lists (`--shadow-float`, on `--bg-elevated`): the autocomplete box and the device picker.
+- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating lists (`--shadow-float`, on `--bg-elevated`): the autocomplete box.
 - **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px). A control that must look smaller (the disconnect x in the Spotify badge) keeps a 44px hit area with an invisible `::before`.
 
 ### Icons
@@ -88,7 +88,12 @@ Phosphor web font, regular and fill, from jsDelivr (`@phosphor-icons/web@2.1.1`)
 
 ### Motion
 
-Tokens: `--dur-fast` (0.15s, hover and color/border/background changes) and `--dur-base` (0.2s, input borders). `fade-up` 0.3s for status messages, `overlayIn` 0.2s for the changelog, the progress fill width 0.25s linear, a 0.1s press scale on player buttons. Transitions name their properties, never `transition:all`. All animation and transitions are disabled by `prefers-reduced-motion: reduce`.
+Tokens: `--dur-fast` (0.15s, hover and color/border/background changes), `--dur-base` (0.2s, input borders and exits), `--dur-slow` (0.35s, entrances and the track-change moment), and the curves `--ease-out-quart` / `--ease-out-expo` (no bounce or overshoot). Motion only carries state, with opacity and transform only:
+- the hero art scales in and the title and artist rise in a short stagger (`art-in`, `hero-in`, ease-out-expo) when the track changes, and only a track that was not in Up next before slides in (`row-in`), never the first fill;
+- the radio view, home view, mode panels, autocomplete and artist panel fade in when they appear (CSS animations that restart on `display`); the changelog overlay also has a 0.15s exit;
+- the cover placeholder pulses while the image loads (`.loading`, or no `src` yet) and the home card's equalizer (`.eq`) dances while playing and freezes when paused; the volume speaker swaps between off, minimum, normal and loud (`radioVolumeIcon()`), without animation;
+- the like heart pops (`heart-pop`), buttons scale to 0.98 on press, the Tuning row pulses as a skeleton, toasts use `--ease-out-quart`.
+The progress fill width stays 0.25s linear. Transitions name their properties, never `transition:all`. All animation and transitions are disabled by `prefers-reduced-motion: reduce`, and JS-timed exits (`closeChangelog()`, `removeToast()`) skip their wait then. `tests/motion.test.js` checks the curves, the keyframe properties and the reduced-motion block.
 
 ---
 
@@ -150,9 +155,6 @@ Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-t
 ### Toast (`.toast`, `showStatus()`)
 Errors and warnings float at the bottom center of the screen (16px from the edge, above everything, max 520px, full width minus 16px gutters on phones), one at a time; a new message replaces the current one and the same message again only keeps it up longer. Neutral warnings invert the page (`--text-primary` fill, `--bg-primary` text, like the play button); errors take the accent (`--lastfm-red` fill, `--on-accent` text, checked in `tests/contrast.test.js`). Each has an icon (info or warning circle), the text (wraps, never truncated), and a 44px close button. It slides up on a short spring (`toast-in`, 0.28s) and slides away; warnings stay 6s and errors 9s, hovering or focusing it holds it, leaving re-arms 2.5s. It lives in a persistent polite live region (`#toastHost`, `role="status"`), so screen readers announce it when it appears. Progress text is not shown, and a success message dismisses the current toast (the problem it reported is over).
 
-### Device picker (`.device-btn`, `.device-picker`)
-Chooses the Spotify Connect device the music plays on. Two entry points open the same popover: a **Play on** row under the home card's buttons (icon, device name, caret) and a device button in the now-playing controls row (icon only while it plays in this browser, icon + name in red when another device is picked; on phones it is a full-width row under previous / play / next). The popover (`--bg-elevated`, 12px radius, 1px border, shadow like the autocomplete box) has a "PLAY ON" eyebrow with a labelled **Refresh** text button (the open list also looks again by itself every 4 seconds, and only redraws when something changed), one 48px row per device (type icon, name; the current one gets a subtle red fill, red text and a speaker icon; restricted devices are disabled), and one short line of helper text under the list (with other devices listed: "Missing a speaker? Play something on it from the Spotify app first."; with only this browser: it names Nest, Chromecast and Sonos and turns into a filled `--bg-tertiary` note). It opens below the button, or above when there is no room, and closes on outside click, Escape, scroll or resize. The pick is remembered (`stm_device`).
-
 ### Spotify badge
 Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify connected" with a small dot and an x to disconnect (20px visible, 44px hit area), in the header.
 
@@ -201,7 +203,7 @@ Full-screen overlay (title and close button in its own header) with an iframe of
 - Targets: at least 44px; the heart in the player is 44px.
 - Semantics: real `<button>` elements; the station picker and Mix balance are `role="group"` with `aria-pressed` on options; icon-only buttons have `aria-label`; the radio view has `aria-label="Radio"`.
 - Selection never relies on color alone (dot, border and fill change together).
-- Focus: one global ring, `2px solid var(--lastfm-red-text)` at 2px offset, on every button, link, range input and `[tabindex]` under `:focus-visible`. Exceptions: text inputs (their red border and glow) and device picker rows (offset -2px so the scrolling list does not clip it).
+- Focus: one global ring, `2px solid var(--lastfm-red-text)` at 2px offset, on every button, link, range input and `[tabindex]` under `:focus-visible`. Exceptions: text inputs (their red border and glow).
 - Toggle buttons expose their state with `aria-pressed` (station picker, Mix balance, hearts).
 - Reduced motion respected.
 

@@ -173,7 +173,6 @@ function updateSpotifyUI(c) {
   $("spotifyBadge").style.display = c ? "" : "none";
   $("radioBtn").style.display = c ? "" : "none";
   $("timeTravel").style.display = c ? "" : "none";
-  if ($("homeDevice")) $("homeDevice").style.display = c ? "" : "none";
   const home = $("homeView"); if (home && home.classList) home.classList.toggle("connected", !!c);  // wide desktop: two columns once the modes are visible
   updateGoButton();
 }
@@ -347,9 +346,18 @@ function openChangelog() {
   document.body.style.overflow = "hidden";
 }
 function closeChangelog() {
-  $("changelogOverlay").style.display = "none";
-  $("changelogFrame").src = "about:blank";
-  document.body.style.overflow = "";
+  const overlay = $("changelogOverlay");
+  if (overlay.classList.contains("leaving")) return;
+  const done = () => {
+    overlay.style.display = "none";
+    overlay.classList.remove("leaving");
+    $("changelogFrame").src = "about:blank";
+    document.body.style.overflow = "";
+  };
+  // wait out the 200ms exit, unless motion is reduced (the CSS animation is off then, so there is nothing to wait for)
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
+  overlay.classList.add("leaving");
+  setTimeout(done, 200);
 }
 
 // (Theme toggle is handled by inline IIFE in index.html to prevent flash)

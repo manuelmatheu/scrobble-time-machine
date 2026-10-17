@@ -101,6 +101,9 @@ assert.deepEqual(r.radioTransportRequest("next", false), { method: "POST", path:
 assert.deepEqual(r.radioTransportRequest("prev", true), { method: "POST", path: "/me/player/previous" });
 assert.equal(r.radioTransportRequest("bogus", false), null);
 
+// radioVolumeIcon: off, minimum, normal, loud
+assert.deepEqual([0, 1, 33, 34, 66, 67, 100].map(r.radioVolumeIcon), ["ph-speaker-x", "ph-speaker-none", "ph-speaker-none", "ph-speaker-low", "ph-speaker-low", "ph-speaker-high", "ph-speaker-high"]);
+
 // radioParseBio: Last.fm bio summary (HTML) -> plain text + "Read more" url
 const readMore = '<a href="https://www.last.fm/music/Arcade+Fire">Read more on Last.fm</a>';
 assert.deepEqual(r.radioParseBio("Arcade Fire is an indie rock band &amp; more. " + readMore), { text: "Arcade Fire is an indie rock band & more.", url: "https://www.last.fm/music/Arcade+Fire" });
