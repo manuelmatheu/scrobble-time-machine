@@ -102,7 +102,7 @@
           <button class="seg-opt" data-balance="mostly-new" aria-pressed="false" onclick="radioSetBalance('mostly-new')">Mostly new</button>
         </div>
       </div>
-      <div class="radio-playing" id="radioPlaying" style="display:none"><i class="ph-fill ph-equalizer" aria-hidden="true"></i><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
+      <div class="radio-playing" id="radioPlaying" style="display:none"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
       <div class="controls">
         <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
         <button class="btn btn-spotify btn-radio" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
@@ -188,7 +188,7 @@
         <button class="radio-btn radio-play" id="radioPlay" onclick="playerPlayPause()" aria-label="Play or pause"><i class="ph-fill ph-play"></i></button>
         <button class="radio-btn" onclick="playerNext()" aria-label="Next"><i class="ph-fill ph-skip-forward"></i></button>
         <button class="device-btn" id="radioDeviceBtn" onclick="toggleDevicePicker(this)" aria-haspopup="true" aria-expanded="false" aria-label="Choose a device"><i class="ph ph-laptop" id="radioDeviceIcon" aria-hidden="true"></i><span class="device-btn-name" id="radioDeviceName">This browser</span></button>
-        <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" aria-hidden="true"></i><input type="range" class="volume-range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
+        <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" id="radioVolumeIcon" aria-hidden="true"></i><input type="range" class="volume-range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
       </div>
     </section>
     <div class="radio-info" id="radioInfo" style="display:none">

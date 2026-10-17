@@ -1,4 +1,4 @@
-:root { --lastfm-red:#d51007; --lastfm-red-hover:#e6130a; --lastfm-red-text:#ff5a50; --lastfm-red-glow:rgba(213,16,7,0.25); --lastfm-red-subtle:rgba(213,16,7,0.08); --on-accent:#ffffff; --spotify-green:#1DB954; --spotify-green-hover:#1ed760; --spotify-green-subtle:rgba(29,185,84,0.08); --spotify-green-border:rgba(29,185,84,0.25); --on-spotify:#0b0b0f; --bg-primary:#0b0b0f; --bg-secondary:#111116; --bg-tertiary:#18181f; --bg-elevated:#1e1e27; --border:#222230; --border-subtle:#1a1a25; --text-primary:#e8e6e3; --text-secondary:#b4b4bc; --text-tertiary:#92929c; --text-muted:#80808a; --success:#22c55e; --error:#ef4444; --warning:#eab308; --shadow-float:0 12px 32px rgba(0,0,0,0.35); --dur-fast:0.15s; --dur-base:0.2s; }
+:root { --lastfm-red:#d51007; --lastfm-red-hover:#e6130a; --lastfm-red-text:#ff5a50; --lastfm-red-glow:rgba(213,16,7,0.25); --lastfm-red-subtle:rgba(213,16,7,0.08); --on-accent:#ffffff; --spotify-green:#1DB954; --spotify-green-hover:#1ed760; --spotify-green-subtle:rgba(29,185,84,0.08); --spotify-green-border:rgba(29,185,84,0.25); --on-spotify:#0b0b0f; --bg-primary:#0b0b0f; --bg-secondary:#111116; --bg-tertiary:#18181f; --bg-elevated:#1e1e27; --border:#222230; --border-subtle:#1a1a25; --text-primary:#e8e6e3; --text-secondary:#b4b4bc; --text-tertiary:#92929c; --text-muted:#80808a; --success:#22c55e; --error:#ef4444; --warning:#eab308; --shadow-float:0 12px 32px rgba(0,0,0,0.35); --dur-fast:0.15s; --dur-base:0.2s; --dur-slow:0.35s; --ease-out-quart:cubic-bezier(0.25,1,0.5,1); --ease-out-expo:cubic-bezier(0.16,1,0.3,1); }
 [data-theme="light"] { --lastfm-red-text:#c60f06; --bg-primary:#f5f5f7; --bg-secondary:#ffffff; --bg-tertiary:#eaeaed; --bg-elevated:#ffffff; --border:#d4d4d8; --border-subtle:#e4e4e7; --text-primary:#18181b; --text-secondary:#52525b; --text-tertiary:#5f5f68; --text-muted:#65656e; --lastfm-red-glow:rgba(213,16,7,0.15); --lastfm-red-subtle:rgba(213,16,7,0.06); --shadow-float:0 12px 32px rgba(0,0,0,0.12); }
 /* Tokens: colors on the two lines above (tests/contrast.test.js reads them by line number), never hardcoded below.
    --on-accent / --on-spotify are the text colors on a red / green fill; --shadow-float is for floating lists only. */
@@ -23,6 +23,7 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .input-username::placeholder, .mode-input-field::placeholder { color:var(--text-muted); }
 .input-username:disabled { opacity:0.5; }
 .btn { min-height:44px; padding:11px 20px; border:none; border-radius:8px; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; white-space:nowrap; transition:background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast); }
+.btn:active:not(:disabled) { transform:scale(0.98); }
 .btn:disabled { opacity:0.4; cursor:not-allowed; }
 .btn-spotify { background:var(--spotify-green); color:var(--on-spotify); }
 .btn-spotify:hover:not(:disabled) { background:var(--spotify-green-hover); transform:translateY(-1px); }
@@ -45,7 +46,7 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .btn-save-playlist.saved { border-color:var(--success); color:var(--success); cursor:default; }
 /* List rows: .track-row (Time Travel) and .radio-row (Up next) share size, cover, type and divider; see DESIGN.md */
 .track-list { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:12px; overflow:hidden; }
-.track-row { display:flex; align-items:center; gap:12px; padding:10px 16px; transition:background var(--dur-fast); cursor:default; }
+.track-row { display:flex; align-items:center; gap:12px; padding:10px 16px; transition:background var(--dur-base) var(--ease-out-quart), opacity var(--dur-base) var(--ease-out-quart); cursor:default; }
 .track-row.playable { cursor:pointer; }
 .track-row.playable:hover { background:var(--bg-tertiary); }
 .track-row.now-playing { background:var(--lastfm-red-subtle); }
@@ -62,13 +63,13 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .track-art { object-fit:cover; }
 .track-art-placeholder { display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:16px; }
 .track-info { flex:1; min-width:0; }
-.track-name { font-size:14px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.track-name { transition:color var(--dur-base) var(--ease-out-quart); font-size:14px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .track-meta { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .track-date { font-size:12px; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
 /* status classes are the match states set by setTrackStatus() in ui.js: found / not_found / searching / skipped */
-.track-status { width:20px; text-align:center; font-size:14px; font-weight:700; flex-shrink:0; }
+.track-status { width:20px; text-align:center; font-size:14px; font-weight:700; flex-shrink:0; transition:color var(--dur-base) var(--ease-out-quart); }
 .track-status.found { color:var(--success); } .track-status.not_found { color:var(--error); } .track-status.searching { color:var(--warning); } .track-status.skipped { color:var(--text-muted); }
-.mode-inputs { position:relative; display:flex; gap:8px; margin-bottom:20px; justify-content:flex-start; flex-wrap:wrap; }
+.mode-inputs { animation:view-in var(--dur-slow) var(--ease-out-expo); position:relative; display:flex; gap:8px; margin-bottom:20px; justify-content:flex-start; flex-wrap:wrap; }
 .mood-grid { max-width:500px; }
 .mood-btn { min-height:44px; padding:8px 14px; border:1px solid var(--border); border-radius:8px; background:var(--bg-secondary); color:var(--text-secondary); font-size:13px; font-family:inherit; cursor:pointer; transition:background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast); }
 .mood-btn:hover { border-color:var(--text-tertiary); color:var(--text-primary); }
@@ -89,14 +90,16 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 }
 
 /* Autocomplete: a floating list, so it may cast --shadow-float */
-.autocomplete-box { position:absolute; top:100%; left:50%; transform:translateX(-50%); min-width:280px; max-width:400px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); z-index:100; overflow:hidden; margin-top:4px; }
+.autocomplete-box { animation:fade-in var(--dur-fast) var(--ease-out-quart); position:absolute; top:100%; left:50%; transform:translateX(-50%); min-width:280px; max-width:400px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); z-index:100; overflow:hidden; margin-top:4px; }
 .autocomplete-item { display:flex; justify-content:space-between; align-items:center; min-height:44px; padding:10px 14px; cursor:pointer; transition:background var(--dur-fast); }
 .autocomplete-item:hover, .autocomplete-item.ac-active { background:var(--bg-tertiary); }
 .ac-name { color:var(--text-primary); font-size:14px; }
 .ac-count { color:var(--text-tertiary); font-size:12px; font-family:'JetBrains Mono',monospace; }
 
 /* Changelog overlay */
-.overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-primary); z-index:1000; display:flex; flex-direction:column; animation:overlayIn 0.2s ease; }
+.overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-primary); z-index:1000; display:flex; flex-direction:column; animation:overlayIn var(--dur-slow) var(--ease-out-expo); }
+.overlay.leaving { animation:overlayOut var(--dur-base) var(--ease-out-quart) forwards; }
+@keyframes overlayOut { to { opacity:0; transform:translateY(12px); } }
 @keyframes overlayIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
 .overlay-header { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .overlay-title { font-size:16px; font-weight:700; color:var(--text-primary); }
@@ -108,6 +111,8 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .heart-btn { width:44px; height:44px; margin:-2px 0; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:none; border:none; border-radius:8px; color:var(--text-muted); cursor:pointer; line-height:1; transition:color var(--dur-fast), background var(--dur-fast); }
 .heart-btn:hover { color:var(--text-primary); background:var(--bg-tertiary); }
 .heart-btn.liked { color:var(--lastfm-red-text); }
+.heart-btn.liked i, .radio-btn.liked i { animation:heart-pop var(--dur-slow) var(--ease-out-expo); }
+@keyframes heart-pop { from { transform:scale(0.6); } to { transform:scale(1); } }
 
 /* Home view */
 .app-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:24px 0 20px; }
@@ -158,6 +163,13 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .mode-card-desc { font-size:13px; line-height:1.35; color:var(--text-secondary); }
 .radio-playing { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:12px 14px; border-radius:12px; background:var(--bg-tertiary); font-size:14px; color:var(--text-secondary); min-width:0; }
 .radio-playing i { color:var(--lastfm-red-text); font-size:18px; flex-shrink:0; }
+/* Equalizer: four bars that dance while it plays and freeze (mid-beat) when paused */
+.eq { display:inline-flex; align-items:flex-end; gap:2px; width:18px; height:18px; flex-shrink:0; }
+.eq i { display:block; width:3px; height:100%; border-radius:1px; background:var(--lastfm-red-text); transform-origin:bottom; transform:scaleY(0.5); animation:eq-bar 0.9s ease-in-out infinite alternate; }
+.eq i:nth-child(2) { animation-duration:0.7s; animation-delay:-0.3s; }
+.eq i:nth-child(3) { animation-duration:1.1s; animation-delay:-0.6s; }
+.eq i:nth-child(4) { animation-duration:0.8s; animation-delay:-0.15s; }
+.radio-playing.paused .eq i { animation-play-state:paused; }
 .radio-playing strong { color:var(--text-primary); }
 .radio-playing-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width:520px) { .mode-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .radio-card { padding:20px; } }
@@ -166,7 +178,8 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 @media (max-width:520px) { .app-brand h1 { font-size:16px; } }
 
 /* Library radio view */
-.radio-view { width:100%; padding-bottom:48px; }
+.radio-view { width:100%; padding-bottom:48px; animation:view-in var(--dur-slow) var(--ease-out-expo); }
+.view-in { animation:view-in var(--dur-slow) var(--ease-out-expo); }
 .radio-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
 .radio-title { text-align:right; font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--lastfm-red-text); }
 .btn-text { background:none; border:none; color:var(--text-secondary); font-family:inherit; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:0; min-height:44px; }
@@ -180,6 +193,11 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .radio-hero-text .eyebrow { margin-bottom:0; }
 .radio-track { font-size:28px; font-weight:800; line-height:1.1; letter-spacing:-0.6px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-artist { font-size:15px; color:var(--text-secondary); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hero-swap .radio-art { animation:art-in var(--dur-slow) var(--ease-out-expo); }
+.hero-swap .radio-track { animation:hero-in var(--dur-slow) var(--ease-out-expo) 0.05s backwards; }
+.hero-swap .radio-artist { animation:hero-in var(--dur-slow) var(--ease-out-expo) 0.1s backwards; }
+/* Cover still loading (or no cover yet): the placeholder pulses; when the image arrives the loading class goes and art-in plays */
+.radio-now .radio-art.loading, .radio-now .radio-art:not([src]) { animation:skeleton-pulse 1.2s ease-in-out infinite; }
 .radio-progress { grid-column:2; grid-row:2; align-self:center; display:flex; align-items:center; gap:12px; }
 .radio-progress span { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-tertiary); flex-shrink:0; }
 .progress-track { flex:1; height:6px; background:var(--bg-tertiary); border-radius:999px; cursor:pointer; }
@@ -210,6 +228,9 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .radio-row-title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-artist { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .radio-row-tuning .radio-row-title { color:var(--text-secondary); font-weight:500; }
+.radio-row-in { animation:row-in var(--dur-slow) var(--ease-out-expo) backwards; }
+.radio-row-tuning { animation:skeleton-pulse 1.2s ease-in-out infinite; }
+.skeleton { background:var(--bg-tertiary); }
 @media (max-width:520px) {
   .radio-now { display:flex; flex-direction:column; gap:16px; height:auto; padding:20px; }
   .radio-hero { display:flex; flex-direction:column; align-items:stretch; gap:16px; }
@@ -241,7 +262,7 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .home-device .device-btn.remote { color:var(--lastfm-red-text); }
 .home-device .device-btn i.ph-caret-down { font-size:14px; }
 /* a floating list like the autocomplete box, so it is the other surface allowed a shadow */
-.device-picker { position:fixed; z-index:50; box-sizing:border-box; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); }
+.device-picker { animation:pop-in var(--dur-slow) var(--ease-out-expo); transform-origin:top center; position:fixed; z-index:50; box-sizing:border-box; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); }
 .device-picker-head { display:flex; align-items:center; justify-content:space-between; padding:0 0 4px 10px; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--lastfm-red-text); }
 .device-picker .device-refresh { padding:0 10px; font-size:13px; font-weight:600; letter-spacing:0; text-transform:none; }  /* a labelled text button: the list also refreshes by itself while open */
 .device-list { display:flex; flex-direction:column; max-height:min(320px, 50vh); overflow-y:auto; }
@@ -270,7 +291,7 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 }
 
 /* Radio: your play counts and artist bio */
-.radio-info { margin-bottom:28px; }
+.radio-info { margin-bottom:28px; animation:view-in var(--dur-slow) var(--ease-out-expo); }
 .radio-stats { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:12px; padding:14px 16px; font-size:14px; line-height:1.5; color:var(--text-secondary); margin-bottom:16px; }
 .radio-stats strong { color:var(--text-primary); font-weight:700; }
 .radio-bio-name { font-size:18px; font-weight:800; letter-spacing:-0.3px; margin-bottom:8px; }
@@ -316,9 +337,9 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 
 /* Toasts: errors and warnings, bottom center, one at a time (showStatus() in ui.js). Inverted like the play button; errors take the accent fill. */
 .toast-host { position:fixed; left:0; right:0; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); z-index:1100; display:flex; justify-content:center; padding:0 16px; pointer-events:none; }
-.toast { pointer-events:auto; display:flex; align-items:center; gap:10px; box-sizing:border-box; max-width:min(520px, 100%); padding:10px 6px 10px 16px; border-radius:12px; background:var(--text-primary); color:var(--bg-primary); box-shadow:var(--shadow-float); font-size:14px; line-height:1.4; animation:toast-in 0.28s cubic-bezier(0.34,1.56,0.64,1); }
+.toast { pointer-events:auto; display:flex; align-items:center; gap:10px; box-sizing:border-box; max-width:min(520px, 100%); padding:10px 6px 10px 16px; border-radius:12px; background:var(--text-primary); color:var(--bg-primary); box-shadow:var(--shadow-float); font-size:14px; line-height:1.4; animation:toast-in 0.28s var(--ease-out-quart); }
 .toast.error { background:var(--lastfm-red); color:var(--on-accent); }
-.toast.leaving { animation:toast-out var(--dur-base) ease-in forwards; }
+.toast.leaving { animation:toast-out var(--dur-fast) var(--ease-out-quart) forwards; }
 .toast > i { font-size:20px; flex-shrink:0; }
 .toast-text { min-width:0; overflow-wrap:anywhere; }
 .toast-close { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; margin:-10px 0; background:none; border:none; border-radius:8px; color:inherit; font-size:18px; cursor:pointer; opacity:0.75; }
@@ -326,3 +347,13 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .toast-close:focus-visible { outline-color:currentColor; }  /* the global ring is red: not visible on the red error fill */
 @keyframes toast-in { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
 @keyframes toast-out { to { opacity:0; transform:translateY(12px); } }
+
+/* Motion keyframes: opacity and transform only; the reduced-motion block above switches them all off */
+@keyframes fade-in { from { opacity:0; } to { opacity:1; } }
+@keyframes pop-in { from { opacity:0; transform:translateY(-8px) scale(0.96); } to { opacity:1; transform:none; } }
+@keyframes view-in { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+@keyframes hero-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+@keyframes art-in { from { opacity:0; transform:scale(0.94); } to { opacity:1; transform:none; } }
+@keyframes row-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+@keyframes eq-bar { from { transform:scaleY(0.25); } to { transform:scaleY(1); } }
+@keyframes skeleton-pulse { 0%, 100% { opacity:1; } 50% { opacity:0.5; } }

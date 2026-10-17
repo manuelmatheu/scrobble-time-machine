@@ -375,6 +375,7 @@ async function playerPrev() {
   playerRest("prev");
 }
 async function playerNext() {
+  if (radioSkipHandled()) return;
   if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
@@ -382,6 +383,7 @@ async function playerNext() {
 async function setVolume(el) {
   const v = Math.min(Math.max(parseInt(el.value, 10) || 0, 0), 100);
   el.style.setProperty("--vol", v + "%");
+  if (typeof radioSetVolumeIcon === "function") radioSetVolumeIcon(v);
   if (window._stmPlayer && sdkPlaying()) window._stmPlayer.setVolume(v / 100);
 }
 function seekTo(e) {

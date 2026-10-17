@@ -214,6 +214,28 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   await new Promise(r => setImmediate(r));
   assert.equal(played.length, 0);
   assert.equal(run("radioPendingReissue"), true);  // still waiting
+  // 12b3. Next on the last track Spotify holds (the first song plays alone) swaps the unsent tracks in instead of running off the end
+  reset(); played = []; n = 100; run(existing); run("radioActive = true; sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 12000; radioSeaming = false;");
+  assert.equal(run("radioSkipHandled()"), false, "nothing unsent and no top-up running: Spotify's own next is fine");
+  global.getLastFmScrobbleAt = async () => song(n++);
+  await run("continueRadio()");
+  assert.equal(played.length, 0);
+  assert.equal(run("radioSkipHandled()"), true);
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  assert.notEqual(played[0][0], "spotify:track:Existing");  // starts at the first new track, mid-song
+  run("_sdkCurrentUri = 'spotify:track:Elsewhere'; radioSeaming = false;");
+  assert.equal(run("radioSkipHandled()"), false, "not on the last sent track: Spotify's next works");
+  // pressed while the top-up is still running: it swaps as soon as the tracks arrive
+  reset(); played = []; n = 100; run(existing); run("radioActive = true; sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Existing'; radioContextLastUri = 'spotify:track:Existing'; radioSeaming = false;");
+  const topUp = run("continueRadio()");
+  assert.equal(run("radioSkipHandled()"), true);
+  await topUp;
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);
+  assert.notEqual(played[0][0], "spotify:track:Existing");
+  assert.equal(run("radioPendingReissue"), false);
+  run("sdkReady = false; radioActive = false; radioContextLastUri = null;");
   // ...and spotifyPlay remembers the end of every context it sends (Spotify caps a play at 100 URIs)
   const realFetch = global.fetch;
   const playCalls = [];

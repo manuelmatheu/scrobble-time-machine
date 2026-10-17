@@ -88,7 +88,12 @@ Phosphor web font, regular and fill, from jsDelivr (`@phosphor-icons/web@2.1.1`)
 
 ### Motion
 
-Tokens: `--dur-fast` (0.15s, hover and color/border/background changes) and `--dur-base` (0.2s, input borders). `fade-up` 0.3s for status messages, `overlayIn` 0.2s for the changelog, the progress fill width 0.25s linear, a 0.1s press scale on player buttons. Transitions name their properties, never `transition:all`. All animation and transitions are disabled by `prefers-reduced-motion: reduce`.
+Tokens: `--dur-fast` (0.15s, hover and color/border/background changes), `--dur-base` (0.2s, input borders and exits), `--dur-slow` (0.35s, entrances and the track-change moment), and the curves `--ease-out-quart` / `--ease-out-expo` (no bounce or overshoot). Motion only carries state, with opacity and transform only:
+- the hero art scales in and the title and artist rise in a short stagger (`art-in`, `hero-in`, ease-out-expo) when the track changes, and only a track that was not in Up next before slides in (`row-in`), never the first fill;
+- the radio view, home view, mode panels, device picker, autocomplete and artist panel fade in when they appear (CSS animations that restart on `display`); the changelog overlay also has a 0.15s exit;
+- the cover placeholder pulses while the image loads (`.loading`, or no `src` yet) and the home card's equalizer (`.eq`) dances while playing and freezes when paused; the volume speaker swaps between off, minimum, normal and loud (`radioVolumeIcon()`), without animation;
+- the like heart pops (`heart-pop`), buttons scale to 0.98 on press, the Tuning row pulses as a skeleton, toasts use `--ease-out-quart`.
+The progress fill width stays 0.25s linear. Transitions name their properties, never `transition:all`. All animation and transitions are disabled by `prefers-reduced-motion: reduce`, and JS-timed exits (`closeChangelog()`, `removeToast()`) skip their wait then. `tests/motion.test.js` checks the curves, the keyframe properties and the reduced-motion block.
 
 ---
 
