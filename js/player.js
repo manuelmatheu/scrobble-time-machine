@@ -11,7 +11,7 @@ function stopPolling() {
   nowPlayingIndex = -1;
 }
 
-let _pollBusy = false;
+let _pollBusy = false, _emptyPolls = 0;
 async function pollNowPlaying() {
   if (sdkPlaying() || _pollBusy) return;
   _pollBusy = true;
@@ -21,7 +21,13 @@ async function pollNowPlayingOnce() {
   const token = await getSpotifyToken();
   if (!token) return;
   const data = await getCurrentlyPlaying(token);
-  if (!data || !data.item) return;
+  if (!data || !data.item) {
+    // Spotify drops a followed device that sat idle: /me/player then comes back empty for good. Let go of it, or the controls
+    // keep talking to a device that is gone
+    if (playbackDeviceId && ++_emptyPolls >= 2) releaseDeadDevice(false);
+    return;
+  }
+  _emptyPolls = 0;
 
   const playingUri = data.item.uri;
   const prevUri = remoteNow && remoteNow.uri;
@@ -364,7 +370,25 @@ async function playerRest(action) {
   if (!req) return;
   const token = await getSpotifyToken();
   if (!token) return;
-  try { await fetch("https://api.spotify.com/v1" + req.path, { method: req.method, headers: { Authorization: "Bearer " + token } }); } catch (e) {}
+  try {
+    const r = await fetch("https://api.spotify.com/v1" + req.path, { method: req.method, headers: { Authorization: "Bearer " + token } });
+    if (r.status === 404 && playbackDeviceId) releaseDeadDevice(true);  // the followed device is gone
+  } catch (e) {}
+}
+// The followed device is gone (switched off, or idle too long). Back to this browser; with resume, carry on from the last
+// track seen so the control that was pressed does something.
+async function releaseDeadDevice(resume) {
+  const name = playbackDeviceName, last = remoteNow && remoteNow.uri;
+  setPlaybackDevice(null);
+  _emptyPolls = 0;
+  remoteNow = null;
+  if (!sdkReady || sessionQueue.size === 0) return;
+  stopPolling();
+  if (!resume) { showStatus((name || "The other device") + " is not available. Playing here again.", "warn"); return; }
+  const uris = radioUrisFrom(matchedUris, allTrackCount, last && sessionQueue.has(last) ? last : null);
+  const token = uris.length ? await getSpotifyToken() : null;
+  if (token && await spotifyPlay(token, uris)) { sessionPaused = false; startPolling(); }
+  else showStatus("Playback stopped. Click a track to continue.", "warn");
 }
 async function playerPlayPause() {
   if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.togglePlay(); return; }
