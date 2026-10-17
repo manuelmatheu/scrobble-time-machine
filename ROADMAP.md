@@ -10,6 +10,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Wide desktop shows 8 Up next rows (6 on smaller screens); the phone like heart sits on the first line of the title; the console logs are gone
 - [x] Library radio shows the "From YEAR" chip too (hero and Up next), like the past half of a Mix
 - [x] Fix: Next on the last song Spotify holds (such as the first song of a session) no longer stops the music; the queued tracks are swapped in at once
+- [x] Removed the "Play on" device picker (it did not work as intended and broke the player layout); a session moved to another device from the Spotify app is still followed
 - [x] Quiet motion: track-change fade, new Up next rows slide in, view/overlay/menu transitions, like pop, Tuning skeleton; ease-out tokens, no overshoot, off under reduced motion (`tests/motion.test.js`)
 - [x] The device list refreshes by itself while open, has a labelled Refresh button and explains why Chromecast, Nest and Sonos speakers may be missing
 

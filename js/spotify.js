@@ -320,7 +320,7 @@ function initSDKPlayer() {
     sdkDeviceId = device_id;
     sdkReady = true;
     if (!playbackDeviceId) stopPolling();  // another Connect device picked: polling keeps following it
-    renderDeviceButtons();
+    if (typeof radioSyncVolume === "function") radioSyncVolume();
     // Re-transfer playback to SDK device after auth error recovery
     if (reconnecting && sessionQueue.size > 0 && !sessionPaused && !playbackDeviceId) {
       sdkNeedsRetransfer = false;
@@ -331,7 +331,7 @@ function initSDKPlayer() {
     sdkReady = false;
     sdkDeviceId = null;
     if (sessionQueue.size > 0) startPolling();
-    renderDeviceButtons();
+    if (typeof radioSyncVolume === "function") radioSyncVolume();
   });
   player.addListener('player_state_changed', state => {
     if (state) onSDKStateChange(state);

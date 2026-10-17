@@ -96,8 +96,8 @@ Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the
 - **Auth:** PKCE (`initiateSpotifyAuth()` / `exchangeCodeForToken()` / `refreshSpotifyToken()` / `getSpotifyToken()`). Tokens live in `localStorage`; only the code verifier and a spare copy of the username go through `sessionStorage`.
 - **SDK:** `initSDKPlayer()` can be called from the SDK-ready callback and from the auth callbacks in `app.js`; it guards on `window._stmPlayer`. Its `ready` / `not_ready` / `authentication_error` listeners stop and start polling and re-transfer playback after a reconnect (`sdkNeedsRetransfer`).
 - **Who is playing:** every SDK-driven decision goes through `sdkPlaying()` (`sdkReady && !playbackDeviceId`), not `sdkReady`. When it is true, `player_state_changed` -> `onSDKStateChange()` drives the UI; otherwise `pollNowPlaying()` reads `/me/player` every `POLL_INTERVAL` (5s) and follows the device the music moved to (`followPlaybackDevice()`).
-- **`spotifyPlay(token, uris, opts)`:** caps at 100 URIs. With the SDK: transfer, then turn shuffle and repeat off, then play with `device_id`. Otherwise it picks a device (the picked one, then the active one, then any). Shuffle and repeat persist on the user's account and would reorder or loop the queue, so every full play resets them. `{quick:true}` (used at seams) sends a single `play` request.
-- **Connect picker:** `toggleDevicePicker()` / `selectPlaybackDevice()` (`player.js`) set `playbackDeviceId` (`localStorage` `stm_device`). `/me/player/devices` lists only cloud-registered devices; Sonos/Cast speakers show up only after something was played on them from the Spotify app.
+- **`spotifyPlay(token, uris, opts)`:** caps at 100 URIs. With the SDK: transfer, then turn shuffle and repeat off, then play with `device_id`. Otherwise it picks a device (the followed one, then the active one, then any). Shuffle and repeat persist on the user's account and would reorder or loop the queue, so every full play resets them. `{quick:true}` (used at seams) sends a single `play` request.
+- **Connect:** there is no device picker (removed in v2.10); the music plays in this browser. `followPlaybackDevice()` (`player.js`) still follows a session moved to another device from the Spotify app, keeping `playbackDeviceId` in memory only. `/me/player/devices` lists only cloud-registered devices.
 - **Search:** `spotifySearch()` tries `track:X artist:Y` first, then a plain query whose hit must pass `spotifyLooseMatch` (otherwise an unrelated song plays). Only final results are cached in `searchCache`; rate-limited or failed lookups are not.
 - **API wrappers:** `spGet` / `spPut` / `spDelete` refresh the token and retry on 401; pass a `null` body for query-string-only endpoints.
 - **Liked songs:** `/me/library/contains|PUT|DELETE ?uris=` (see Quirk 9); `likedSet` holds bare track IDs. **Save playlist:** `POST /me/playlists`, named `"Time Machine: " + playlistLabel`, Time Travel only.
@@ -178,8 +178,6 @@ Bump the version only for a release (a new feature set or a user-visible change 
 | `continueRadio()` | radio.js | Top up the queue and re-issue playback |
 | `radioStop()` | radio.js | Stop radio and invalidate in-flight fills |
 | `radioMaybeSeam()` / `radioRemoteTick()` | radio.js | Swap new tracks in at the end of the last queued song (SDK / another Connect device) |
-| `toggleDevicePicker(btn)` | player.js | Open the Spotify Connect device picker |
-| `selectPlaybackDevice(dev)` | player.js | Switch the session to another Connect device (or this browser) |
 | `radioSetStation(name)` | radio.js | Pick Library, Discover or Mix on the home card |
 | `discoverCollectBatch(user, sid)` | radio.js | Pop, vet and return Discover candidates (refills the pool) |
 | `mixCollectBatch(user, sid)` | radio.js | Collect both sources and hand out picks in the Mix pattern |
