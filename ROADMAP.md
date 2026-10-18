@@ -12,6 +12,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Fix: Next on the last song Spotify holds (such as the first song of a session) no longer stops the music; the queued tracks are swapped in at once
 - [x] Removed the "Play on" device picker (it did not work as intended and broke the player layout); a session moved to another device from the Spotify app is still followed
 - [x] Quiet motion: track-change fade, new Up next rows slide in, view/overlay/menu transitions, like pop, Tuning skeleton; ease-out tokens, no overshoot, off under reduced motion (`tests/motion.test.js`)
+- [x] Fix: a followed device that went idle and was dropped by Spotify no longer leaves Next/Play stuck on 404s; STM releases it and resumes in this browser
 - [x] The device list refreshes by itself while open, has a labelled Refresh button and explains why Chromecast, Nest and Sonos speakers may be missing
 
 ---
