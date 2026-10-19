@@ -2,7 +2,7 @@
 
 The design of Scrobble Time Machine (STM): principles, tokens, components, screens and responsive rules.
 
-**Source of truth.** `css/style.css` and `index.html` are what ships; this file describes them. The mockups live in the Design canvas ("Radio Home Redesign", https://claude.ai/artifact/RGMxpKGBicDSnLjYzvETMv). Where the two disagree, the code wins, unless this file says a mockup change is still pending (see "Not applied yet").
+**Source of truth.** `css/style.css` and `index.html` are what ships; this file describes them. The mockups live in the Design canvases ("Radio Home Redesign", https://claude.ai/artifact/RGMxpKGBicDSnLjYzvETMv, and "Time Travel into Radio" for the Library options and Moments, https://claude.ai/artifact/FxeAUu2yox3QMPWRoxfPbh). Where the two disagree, the code wins, unless this file says a mockup change is still pending (see "Not applied yet").
 
 ---
 
@@ -32,14 +32,15 @@ Both load from Google Fonts in `index.html`.
 |---|---|---|
 | Home headline | `clamp(28px, 6vw, 44px)` / 800, letter-spacing -1px, line-height 1.05 | 40px on wide desktop when connected |
 | Now-playing title | 28px / 800, letter-spacing -0.6px | 26px on phones, wraps instead of truncating |
-| Section heading ("Or time travel", "Up next") | 22px / 700 | |
+| Section heading ("Up next") | 22px / 700 | |
+| Moment label ("Tuesday, March 11, 2014 · evening") | 20px / 700, letter-spacing -0.3px | |
 | Station name | 16px / 700 | |
 | Body | 14-16px / 400-500 | secondary copy uses `--text-secondary` |
-| Mode card name | 15px / 700 | |
 | Row title | 14px / 600 | artist line 12px |
 | Eyebrow / small caps label | 12px / 700, uppercase, letter-spacing 1.5px, `--lastfm-red-text` | "NOW PLAYING", "LIBRARY RADIO" |
+| Option label | 12px / 700, uppercase, letter-spacing 1.5px, `--text-tertiary` | "HOW IT PLAYS", "WHEN", "THIS MOMENT" |
 | Chip, helper text | 12px / 600 | |
-| Controls (mood buttons, device button, Save as Playlist, toasts) | 13px / 600-700 | |
+| Controls (segmented options, Save this moment, toasts) | 13px / 600-700 | |
 
 Nothing is smaller than **12px** (row numbers, dates and the footer included); `tests/design-system.test.js` checks it.
 
@@ -66,8 +67,8 @@ Defined on `:root` (dark) and overridden under `[data-theme="light"]`. Never har
 | `--success` / `--error` / `--warning` | `#22c55e` / `#ef4444` / `#eab308` | same | match status marks |
 | `--on-accent` | `#ffffff` | same | text on a red fill (primary button) |
 | `--on-spotify` | `#0b0b0f` | same | text on a green fill (Connect Spotify) |
-| `--spotify-green-subtle` / `--spotify-green-border` | `rgba(29,185,84,.08)` / `.25` | same | Spotify badge fill and border, Save as Playlist hover |
-| `--shadow-float` | `0 12px 32px rgba(0,0,0,.35)` | `.12` alpha | floating lists only (autocomplete) |
+| `--spotify-green-subtle` / `--spotify-green-border` | `rgba(29,185,84,.08)` / `.25` | same | Spotify badge fill and border, Save this moment hover |
+| `--shadow-float` | `0 12px 32px rgba(0,0,0,.35)` | `.12` alpha | floating lists only (toasts) |
 
 The token lines are the first two lines of `style.css` (the contrast test reads them by line number). No hex or `rgba()` appears below them; `tests/design-system.test.js` fails if one does.
 
@@ -77,9 +78,9 @@ The dark theme adds a faint noise overlay (`body::before`, 3% opacity); it is re
 
 ### Shape, spacing, elevation
 
-- **Radii:** cards and panels 16px; list panels (Up next, Tracks), station options, mode cards, segmented control, floating lists 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px (both row families); chips and the play button 999px.
+- **Radii:** cards and panels 16px; list panels (Up next), station options, the Library options box, segmented control, the year list, floating lists 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px (both row families); chips and the play button 999px.
 - **Spacing:** 4px base. Common gaps 6, 8, 10, 12, 14, 16, 20, 28. Card padding 28px (20px on phones). Page container 680px, 20px side padding.
-- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating lists (`--shadow-float`, on `--bg-elevated`): the autocomplete box.
+- **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating things (`--shadow-float`): the toasts.
 - **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px). A control that must look smaller (the disconnect x in the Spotify badge) keeps a 44px hit area with an invisible `::before`.
 
 ### Icons
@@ -90,7 +91,7 @@ Phosphor web font, regular and fill, from jsDelivr (`@phosphor-icons/web@2.1.1`)
 
 Tokens: `--dur-fast` (0.15s, hover and color/border/background changes), `--dur-base` (0.2s, input borders and exits), `--dur-slow` (0.35s, entrances and the track-change moment), and the curves `--ease-out-quart` / `--ease-out-expo` (no bounce or overshoot). Motion only carries state, with opacity and transform only:
 - the hero art scales in and the title and artist rise in a short stagger (`art-in`, `hero-in`, ease-out-expo) when the track changes, and only a track that was not in Up next before slides in (`row-in`), never the first fill;
-- the radio view, home view, mode panels, autocomplete and artist panel fade in when they appear (CSS animations that restart on `display`); the changelog overlay also has a 0.15s exit;
+- the radio view, home view, Library options, moment panel and artist panel fade in when they appear (CSS animations that restart on `display`); the changelog overlay also has a 0.15s exit;
 - the cover placeholder pulses while the image loads (`.loading`, or no `src` yet) and the home card's equalizer (`.eq`) dances while playing and freezes when paused; the volume speaker swaps between off, minimum, normal and loud (`radioVolumeIcon()`), without animation;
 - the like heart pops (`heart-pop`), buttons scale to 0.98 on press, the Tuning row pulses as a skeleton, toasts use `--ease-out-quart`.
 The progress fill width stays 0.25s linear. Transitions name their properties, never `transition:all`. All animation and transitions are disabled by `prefers-reduced-motion: reduce`, and JS-timed exits (`closeChangelog()`, `removeToast()`) skip their wait then. `tests/motion.test.js` checks the curves, the keyframe properties and the reduced-motion block.
@@ -99,7 +100,7 @@ The progress fill width stays 0.25s linear. Transitions name their properties, n
 
 ## 3. Components
 
-**Naming.** `radio-*` classes belong to the player view (`#radioView`), which serves Library / Discover / Mix radio *and* Time Travel: the prefix means "player view", not "Library Radio". Style with classes, not ids (ids are JS hooks): the progress bar is `.progress-track` / `.progress-fill`, the volume slider `.volume-range`.
+**Naming.** `radio-*` classes belong to the player view (`#radioView`), which serves Library / Discover / Mix radio: the prefix means "player view", not "Library Radio". Style with classes, not ids (ids are JS hooks): the progress bar is `.progress-track` / `.progress-fill`, the volume slider `.volume-range`.
 
 ### Buttons
 - **Primary** (`.btn-primary`): red fill, white text; hover lightens and lifts 1px.
@@ -110,17 +111,8 @@ The progress fill width stays 0.25s linear. Transitions name their properties, n
 - **Disabled:** 40% opacity, `not-allowed` cursor.
 - Every `.btn` is at least 44px tall.
 
-### Text inputs (`.input-username`, `.mode-input-field`)
-One spec: 44px min height, 10px/14px padding, 14px text, `--bg-secondary` fill, 1px border, 8px radius. Focus: red border plus a 3px `--lastfm-red-glow` ring (instead of the global outline). Selects use the same class with a caret.
-
-### Mood / decade buttons (`.mood-btn`)
-Choice chips inside a mode's inputs (Mood, Decade): 44px tall, 13px (12px on phones), bordered. Active: red border, red text, subtle red fill.
-
-### Autocomplete (`.autocomplete-box`)
-Artist suggestions under the artist field: a floating list on `--bg-elevated` with `--shadow-float`, 12px radius, 44px rows (name, scrobble count in mono). Hover and the keyboard-highlighted row (`.ac-active`) fill `--bg-tertiary`.
-
-### Heart in list rows (`.heart-btn`)
-44px button, muted outline heart; liked = filled heart in `--lastfm-red-text`. `aria-label="Like <track>"` and `aria-pressed` carry the state (`setHeartBtn()` in `player.js`); the player hearts (`#radioHeart`, `#radioHeartTitle`) set `aria-pressed` too.
+### Text input (`.input-username`)
+44px min height, 10px/14px padding, 14px text, `--bg-secondary` fill, 1px border, 8px radius. Focus: red border plus a 3px `--lastfm-red-glow` ring (instead of the global outline).
 
 ### Theme toggle (`.theme-toggle`)
 44px square in the header, 1.5px border, icon at 70% opacity (full on hover).
@@ -128,14 +120,17 @@ Artist suggestions under the artist field: a floating list on `--bg-elevated` wi
 ### Station picker (`.station-picker`)
 Three full-width options stacked: Library, Discover, Mix. Each is a 64px-min card with an icon, a name, a one-line description and a radio dot on the right. Active: red border, subtle red fill, red icon and dot. It stays visible while a radio runs (it chooses the *next* radio; the running one is unaffected). The headline above it follows the picked station. Remembered in `localStorage` (`stm_station`).
 
+### Library options (`.library-options`)
+Only visible when Library is picked, in a `--bg-tertiary` box (12px radius, 16px padding) under the station picker. Two blocks, each an option label (12px caps, tertiary), a segmented control (`.seg` on `--bg-secondary`) and a line of help (13px, tertiary) that changes with the choice:
+- **How it plays:** **Songs** ("One song at a time, each from a different day of your history.") or **Moments** ("A stretch of what you played back then, in the order you played it. When it ends, the radio jumps to another moment."). Remembered (`stm_library_how`).
+- **When:** **Every year** or **One year**; One year shows the year list (`.lib-year`, a native select, 50px tall, red border, mono 15px) from the year of the first scrobble to today. Remembered (`stm_library_year`).
+The headline follows them: "Your library, shuffled across every year.", "Your 2014, shuffled.", "Your past, one moment at a time.", "Back in 2014, as you played it."
+
 ### Mix balance (`.mix-balance` / `.seg`)
 Only visible when Mix is picked. Label "How much is new" above a 3-option segmented control: **Mostly past** (3 past : 1 new), **Balanced** (1:1), **Mostly new** (1:3). Active segment: red border and subtle fill. Remembered (`stm_mix_balance`).
 
-### Mode card (`.mode-card`)
-Time Travel entry points: icon, name, one-line description; 3 columns (2 on phones). Selecting one reveals its input block below the grid. Active uses the same red-border treatment as station options.
-
 ### Source chip (`.radio-chip`)
-A small pill that says why a track is playing. Red tint with a sparkle icon for new music ("Last.fm pick", "Similar to X"); neutral with a clock icon for tracks from your past ("From 2014"; every Library pick has it, and the past half of a Mix). Max width 170px in the hero, 160px in rows; text truncates with an ellipsis. It appears in the now-playing eyebrow row (right-aligned) and at the end of Up next rows (Library, Discover and Mix).
+A small pill that says why a track is playing. Red tint with a sparkle icon for new music ("Last.fm pick", "Similar to X"); neutral with a clock icon for tracks from your past ("From 2014" for Library songs and the past half of a Mix; the moment's date, "Mar 11, 2014", in Moments). Max width 170px in the hero, 160px in rows; text truncates with an ellipsis. It appears in the now-playing eyebrow row (right-aligned) and at the end of Up next rows (Library, Discover and Mix).
 
 ### Now-playing card (`.radio-now`)
 - **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume only while the Web Playback SDK plays here).
@@ -146,8 +141,11 @@ A small pill that says why a track is playing. Red tint with a sparkle icon for 
 ### Artist panel (`.radio-info`)
 Your play counts ("You have played X n times, and this track n times") and a four-line Last.fm bio with a "Read more on Last.fm" link. In Discover the stats line becomes the reason ("New to you. You have never played X. Picked because you listen to Y and Z."). On wide desktop (>=1100px) it becomes a card with a 148px artist photo from Spotify on the left (microphone placeholder when there is none). The panel hides when there is nothing to show.
 
-### List rows (`.radio-row`, `.track-row`)
-44px minimum, 10px/16px padding (5px/16px in the wide list panel, where a row is 50px), 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). The playing row in Time Travel has a subtle red fill and red title; unmatched rows are 40% opacity with a red cross, matched ones a green check (status classes `found` / `not_found` / `searching` / `skipped`, the names `setTrackStatus()` uses). In Time Travel the list ("Tracks") also holds the **Save as Playlist** button (green outline), which never appears in the radio.
+### Moment panel (`.radio-moment`)
+Library in Moments only, between the now-playing card and the artist panel: a 16px-radius card with THIS MOMENT, the moment label ("Tuesday, March 11, 2014 · evening"), a line with the songs and times ("11 songs you played between 21:04 and 21:52, in that order.") and two buttons: **Save this moment** (green outline, `.btn-save-playlist`, becomes "Saved! Open") and **Next moment** (ghost; disabled only while it is fetching the next moment or when there is nothing left). Full-width stacked buttons on phones.
+
+### List rows (`.radio-row`)
+44px minimum, 10px/16px padding (5px/16px in the wide list panel, where a row is 50px), 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). In Moments the first song of the next moment has a stronger line above it (`.moment-start`, an inset 1px `--text-muted` line) and every row's chip shows its moment's date. The canvas showed a "Next moment" header row instead; it was not used because the wide list gives every row the same height.
 
 ### Home "playing" strip (`.radio-playing`)
 Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-tertiary` pill, shown when a radio is running behind the home view.
@@ -164,15 +162,12 @@ Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify
 
 ### Home (`#homeView`)
 - **Not connected:** centered radio card (max 680px on desktop) with the headline, a short prompt, the station picker, the username field and **Connect Spotify**.
-- **Connected, idle:** headline, `username · N scrobbles`, station picker (+ Mix balance when Mix), username field, **Start <Station> radio**. Below, "Or time travel": nine mode cards and the active mode's inputs.
+- **Connected, idle:** headline, `username · N scrobbles`, station picker (+ Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
-- **Wide desktop (>=1100px) and connected:** two columns, the radio card at 420px on the left and the Time Travel grid on the right.
+- **Wide desktop (>=1100px):** the same card, centered at 680px.
 
 ### Radio view (`#radioView`, Library / Discover / Mix)
-Top bar: **Home** on the left, the station label (LIBRARY / DISCOVER / MIX RADIO) in small red caps on the right. Then the now-playing card, the artist panel and **Up next**. The first row after the current track can show a "Tuning..." placeholder while more tracks load. Returning home does not stop the music.
-
-### Time Travel view
-Same view with the label "TIME TRAVEL · <moment>", an **Again** button next to Home, and a full **Tracks** list (with match count and Save as Playlist) instead of Up next; no volume or context panel changes beyond that.
+Top bar: **Home** on the left, the station label (LIBRARY / DISCOVER / MIX RADIO) in small red caps on the right. Then the now-playing card, the moment panel (Moments only), the artist panel and **Up next**. With Library options the label names them (LIBRARY RADIO · MOMENTS · 2014). The first row after the current track can show a "Tuning..." placeholder while more tracks load. Returning home does not stop the music.
 
 ### Changelog overlay
 Full-screen overlay (title and close button in its own header) with an iframe of `changelog.html`. Inside the overlay the page hides its own title block and back link (a `framed` class set before first paint), so the title appears once; standalone, the title, subtitle, back link and entries share one 680px column and one left edge.
@@ -183,10 +178,10 @@ Full-screen overlay (title and close button in its own header) with an iframe of
 
 | Width | Behavior |
 |---|---|
-| **<= 520px** | Mode grid 2 columns; radio card padding 20px; now-playing card stacks (see above); buttons full width in `.controls`; header brand 16px; date column hidden in lists |
+| **<= 520px** | Radio card padding 20px; now-playing card stacks (see above); buttons full width in `.controls` and in the moment panel; header brand 16px |
 | **<= 720px** | Volume slider hidden (phones cannot use the SDK anyway) |
 | **521-1099px** | One column, 680px container, now-playing card horizontal at 224px |
-| **>= 1100px** | 1120px container. Home two columns (420px + rest). Radio / Time Travel two columns: player + artist panel (640px) on the left, the list as a panel of equal height on the right (min 468px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum); the Tracks list scrolls inside and keeps the playing row visible. Artist photo shown |
+| **>= 1100px** | 1120px container. Home: the card centered at 680px. Radio two columns: player, moment panel and artist panel (640px) on the left, Up next as a panel of equal height on the right (min 468px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum). Artist photo shown |
 
 ---
 

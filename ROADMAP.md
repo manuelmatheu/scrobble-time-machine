@@ -2,7 +2,17 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.10 (current) ✅
+## v2.11 (current) ✅
+
+- [x] Time Travel folded into Library radio (Design canvas "Time Travel into Radio", https://claude.ai/artifact/FxeAUu2yox3QMPWRoxfPbh): the nine mode cards are gone
+- [x] Library **How it plays**: Songs (random scrobbles) or Moments (a stretch of consecutive scrobbles in the order played, then a jump to another moment: an endless Random mode)
+- [x] Library **When**: every year or one year (`user.getrecenttracks` with `from`/`to`, so positions stay inside the year)
+- [x] This moment panel: when it was, how many songs, Save this moment (playlist) and Next moment
+- [ ] Open: should the past half of a Mix follow When too?
+
+---
+
+## v2.10 ✅
 
 - [x] Faster start: the first song plays as soon as it is matched (about 1.5s instead of 8s with typical latencies for Library, 2-3s for Discover and Mix); the rest of the queue fills behind it
 - [x] New tracks reach a speaker or other Connect device at the end of the last queued song (like in the browser), instead of restarting the music mid-song
@@ -111,7 +121,6 @@ A living document tracking planned features, improvements, and ideas for future 
 ## Next up (v2.x)
 
 - [ ] Sonos: Spotify answers `403 "Restricted device"` to `play` and `next` on it, so STM cannot skip, play from a row or top up the queue there, and a failed play falls back to this browser. Show a clear message instead of moving the music, and/or send up to 100 tracks in the first play so the queue lasts longer
-- [ ] Fold Time Travel into Library radio (proposal: Design canvas "Time Travel into Radio", https://claude.ai/artifact/FxeAUu2yox3QMPWRoxfPbh). Library gets two options: **How it plays** (Songs = today's random scrobbles; Moments = a stretch of consecutive scrobbles played in order, then a jump to another moment, i.e. an endless Random mode) and **When** (Every year, or One year: `user.getrecenttracks` with `from`/`to` plus `limit=1`, so `page` stays an index inside that year). Save as Playlist comes along as "Save this moment". The nine mode cards go away; decide whether Mix's past half follows When too
 - [ ] "Not for me" on Discover picks: a dislike button so a Last.fm recommendation (track, or the whole artist) never comes back. Last.fm has no ban API anymore, so keep the list in `localStorage` and drop it in `discoverVet()`; it would sync across devices once there is a backend (see Future)
 - [ ] Autoplay: when the app opens (username saved, Spotify connected), start the last station with its last settings by itself, as an opt-in setting. Browsers block sound until the user interacts with the page (the SDK needs `activateElement()` from a click), so in this browser it may need one tap: prepare the queue on load and show a single "Resume <station> radio" button; a session followed on another Spotify Connect device can start with no tap
 

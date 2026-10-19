@@ -20,7 +20,7 @@ async function exchangeCodeForToken(code) {
   localStorage.setItem("spotify_access_token", d.access_token);
   localStorage.setItem("spotify_refresh_token", d.refresh_token);
   localStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
-  const u = sessionStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshYearsForUser(); }
+  const u = sessionStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshLibraryYears(); }
   window.history.replaceState({}, document.title, window.location.pathname);
   return d.access_token;
 }
@@ -402,34 +402,30 @@ async function addTracksToPlaylist(token, playlistId, uris) {
   return true;
 }
 
-async function saveAsPlaylist() {
-  const btn = $("savePlaylistBtn");
+// Save tracks as a private Spotify playlist named "Time Machine: <label>". The button shows the progress, then opens the
+// playlist; stillCurrent() false means the view moved on meanwhile (the button belongs to another moment by then).
+async function saveAsPlaylist(btn, uris, label, stillCurrent) {
+  const current = () => !stillCurrent || stillCurrent();
   btn.disabled = true;
   btn.textContent = "Saving...";
   try {
     const token = await getSpotifyToken();
     if (!token) throw new Error("Spotify expired. Reconnect.");
-    const uris = [];
-    for (let i = 0; i < allTrackCount; i++) if (matchedUris[i]) uris.push(matchedUris[i]);
     if (!uris.length) throw new Error("No matched tracks to save");
-    const name = "Time Machine: " + (playlistLabel || "Random");
     const now = new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     const desc = "Created by Scrobble Time Machine on " + now + " - " + uris.length + " tracks";
-    const playlist = await createSpotifyPlaylist(token, name, desc);
+    const playlist = await createSpotifyPlaylist(token, "Time Machine: " + label, desc);
     if (!playlist) throw new Error("Could not create playlist. Disconnect and reconnect Spotify.");
     await addTracksToPlaylist(token, playlist.id, uris);
+    if (!current()) return;
     btn.textContent = "Saved! Open";
     btn.className = "btn-save-playlist saved";
     btn.disabled = false;
     btn.onclick = function() {
-      if (playlist.external_urls && playlist.external_urls.spotify) {
-        window.open(playlist.external_urls.spotify, "_blank");
-      }
+      if (playlist.external_urls && playlist.external_urls.spotify) window.open(playlist.external_urls.spotify, "_blank");
     };
   } catch (err) {
-    btn.textContent = "Save as Playlist";
-    btn.disabled = false;
-    btn.onclick = saveAsPlaylist;
+    if (current()) { btn.textContent = "Save this moment"; btn.disabled = false; }
     const msg = (err.message || "").toLowerCase();
     if (msg.includes("403") || msg.includes("401") || msg.includes("permission")) {
       showStatus("Permission error -- disconnect and reconnect Spotify.", "error");

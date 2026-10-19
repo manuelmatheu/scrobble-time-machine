@@ -1,4 +1,3 @@
-
 // ═════════════════════════════════════════════════════════════════════════════
 // INIT
 // ═════════════════════════════════════════════════════════════════════════════
@@ -11,69 +10,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Restore saved username from localStorage or sessionStorage
   const savedUser = localStorage.getItem("lastfm_username") || sessionStorage.getItem("lastfm_username");
-  if (savedUser) { $("usernameInput").value = savedUser; refreshYearsForUser(); }
+  if (savedUser) $("usernameInput").value = savedUser;
   refreshHomeMeta();
-  let savedStation = "library"; try { savedStation = localStorage.getItem("stm_station") || "library"; } catch {}
-  radioSetStation(savedStation);
-  let savedBalance = "balanced"; try { savedBalance = localStorage.getItem("stm_mix_balance") || "balanced"; } catch {}
-  radioSetBalance(savedBalance);
+  refreshLibraryYears();
+  const saved = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch { return fallback; } };
+  radioSetHow(saved("stm_library_how", "songs"));
+  radioSetYear(saved("stm_library_year", "0"));
+  radioFillYears();  // until the first scrobble's year arrives: this year down to the saved one
+  radioSetStation(saved("stm_station", "library"));
+  radioSetBalance(saved("stm_mix_balance", "balanced"));
   loadPlaybackDevice();
 
   // Username: save on change, update button
-  $("usernameInput").addEventListener("input", updateGoButton);
+  $("usernameInput").addEventListener("input", updateRadioButton);
   $("usernameInput").addEventListener("change", () => {
     const user = $("usernameInput").value.trim();
     if (user) {
       localStorage.setItem("lastfm_username", user);
       sessionStorage.setItem("lastfm_username", user);
     }
-    refreshYearsForUser();
     refreshHomeMeta();
+    refreshLibraryYears();
   });
   $("usernameInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("radioBtn").disabled) startRadio(); });
-
-  // Artist input: autocomplete + validation
-  $("artistInput").addEventListener("input", () => {
-    updateGoButton();
-    handleArtistAutocomplete();
-  });
-  $("artistInput").addEventListener("keydown", e => {
-    if (handleArtistKeydown(e)) return;
-    if (e.key === "Enter" && !$("goBtn").disabled) handleGo();
-  });
-  $("artistInput").addEventListener("blur", () => { setTimeout(clearArtistSuggestions, 200); });
-
-  // Album inputs
-  $("albumArtistInput").addEventListener("input", updateGoButton);
-  $("albumArtistInput").addEventListener("keydown", e => { if (e.key === "Enter") $("albumInput").focus(); });
-  $("albumInput").addEventListener("input", updateGoButton);
-  $("albumInput").addEventListener("keydown", e => { if (e.key === "Enter" && !$("goBtn").disabled) handleGo(); });
-
-  // Discovery input
-  $("discoveryInput").addEventListener("input", () => {
-    updateGoButton();
-    handleDiscoveryAutocomplete();
-  });
-  $("discoveryInput").addEventListener("keydown", e => {
-    if (handleDiscoveryKeydown(e)) return;
-    if (e.key === "Enter" && !$("goBtn").disabled) handleGo();
-  });
-  $("discoveryInput").addEventListener("blur", () => { setTimeout(clearDiscoverySuggestions, 200); });
-
-  // Streak input
-  $("streakInput").addEventListener("input", () => {
-    updateGoButton();
-    handleStreakAutocomplete();
-  });
-  $("streakInput").addEventListener("keydown", e => {
-    if (handleStreakKeydown(e)) return;
-    if (e.key === "Enter" && !$("goBtn").disabled) handleGo();
-  });
-  $("streakInput").addEventListener("blur", () => { setTimeout(clearStreakSuggestions, 200); });
-
-  // Date selectors
-  $("dateMonth").addEventListener("change", () => { populateDays(); updateGoButton(); });
-  $("dateYear").addEventListener("change", () => { populateDays(); updateGoButton(); });
 
   // Global keyboard shortcuts
   document.addEventListener("keydown", e => {
@@ -81,6 +40,5 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }
   });
 
-  populateYears();
-  updateGoButton();
+  updateRadioButton();
 });

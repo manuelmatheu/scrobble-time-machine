@@ -72,13 +72,66 @@ function radioRateLimitText(ms) {
   return hours + (hours === 1 ? " hour" : " hours");
 }
 
-// Label for a set of Last.fm tracks: the oldest date, to the day when all tracks share one
-function radioEraLabel(tracks) {
-  const uts = (tracks || []).filter(t => t && t.date && t.date.uts).map(t => parseInt(t.date.uts, 10));
-  if (!uts.length) return "Random";
-  const oldest = new Date(Math.min(...uts) * 1000), newest = new Date(Math.max(...uts) * 1000);
-  const sameDay = oldest.toDateString() === newest.toDateString();
-  return oldest.toLocaleDateString("en-US", sameDay ? { year: "numeric", month: "long", day: "numeric" } : { year: "numeric", month: "long" });
+// ===== Library options: one year, and moments =====
+// Unix-second bounds of a calendar year in local time; null for 0 (every year)
+function radioYearRange(year) {
+  if (!year) return null;
+  return { from: Math.floor(new Date(year, 0, 1).getTime() / 1000), to: Math.floor(new Date(year + 1, 0, 1).getTime() / 1000) - 1 };
+}
+
+// A moment: the run of scrobbles around one point of a Last.fm page with no silence longer than gapS, oldest first,
+// at most max tracks. list is the page (newest first), at the index of the random point in it. null when nothing is usable.
+function radioMomentFromTracks(list, at, gapS, max) {
+  const arr = Array.isArray(list) ? list : (list ? [list] : []);
+  const items = [];
+  arr.forEach((t, i) => {
+    if (!t || (t["@attr"] && t["@attr"].nowplaying) || !t.name || !t.date || !t.date.uts) return;
+    const artist = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
+    const uts = parseInt(t.date.uts, 10);
+    if (artist && uts) items.push({ i, artist, track: t.name, album: (t.album && t.album["#text"]) || "", uts });
+  });
+  if (!items.length) return null;
+  items.sort((a, b) => a.uts - b.uts || b.i - a.i);
+  let p = 0, best = Infinity;
+  items.forEach((x, k) => { const d = Math.abs(x.i - at); if (d < best) { best = d; p = k; } });
+  let s = p, e = p;
+  while (s > 0 && items[s].uts - items[s - 1].uts <= gapS) s--;
+  while (e < items.length - 1 && items[e + 1].uts - items[e].uts <= gapS) e++;
+  if (e - s + 1 > max) { s = Math.max(s, Math.min(p, e - max + 1)); e = s + max - 1; }  // too long: start at the point
+  const run = items.slice(s, e + 1).map(x => ({ artist: x.artist, track: x.track, album: x.album, uts: x.uts }));
+  return { tracks: run, start: run[0].uts, end: run[run.length - 1].uts };
+}
+
+// "Tuesday, March 11, 2014 · evening" (the moment panel) and "Mar 11, 2014" (the chips)
+function radioMomentLabel(uts) {
+  const d = new Date(uts * 1000), h = d.getHours();
+  const part = h < 5 ? "night" : h < 12 ? "morning" : h < 18 ? "afternoon" : h < 23 ? "evening" : "night";
+  return d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + " · " + part;
+}
+function radioMomentChip(uts) {
+  return new Date(uts * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+function radioClock(uts) {
+  return new Date(uts * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+// The moment panel's line: how many songs, and when
+function radioMomentMeta(m) {
+  if (!m) return "";
+  if (m.size === 1) return "1 song you played at " + radioClock(m.start) + ".";
+  return m.size + " songs you played between " + radioClock(m.start) + " and " + radioClock(m.end) + ", in that order.";
+}
+
+// Home card headline for the picked station and Library options
+function radioHomeHeadline(station, how, year) {
+  if (station !== "library") return RADIO_STATIONS[station].headline;
+  if (how === "moments") return year ? "Back in " + year + ", as you played it." : "Your past, one moment at a time.";
+  return year ? "Your " + year + ", shuffled." : RADIO_STATIONS.library.headline;
+}
+// Radio view title: the station, plus the Library options in use
+function radioSessionTitle(station, how, year) {
+  let t = RADIO_STATIONS[station].title;
+  if (station === "library") { if (how === "moments") t += " · Moments"; if (year) t += " · " + year; }
+  return t;
 }
 
 // How many matched tracks come after currentUri (Infinity when it is not ours)
@@ -203,13 +256,27 @@ function radioSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function radioCollectBatch(user) {
   const pages = [];
   for (let k = 0; k < RADIO_CONCURRENCY; k++) pages.push(radioPickPage(radioTotal));
-  const settled = await Promise.allSettled(pages.map(p => getLastFmScrobbleAt(user, p).then(list => radioScrobbleFromTracks(list, p))));
+  const settled = await Promise.allSettled(pages.map(p => getLastFmScrobbleAt(user, p, radioRange).then(list => radioScrobbleFromTracks(list, p))));
   const picks = []; let failed = 0;
   for (const s of settled) {
     if (s.status === "rejected") failed++;
     else if (s.value) picks.push(s.value);
   }
   return { picks, failed, total: settled.length };
+}
+
+// Library in Moments: one random point of the history (or of the year), and the scrobbles around it in the order you
+// played them. Every pick carries its moment, so the view can say when it was and save it as a playlist.
+async function momentCollectBatch(user) {
+  const pos = radioPickPage(radioTotal);
+  const page = Math.ceil(pos / MOMENT_FETCH), at = (pos - 1) % MOMENT_FETCH;
+  let rt;
+  try { rt = await getLastFmScrobbles(user, page, MOMENT_FETCH, radioRange); } catch { return { picks: [], failed: 1, total: 1 }; }
+  const m = radioMomentFromTracks(rt && rt.track, at, MOMENT_GAP_S, MOMENT_MAX);
+  if (!m) return { picks: [], failed: 0, total: 1 };
+  const moment = { id: ++radioMomentSeq, label: radioMomentLabel(m.start), chip: radioMomentChip(m.start), start: m.start, end: m.end, size: m.tracks.length };
+  const year = new Date(m.start * 1000).getFullYear();
+  return { picks: m.tracks.map(t => ({ artist: t.artist, track: t.track, album: t.album, page: null, year, moment })), failed: 0, total: 1 };
 }
 
 // ===== Discover station =====
@@ -337,7 +404,8 @@ async function radioFill(want) {
   while (added < want && attempts < (fresh ? DISCOVER_MAX_ROUNDS : RADIO_MAX_ATTEMPTS)) {
     // picks a previous fill collected but did not need come first (they were already vetted: Discover and Mix pay for that)
     const batch = radioCarry.length ? { picks: radioCarry.splice(0), failed: 0, total: 1 }
-      : station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid) : await radioCollectBatch(user);
+      : station === "mix" ? await mixCollectBatch(user, sid) : station === "discover" ? await discoverCollectBatch(user, sid)
+      : radioActiveHow === "moments" ? await momentCollectBatch(user) : await radioCollectBatch(user);
     if (sid !== radioSession) return added;
     attempts += fresh ? 1 : batch.total;
     if (batch.failed === batch.total) {
@@ -370,8 +438,11 @@ async function radioFill(want) {
         };
         if (p.source) Object.assign(trackMeta[idx], { source: p.source, kind: p.kind, artistPlays: p.artistPlays });
         else trackMeta[idx].fromPast = true;  // from your history (Library, and the past half of a Mix): shown as "From YEAR"
+        if (p.moment) trackMeta[idx].moment = p.moment;  // Library in Moments: shown as the moment's date
         added++;
         radioRenderQueue();  // Up next fills as the tracks arrive, not when the whole fill is done
+        // Next moment was pressed before the next moment was queued: its first song is here, play it
+        if (radioJumpFrom !== null && p.moment && p.moment.id !== radioJumpFrom) { radioJumpFrom = null; radioPlayFrom(idx); }
       }
       if (added >= want) { radioCarry.push(...batch.picks.slice(pi + 1)); return added; }  // done: no pause before leaving
       await radioSleep(SEARCH_DELAY);
@@ -381,16 +452,30 @@ async function radioFill(want) {
   return added;
 }
 
+// A radio is starting: the home card's controls wait, and the previous session is gone
+function beginSession() {
+  radioStop();
+  currentPhase = "working"; updateRadioButton();
+  $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
+  searchCache = {}; sessionQueue = new Set(); sessionPaused = false; stopPolling(); hideStatus();
+}
+function endSessionUI() {
+  $("cancelBtn").style.display = "none"; $("usernameInput").disabled = false; updateRadioButton();
+}
+
 async function startRadio() {
   const user = $("usernameInput").value.trim();
   if (!user || !spotifyToken) return;
   beginSession();
   radioActiveStation = radioStation; radioActiveBalance = radioBalance;
+  const library = radioActiveStation === "library";
+  radioActiveHow = library ? radioHow : "songs"; radioActiveYear = library ? radioYear : 0;
+  radioRange = radioYearRange(radioActiveYear); radioMomentSeq = 0;
   const discover = radioActiveStation === "discover", fresh = radioActiveStation !== "library";
   radioBuf = { past: [], new: [] }; radioMixCursor = 0;
   discoverPool = []; discoverSeeds = null; discoverSeedRound = 0; discoverSimilarCache = {}; discoverTopCache = {}; discoverUsedArtists = new Set();
   discoverNeedsReconnect = false; discoverWarnedEmpty = false;
-  matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0; skippedPlan = []; isContinuing = false;
+  matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0;
   trackMeta = {}; radioSeen = new Set(); radioFailures = 0; radioRefilling = false; radioExhausted = false;
   radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioUser = user; radioActive = true;
   radioCarry = []; radioStartedAt = 0;
@@ -402,10 +487,11 @@ async function startRadio() {
     let totalScrobbles = 0;
     if (!discover) {
       // the home card already counted the scrobbles: one request less before the first pick
-      if (homeTotalCache.user === user && homeTotalCache.total && Date.now() - homeTotalCache.at < HOME_TOTAL_FRESH_MS) totalScrobbles = homeTotalCache.total;
+      if (radioRange) totalScrobbles = await getLastFmCountIn(user, radioRange);  // one year: its own count, so positions stay inside it
+      else if (homeTotalCache.user === user && homeTotalCache.total && Date.now() - homeTotalCache.at < HOME_TOTAL_FRESH_MS) totalScrobbles = homeTotalCache.total;
       else ({ totalScrobbles } = await getLastFmTotalPages(user));
       if (sid !== radioSession) return;
-      if (!totalScrobbles) throw new Error("No scrobbles found");
+      if (!totalScrobbles) throw new Error(radioRange ? "No scrobbles in " + radioActiveYear + ". Pick another year." : "No scrobbles found");
       radioTotal = totalScrobbles;
     }
     showRadioView();
@@ -423,7 +509,7 @@ async function startRadio() {
       throw new Error(devs.length === 0 ? "No active Spotify device. Open Spotify and try again." : "Playback failed. Make sure Spotify is active.");
     }
     currentPhase = "done";
-    showStatus("▶ " + RADIO_STATIONS[radioActiveStation].title + (!discover && totalScrobbles < 200 ? " · small library, new tracks may run out" : ""), "success");
+    showStatus("", "success");
     if (fresh && discoverNeedsReconnect) showStatus("Reconnect Spotify to get picks based on what you play lately.", "warn");
     radioStartedAt = Date.now();
     startPolling();
@@ -437,7 +523,7 @@ async function startRadio() {
 }
 
 // Top up the queue, then re-issue playback from the current track so the new tracks join
-// the Spotify context (same approach as continueMatching; avoids the persistent user queue)
+// the Spotify context (avoids the persistent user queue)
 async function continueRadio() {
   if (!radioActive || radioRefilling || radioExhausted) return;
   const sid = radioSession;
@@ -453,7 +539,7 @@ async function continueRadio() {
       if (healthy && radioActiveStation !== "library") {
         // New music keeps arriving (the station changes on every call): an empty round is retried on the next track change
         if (!discoverWarnedEmpty) { discoverWarnedEmpty = true; showStatus("No new music found right now. Playing what is queued.", "warn"); }
-      } else if (healthy) { radioExhausted = true; showStatus("No more new tracks in your library. Playing what is queued.", "warn"); }
+      } else if (healthy) { radioExhausted = true; showStatus("No more new tracks " + (radioActiveYear ? "from " + radioActiveYear : "in your library") + ". Playing what is queued.", "warn"); }
       return;
     }
     if (radioSkipWanted) { radioSkipWanted = false; await radioSeamReissue(); return; }  // Next was pressed while this top-up ran
@@ -510,7 +596,7 @@ function radioRemoteLeft(r, now) {
 // we hold tracks Spotify was not sent, swap them in. Near the end it re-reads /me/player every second, since the position
 // is only as exact as the last reading.
 function radioRemoteTick() {
-  if (!(radioActive || travelActive) || sdkPlaying() || radioSeaming || radioPaused || !remoteNow || !remoteNow.playing) return;
+  if (!radioActive || sdkPlaying() || radioSeaming || radioPaused || !remoteNow || !remoteNow.playing) return;
   if (!radioContextLastUri || remoteNow.uri !== radioContextLastUri || !radioUnsentUris().length) return;
   const now = Date.now(), left = radioRemoteLeft(remoteNow, now);
   if (left === null || now - remoteSeamAt < 3000) return;
@@ -519,12 +605,12 @@ function radioRemoteTick() {
 }
 // Spotify ran past the last track we sent (we missed the swap) and moved on to something else: put the tracks back now
 function radioRecoverRunOff(prevUri) {
-  if (!(radioActive || travelActive) || radioSeaming || !radioContextLastUri || prevUri !== radioContextLastUri || !radioUnsentUris().length) return false;
+  if (!radioActive || radioSeaming || !radioContextLastUri || prevUri !== radioContextLastUri || !radioUnsentUris().length) return false;
   radioSeamReissue();
   return true;
 }
 function radioMaybeSeam() {
-  if (!(radioActive || travelActive) || !sdkPlaying() || radioSeaming) return;
+  if (!radioActive || !sdkPlaying() || radioSeaming) return;
   const atLast = !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri;
   if (!radioSeamDue(radioPendingReissue || (atLast && radioUnsentUris().length > 0), atLast, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
   radioSeamReissue();
@@ -534,7 +620,7 @@ function radioMaybeSeam() {
 // alone until the rest is swapped in). Swap the tracks it does not have in right now instead; true when the skip was handled here.
 let radioSkipWanted = false;  // Next was pressed on the last sent track while the queue was still filling: swap as soon as it has tracks
 function radioSkipHandled() {
-  if (!(radioActive || travelActive) || !radioContextLastUri) return false;
+  if (!radioActive || !radioContextLastUri) return false;
   const cur = sdkPlaying() ? _sdkCurrentUri : remoteNow && remoteNow.uri;
   if (cur !== radioContextLastUri) return false;
   if (radioSeaming) return true;
@@ -573,7 +659,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 }
 
 function radioStop() {
-  radioActive = false; radioSession++; radioRefilling = false;
+  radioActive = false; radioSession++; radioRefilling = false; radioJumpFrom = null;
   radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0;
   hideRadioView();
 }
@@ -650,6 +736,8 @@ function radioResetHero() {
   radioInfoIdx = -1; radioHideInfo();
   radioPhotoId = ""; radioShowArtistPhoto(null);
   radioShowSource("");
+  radioMomentShown = null;
+  if ($("radioMoment")) $("radioMoment").style.display = "none";
 }
 
 // The "why this track" chip next to NOW PLAYING (Discover only)
@@ -669,7 +757,7 @@ function radioSetBalance(name) {
   if (!MIX_PATTERNS[name]) name = "balanced";
   radioBalance = name;
   try { localStorage.setItem("stm_mix_balance", name); } catch {}
-  document.querySelectorAll(".seg-opt").forEach(b => { const on = b.dataset.balance === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+  document.querySelectorAll(".seg-opt[data-balance]").forEach(b => { const on = b.dataset.balance === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
 }
 
 // Home card: the station picked here is the one Start radio plays
@@ -680,28 +768,85 @@ function radioSetStation(name) {
   document.querySelectorAll(".station-opt").forEach(b => { const on = b.dataset.station === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
   const s = RADIO_STATIONS[name];
   if ($("mixBalance")) $("mixBalance").style.display = name === "mix" ? "" : "none";
+  if ($("libraryOptions")) $("libraryOptions").style.display = name === "library" ? "" : "none";
   if ($("radioEyebrow")) $("radioEyebrow").textContent = s.eyebrow;
-  if ($("homeHeadline")) $("homeHeadline").textContent = s.headline;
+  radioSyncHeadline();
   radioSyncHome();
 }
+function radioSyncHeadline() {
+  if ($("homeHeadline")) $("homeHeadline").textContent = radioHomeHeadline(radioStation, radioHow, radioYear);
+}
 
-// mode "radio" (default) shows Up next; "travel" shows the era panel and the full track list
-function showRadioView(mode) {
-  const travel = mode === "travel";
+// Home card, Library: how it plays (Songs or Moments) and when (every year or one)
+const LIBRARY_HOW_HELP = {
+  songs: "One song at a time, each from a different day of your history.",
+  moments: "A stretch of what you played back then, in the order you played it. When it ends, the radio jumps to another moment."
+};
+function radioSetHow(name) {
+  if (!LIBRARY_HOW_HELP[name]) name = "songs";
+  radioHow = name;
+  try { localStorage.setItem("stm_library_how", name); } catch {}
+  document.querySelectorAll(".seg-opt[data-how]").forEach(b => { const on = b.dataset.how === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+  if ($("libraryHowHelp")) $("libraryHowHelp").textContent = LIBRARY_HOW_HELP[name];
+  radioSyncHeadline();
+}
+// year: 0 for every year. "one" picks the year in the list (the last one used, else the newest)
+function radioSetYear(year) {
+  if (year === "one") year = parseInt(($("libraryYear") && $("libraryYear").value) || "", 10) || new Date().getFullYear();
+  year = parseInt(year, 10) || 0;
+  radioYear = year;
+  try { localStorage.setItem("stm_library_year", String(year)); } catch {}
+  document.querySelectorAll(".seg-opt[data-when]").forEach(b => { const on = (b.dataset.when === "one") === !!year; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+  const sel = $("libraryYear");
+  if (sel) {
+    sel.style.display = year ? "" : "none";
+    if (year) { radioEnsureYearOption(sel, year); sel.value = String(year); }
+  }
+  if ($("libraryWhenHelp")) $("libraryWhenHelp").textContent = year ? "Only scrobbles from " + year + "." : "Anywhere in your history, from your first scrobble to today.";
+  radioSyncHeadline();
+}
+// The years from the first scrobble to today, newest first (a year saved earlier stays in the list)
+function radioLibraryYears(first, now, keep) {
+  const out = [];
+  for (let y = now; y >= Math.min(first || now, keep || now); y--) out.push(y);
+  return out;
+}
+function radioEnsureYearOption(sel, year) {
+  if ([].some.call(sel.options || [], o => o.value === String(year))) return;
+  const o = document.createElement("option"); o.value = String(year); o.textContent = String(year);
+  sel.appendChild(o);
+}
+function radioFillYears() {
+  const sel = $("libraryYear");
+  if (!sel) return;
+  const years = radioLibraryYears(libraryYears.first, new Date().getFullYear(), radioYear);
+  sel.innerHTML = years.map(y => '<option value="' + y + '">' + y + '</option>').join("");
+  if (radioYear) sel.value = String(radioYear);
+}
+// The When list starts at the year of the user's first scrobble (one lookup per username)
+async function refreshLibraryYears() {
+  const user = $("usernameInput").value.trim();
+  if (!user || libraryYears.user === user.toLowerCase()) return;
+  libraryYears = { user: user.toLowerCase(), first: 0 };
+  const first = await fetchEarliestYear(user);
+  if (libraryYears.user !== user.toLowerCase()) return;
+  libraryYears.first = first || 0;
+  radioFillYears();
+}
+
+function showRadioView() {
   const wasHidden = $("radioView").style.display === "none";
-  travelActive = travel; radioMinimized = false; radioSyncHome();
+  radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
-  $("radioTitle").textContent = travel ? "Time travel" : RADIO_STATIONS[radioActiveStation].title;
-  $("radioAgainBtn").style.display = travel ? "" : "none";
-  $("radioUpNextBlock").style.display = travel ? "none" : "";
+  $("radioTitle").textContent = radioSessionTitle(radioActiveStation, radioActiveHow, radioActiveYear);
   radioResetHero();
-  if (!travel) radioRenderQueue();
+  radioRenderQueue();
   if (wasHidden) window.scrollTo(0, 0);  // the home view may have been scrolled; open the new view at its top
 }
 
 function hideRadioView() {
-  travelActive = false; radioMinimized = false; radioSyncHome();
+  radioMinimized = false; radioSyncHome();
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   $("radioUpNext").innerHTML = "";
@@ -712,7 +857,7 @@ function hideRadioView() {
 
 // Home button: show the home view again but keep the session and the music going; the home card leads back
 function radioMinimize() {
-  if (!(radioActive || travelActive) || $("radioView").style.display === "none") return;
+  if (!radioActive || $("radioView").style.display === "none") return;
   radioMinimized = true; radioSyncHome();
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
@@ -728,21 +873,11 @@ function radioReopen() {
   window.scrollTo(0, 0);
 }
 
-// Repeat the last Time Travel mode with the same inputs
-function travelAgain() {
-  if (currentPhase === "working") return;  // a session is still loading: starting another would run two at once
-  handleGo();
-}
-
-// Last.fm names for the track at idx: the radio's scrobble names, or the time-travel track objects
+// Last.fm names for the track at idx (the scrobble's own names, which getInfo knows)
 function radioInfoSource(idx) {
   const m = trackMeta[idx];
   // trackMeta can be left over from a radio session that failed to start: only trust it while the radio runs
-  if (radioActive && m && m.lfmArtist) return { artist: m.lfmArtist, track: m.lfmTrack };
-  const t = currentTracks[idx];
-  if (!t) return null;
-  const artist = (t.artist && (t.artist["#text"] || t.artist.name)) || "";
-  return artist && t.name ? { artist, track: t.name } : null;
+  return radioActive && m && m.lfmArtist ? { artist: m.lfmArtist, track: m.lfmTrack } : null;
 }
 
 // Cached Last.fm lookups (promises, so concurrent calls share one request); the info panel and Discover use the same caches
@@ -762,8 +897,7 @@ function radioTrackPlaysP(user, artist, track) {
 async function radioInfoFor(idx) {
   const src = radioInfoSource(idx);
   if (!src) return null;
-  // radioUser belongs to the radio and can be stale; time travel reads the username field
-  const user = travelActive ? $("usernameInput").value.trim() : radioUser;
+  const user = radioUser;
   const uKey = user.toLowerCase();
   const aKey = uKey + "|" + src.artist.toLowerCase(), tKey = uKey + "|" + radioTrackKey(src.artist, src.track);
   const [artist, trackPlays] = await Promise.all([radioArtistInfoP(user, src.artist), radioTrackPlaysP(user, src.artist, src.track)]);
@@ -900,22 +1034,33 @@ function radioRenderNow(track, paused) {
   radioNowPaused = !!paused;
   radioSyncVolume();
   const fromPast = radioActive && meta && meta.fromPast && meta.year;
-  radioShowSource(radioActive && meta && meta.source ? meta.source : fromPast ? "From " + meta.year : "", !!fromPast);
+  radioShowSource(radioActive && meta ? radioChipText(meta) : "", !!fromPast);
   if (radioMinimized) radioSyncHome();
+  radioSyncMoment();
   radioSyncInfo();
   radioSyncArtistPhoto(track);
   radioRenderQueue();
 }
 
-// One Up next row: cover (https only, so the URL is safe in an attribute), title and artist
-function radioQueueRowHtml(idx, m, esc) {
+// Why a track is playing: the Discover reason, the moment's date (Library in Moments) or the year it is from
+function radioChipText(m) {
+  if (!m) return "";
+  if (m.source) return m.source;
+  if (m.moment) return m.moment.chip;
+  return m.fromPast && m.year ? "From " + m.year : "";
+}
+
+// One Up next row: cover (https only, so the URL is safe in an attribute), title and artist.
+// newMoment marks the first song of a moment that is not the one playing (a stronger divider above it).
+function radioQueueRowHtml(idx, m, esc, newMoment) {
   esc = esc || (s => s);
   const art = /^https:\/\/[^"'<>\s]+$/.test(m.art || "")
     ? '<img class="radio-row-art" src="' + m.art + '" alt="" loading="lazy">'
     : '<div class="radio-row-art"></div>';
-  const chip = m.source ? '<span class="radio-chip"><i class="ph-fill ph-sparkle" aria-hidden="true"></i><span>' + esc(m.source) + '</span></span>'
-    : m.fromPast && m.year ? '<span class="radio-chip past"><i class="ph ph-clock" aria-hidden="true"></i><span>From ' + esc(String(m.year)) + '</span></span>' : '';
-  return '<div class="radio-row radio-row-play" onclick="radioPlayFrom(' + idx + ')">' + art
+  const text = radioChipText(m);
+  const chip = !text ? '' : m.source ? '<span class="radio-chip"><i class="ph-fill ph-sparkle" aria-hidden="true"></i><span>' + esc(text) + '</span></span>'
+    : '<span class="radio-chip past"><i class="ph ph-clock" aria-hidden="true"></i><span>' + esc(text) + '</span></span>';
+  return '<div class="radio-row radio-row-play' + (newMoment ? ' moment-start' : '') + '" onclick="radioPlayFrom(' + idx + ')">' + art
     + '<div class="radio-row-text"><div class="radio-row-title">' + esc(m.name) + '</div><div class="radio-row-artist">' + esc(m.artist) + '</div></div>' + chip + '</div>';
 }
 
@@ -927,10 +1072,14 @@ function radioRenderQueue() {
   const upRows = radioUpNextRows();
   let html = "", shown = 0;
   const idxs = [];
+  const cur = trackMeta[nowPlayingIndex];
+  let prevMoment = cur && cur.moment ? cur.moment.id : null;
   for (let i = Math.max(nowPlayingIndex + 1, 0); i < allTrackCount && shown < upRows; i++) {
     const m = trackMeta[i];
     if (!m) continue;
-    html += radioQueueRowHtml(i, m, escHtml);
+    const mid = m.moment ? m.moment.id : null;
+    html += radioQueueRowHtml(i, m, escHtml, mid !== null && prevMoment !== null && mid !== prevMoment);
+    if (mid !== null) prevMoment = mid;
     idxs.push(i);
     shown++;
   }
@@ -957,7 +1106,69 @@ async function radioPlayFrom(idx) {
   else radioPendingReissue = false;  // the new context already holds every queued track
 }
 
+// ===== This moment (Library in Moments) =====
+// The queued tracks of a moment, in order
+function radioMomentIndices(id) {
+  const out = [];
+  for (let i = 0; i < allTrackCount; i++) if (matchedUris[i] && trackMeta[i] && trackMeta[i].moment && trackMeta[i].moment.id === id) out.push(i);
+  return out;
+}
+// The first queued track after idx that belongs to another moment (-1: none queued yet)
+function radioNextMomentIndex(idx) {
+  const cur = trackMeta[idx], id = cur && cur.moment ? cur.moment.id : null;
+  for (let i = idx + 1; i < allTrackCount; i++) {
+    const m = trackMeta[i];
+    if (matchedUris[i] && m && m.moment && m.moment.id !== id) return i;
+  }
+  return -1;
+}
+
+let radioMomentShown = null;  // id of the moment the panel shows
+function radioSyncMoment() {
+  const box = $("radioMoment");
+  if (!box) return;
+  const meta = radioActive ? trackMeta[nowPlayingIndex] : null;
+  const m = meta && meta.moment;
+  box.style.display = m ? "" : "none";
+  if (!m) { radioMomentShown = null; return; }
+  // Next moment works before the next moment is queued (it is fetched then); only a finished library or a pending jump disables it
+  if ($("momentNextBtn")) $("momentNextBtn").disabled = radioJumpFrom !== null || (radioExhausted && radioNextMomentIndex(nowPlayingIndex) < 0);
+  if (m.id === radioMomentShown) return;
+  radioMomentShown = m.id;
+  $("radioMomentLabel").textContent = m.label;
+  $("radioMomentMeta").textContent = radioMomentMeta(m);
+  radioResetSaveMoment();
+}
+function radioResetSaveMoment() {
+  const btn = $("momentSaveBtn");
+  if (!btn) return;
+  btn.disabled = false; btn.className = "btn-save-playlist"; btn.onclick = saveMomentPlaylist;
+  btn.innerHTML = '<i class="ph ph-plus" aria-hidden="true"></i> Save this moment';
+}
+
+// Next moment: play from the first song of the next queued moment
+// When none is queued yet, the rest of this moment is dropped and the next one is fetched; it plays as soon as its first
+// song is matched (radioFill)
+function radioNextMoment() {
+  const idx = radioNextMomentIndex(nowPlayingIndex);
+  if (idx >= 0) { radioPlayFrom(idx); return; }
+  const cur = trackMeta[nowPlayingIndex], id = cur && cur.moment ? cur.moment.id : null;
+  if (!radioActive || id === null || radioExhausted) return;
+  radioCarry = radioCarry.filter(p => !(p.moment && p.moment.id === id));
+  radioJumpFrom = id;
+  if ($("momentNextBtn")) $("momentNextBtn").disabled = true;
+  if (!radioRefilling) continueRadio();
+}
+
+// Save the playing moment (its queued songs) as a Spotify playlist named after its date
+async function saveMomentPlaylist() {
+  const meta = trackMeta[nowPlayingIndex], m = meta && meta.moment;
+  if (!m) return;
+  const uris = radioMomentIndices(m.id).map(i => matchedUris[i]);
+  await saveAsPlaylist($("momentSaveBtn"), uris, m.label, () => radioMomentShown === m.id);
+}
+
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { radioVolumeIcon, radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioEraLabel, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt, radioRemoteLeft };
+  module.exports = { radioVolumeIcon, radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioYearRange, radioMomentFromTracks, radioMomentLabel, radioMomentChip, radioMomentMeta, radioHomeHeadline, radioSessionTitle, radioLibraryYears, radioChipText, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt, radioRemoteLeft };
 }
