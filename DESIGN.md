@@ -161,7 +161,7 @@ Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify
 ## 4. Screens
 
 ### Home (`#homeView`)
-- **Not connected:** centered radio card (max 680px on desktop) with the headline, a short prompt, the station picker, the username field and **Connect Spotify**.
+- **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and two numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Connect Spotify** (disabled until there is a username; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
 - **Connected, idle:** headline, `username · N scrobbles`, station picker (+ Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
 - **Wide desktop (>=1100px):** the same card, centered at 680px.

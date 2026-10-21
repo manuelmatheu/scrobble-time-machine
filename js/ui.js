@@ -60,7 +60,23 @@ function updateSpotifyUI(c) {
   $("spotifyConnectBtn").style.display = c ? "none" : "";
   $("spotifyBadge").style.display = c ? "" : "none";
   $("radioBtn").style.display = c ? "" : "none";
+  showLanding(!c);
   updateRadioButton();
+}
+// First run (no Spotify session): a short landing with two steps, username then Connect Spotify. The Home card with every
+// option appears once Spotify is connected. The landing's field feeds #usernameInput, which the rest of the app reads.
+function showLanding(on) {
+  const landing = $("landing"), card = $("homeCard");
+  if (!landing || !card) return;
+  if (on && landing.style.display === "none") { $("landingUser").value = $("usernameInput").value; landingSync(); }
+  landing.style.display = on ? "" : "none";
+  card.style.display = on ? "none" : "";
+}
+function landingSync() {
+  const user = $("landingUser").value.trim();
+  $("landingStepUser").className = "landing-step " + (user ? "done" : "active");
+  $("landingStepSpotify").className = "landing-step " + (user ? "active" : "locked");
+  $("landingConnectBtn").disabled = !user;
 }
 // Start radio needs a username, Spotify and no radio starting already
 function updateRadioButton() {

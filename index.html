@@ -86,7 +86,31 @@
     (set redirect URI to <code id="currentUrl"></code>)</div>
 
   <div id="homeView">
-    <section class="radio-card">
+    <section class="radio-card landing" id="landing" aria-label="Get started">
+      <span class="eyebrow">Last.fm &middot; Spotify</span>
+      <h2 class="home-headline">Your listening history, played back as a radio.</h2>
+      <p class="home-meta">Hear your own scrobbles again, song by song or as whole moments from any year.</p>
+      <ol class="landing-steps">
+        <li class="landing-step active" id="landingStepUser">
+          <span class="step-badge" aria-hidden="true"><span class="step-num">1</span><i class="ph ph-check step-check"></i></span>
+          <div class="step-body">
+            <label class="step-title" for="landingUser">Your Last.fm username</label>
+            <input type="text" class="input-username landing-input" id="landingUser" placeholder="Last.fm username" autocomplete="off" spellcheck="false">
+            <p class="step-help">We only read your public scrobbles. No Last.fm password.</p>
+          </div>
+        </li>
+        <li class="landing-step locked" id="landingStepSpotify">
+          <span class="step-badge" aria-hidden="true"><span class="step-num">2</span><i class="ph ph-check step-check"></i></span>
+          <div class="step-body">
+            <span class="step-title">Connect Spotify</span>
+            <p class="step-help">Plays the music in this browser. Needs Spotify Premium.</p>
+            <button class="btn btn-spotify btn-radio" id="landingConnectBtn" onclick="initiateSpotifyAuth()" disabled>Connect Spotify</button>
+            <p class="step-help">Then pick what to play: your Library, new music, or a mix of both.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+    <section class="radio-card" id="homeCard" style="display:none">
       <span class="eyebrow" id="radioEyebrow">Library radio</span>
       <h2 class="home-headline" id="homeHeadline">Your library, shuffled across every year.</h2>
       <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
