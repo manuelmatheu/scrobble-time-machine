@@ -22,6 +22,7 @@ No build step, no package manager, no linter -- there is nothing to install or c
 - `radio-engine`: the radio engine with the network stubbed (fills, top-ups, seams, stations, `spotifyPlay` request shapes).
 - `contrast`: WCAG contrast of the text tokens on the surface tokens, both themes.
 - `design-system`: colors only as tokens (no hex or `rgba()` outside the token lines of `style.css`), every match status styled, no text under 12px, no `transition:all`.
+- `motion`: ease-out curves only (no overshoot), keyframes animate only `opacity`/`transform`, and the reduced-motion block switches every animation and transition off.
 - `no-page-numbers`: no page numbers in status or error messages. `no-era-panel`: the era panel and slider stay removed.
 
 - **Run locally:** serve the folder with any static file server (`/api/lfm-station` only exists on Vercel or `vercel dev`; without it Discover falls back to the similar-artist source) (e.g. `npx serve`, `python -m http.server`) and open it in a browser. Opening `index.html` directly via `file://` will break Spotify PKCE auth, since `SPOTIFY_REDIRECT_URI` (`js/config.js`) is derived from `window.location.origin + window.location.pathname` and must exactly match a redirect URI registered on the Spotify app.
@@ -120,7 +121,7 @@ Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the
 
 3. **Spotify tokens live in `localStorage`, not `sessionStorage`** -- intentional (v2.3+), so a reconnect isn't needed every time a tab closes. Only the PKCE code verifier and a spare copy of the Last.fm username use `sessionStorage`. Don't revert the token storage to `sessionStorage` without checking why it was changed (commit `bd8354c`).
 
-4. **`pollNowPlaying()` only runs when `!sdkPlaying()`** -- first line is `if (sdkPlaying() || _pollBusy) return;`. When the SDK is the player, `player_state_changed` events handle all updates; with another device picked, polling does, even though `sdkReady` is true.
+4. **`pollNowPlaying()` only runs when `!sdkPlaying()`** -- first line is `if (sdkPlaying() || _pollBusy) return;`. When the SDK is the player, `player_state_changed` events handle all updates; when the session was moved to another device (`playbackDeviceId` set by `followPlaybackDevice()`), polling does, even though `sdkReady` is true.
 
 5. **`matchedUris` is index-keyed object, not an array** -- iterate with `for (let i = 0; i < allTrackCount; i++)`, not `Object.values()` or array methods. Sparse: some indices may be missing.
 

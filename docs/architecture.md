@@ -59,11 +59,11 @@ Rewritten in commits `ca73300`/`4976e4f`/`4828bab` to match SpotiMix's device-tr
 When `sdkReady = true`:
 - Playback goes through the in-browser SDK device
 - `player_state_changed` events update `onSDKStateChange()` directly
-- `pollNowPlaying()` returns immediately while the SDK is the player (`sdkPlaying()`: `sdkReady` and no other Connect device picked)
+- `pollNowPlaying()` returns immediately while the SDK is the player (`sdkPlaying()`: `sdkReady` and the session was not moved to another device)
 
 ### Polling Fallback
 
-When the SDK is not the player (`sdkReady = false`: not initialized, non-Premium or SDK error; or another Connect device is picked):
+When the SDK is not the player (`sdkReady = false`: not initialized, non-Premium or SDK error; or the session was moved to another Connect device):
 - `pollNowPlaying()` runs every `POLL_INTERVAL` (5000ms)
 - Calls `getCurrentlyPlaying()` and updates highlight via `uriToIndices` reverse map
 
