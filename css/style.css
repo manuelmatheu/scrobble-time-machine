@@ -230,11 +230,11 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 
 /* Wide desktop (1100px and up): a 1120px container. Home: the radio card, centered at 680px.
    Radio: player, moment and artist panels on the left (640px), Up next on the right as a panel of the same height
-   (rows grow or scroll inside it). Narrower screens keep one column. */
+   (as many rows as fit). Narrower screens keep one column. */
 @media (min-width:1100px) {
   .container { max-width:1120px; }
   #homeView .radio-card { max-width:680px; margin-left:auto; margin-right:auto; }
-  .radio-cols { display:grid; grid-template-columns:640px minmax(0,1fr); grid-template-rows:minmax(468px,auto); gap:28px; align-items:stretch; }
+  .radio-cols { display:grid; grid-template-columns:640px minmax(0,1fr); grid-template-rows:minmax(476px,auto); gap:28px; align-items:stretch; }
   .radio-col-main { display:flex; flex-direction:column; gap:28px; min-width:0; }
   .radio-col-main .radio-now, .radio-col-main .radio-moment { margin-bottom:0; }
   .radio-col-main .radio-info { margin-bottom:0; padding:20px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
@@ -248,7 +248,7 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
   .radio-col-list .radio-upnext { flex:1; min-height:0; margin:0; border:none; border-radius:0; background:none; }
   .radio-col-list .radio-upnext { display:flex; flex-direction:column; }
   .radio-col-list .radio-row { padding-top:5px; padding-bottom:5px; }  /* tighter rows: 8 fit where 6 did (the 40px cover still gets 44px+ per row) */
-  .radio-col-list .radio-upnext .radio-row { flex:0 0 calc(100% / var(--upnext-rows, 6)); }  /* every row keeps the same height, even with fewer tracks queued */
+  .radio-col-list .radio-upnext .radio-row { flex:0 0 auto; }  /* every row has its natural height (51px with the divider), as in the phone list; radioUpNextRows() shows as many as fit */
 }
 
 /* Toasts: errors and warnings, bottom center, one at a time (showStatus() in ui.js). Inverted like the play button; errors take the accent fill. */

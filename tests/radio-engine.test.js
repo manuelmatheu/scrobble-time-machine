@@ -857,7 +857,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     run("radioRenderQueue()");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, run("RADIO_UPNEXT_ROWS"));
     assert.doesNotMatch(q.innerHTML, /Tuning/, "no Tuning row when the list is already full");
-    assert.equal(q.style["--upnext-rows"], run("RADIO_UPNEXT_ROWS"));
     run("allTrackCount = 4;");
     run("radioRenderQueue()");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 3);
@@ -870,7 +869,12 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("RADIO_UPNEXT_ROWS_WIDE"), 8);
     run("radioRenderQueue()");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 8);
-    assert.equal(q.style["--upnext-rows"], 8);
+    // the panel is taller than 8 rows (the moment panel stretches the left column): rows keep their height and more of them show
+    q.clientHeight = 10 * 51 - 1;  // ten rows, the last one without divider
+    assert.equal(run("radioUpNextRows()"), 10);
+    q.clientHeight = 300;
+    assert.equal(run("radioUpNextRows()"), 8, "never fewer than the wide minimum");
+    delete q.clientHeight;
     delete global.window.matchMedia;
     assert.equal(run("radioUpNextRows()"), run("RADIO_UPNEXT_ROWS"));  // no media query support: the phone count
   }

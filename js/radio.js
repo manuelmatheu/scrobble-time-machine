@@ -650,7 +650,11 @@ async function radioSeamReissue() {
 // Rows in the Up next list: more on wide desktop. The top-up threshold follows it (a full list must stay queued)
 function radioUpNextRows() {
   const wide = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(min-width:1100px)").matches;
-  return wide ? RADIO_UPNEXT_ROWS_WIDE : RADIO_UPNEXT_ROWS;
+  if (!wide) return RADIO_UPNEXT_ROWS;
+  // the panel is as tall as the left column (the moment panel makes it taller), and rows keep one height: show as many as fit
+  const box = typeof $ === "function" ? $("radioUpNext") : null;
+  const h = box && box.clientHeight;
+  return h > 0 ? Math.max(RADIO_UPNEXT_ROWS_WIDE, Math.floor((h + 1) / RADIO_ROW_PX_WIDE)) : RADIO_UPNEXT_ROWS_WIDE;
 }
 function radioMaybeRefill(currentUri, positionMs) {
   radioCurrentUri = currentUri; radioLastPos = positionMs || 0;
@@ -1068,7 +1072,6 @@ function radioQueueRowHtml(idx, m, esc, newMoment) {
 function radioRenderQueue() {
   const box = $("radioUpNext");
   if (!box) return;
-  if (box.style && box.style.setProperty) box.style.setProperty("--upnext-rows", radioUpNextRows());  // wide layout: every row is 1/N of the panel
   const upRows = radioUpNextRows();
   let html = "", shown = 0;
   const idxs = [];
@@ -1171,4 +1174,13 @@ async function saveMomentPlaylist() {
 // ===== node test exports (no-op in browsers) =====
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { radioVolumeIcon, radioPickPage, radioTrackKey, radioScrobbleFromTracks, radioParseBio, radioPlaysText, radioStatsHtml, radioArtistFromInfo, radioTrackPlaysFromInfo, radioYearRange, radioMomentFromTracks, radioMomentLabel, radioMomentChip, radioMomentMeta, radioHomeHeadline, radioSessionTitle, radioLibraryYears, radioChipText, radioRateLimitText, radioRemaining, radioUrisFrom, radioShouldRefill, radioSeamDue, radioCoverUrl, radioTransportRequest, radioQueueRowHtml, radioArtistPhotoFromSpotify, radioArtistId, discoverParseStation, discoverParseSimilarArtists, discoverParseTopTracks, discoverInterleave, discoverShuffle, discoverVerdict, discoverStatsHtml, mixKindAt, radioRemoteLeft };
+}
+
+// A resized window changes how many Up next rows fit (wide layout)
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  let _upNextResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(_upNextResizeTimer);
+    _upNextResizeTimer = setTimeout(() => { if (radioActive) radioRenderQueue(); }, 150);
+  });
 }

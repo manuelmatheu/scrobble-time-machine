@@ -145,7 +145,7 @@ Your play counts ("You have played X n times, and this track n times") and a fou
 Library in Moments only, between the now-playing card and the artist panel: a 16px-radius card with THIS MOMENT, the moment label ("Tuesday, March 11, 2014 · evening"), a line with the songs and times ("11 songs you played between 21:04 and 21:52, in that order.") and two buttons: **Save this moment** (green outline, `.btn-save-playlist`, becomes "Saved! Open") and **Next moment** (ghost; disabled only while it is fetching the next moment or when there is nothing left). Full-width stacked buttons on phones.
 
 ### List rows (`.radio-row`)
-44px minimum, 10px/16px padding (5px/16px in the wide list panel, where a row is 50px), 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). In Moments the first song of the next moment has a stronger line above it (`.moment-start`, an inset 1px `--text-muted` line) and every row's chip shows its moment's date. The canvas showed a "Next moment" header row instead; it was not used because the wide list gives every row the same height.
+44px minimum, 10px/16px padding (5px/16px in the wide list panel, where a row is 51px with its divider and the list shows as many as fit), 40px cover (6px radius), title 14px/600 and artist 12px/tertiary, hairline divider between rows. Up next rows are clickable (play from here, hover fills `--bg-tertiary`). In Moments the first song of the next moment has a stronger line above it (`.moment-start`, an inset 1px `--text-muted` line) and every row's chip shows its moment's date. The canvas showed a "Next moment" header row instead; it was not used because the wide list gives every row the same height.
 
 ### Home "playing" strip (`.radio-playing`)
 Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-tertiary` pill, shown when a radio is running behind the home view.
@@ -181,7 +181,7 @@ Full-screen overlay (title and close button in its own header) with an iframe of
 | **<= 520px** | Radio card padding 20px; now-playing card stacks (see above); buttons full width in `.controls` and in the moment panel; header brand 16px |
 | **<= 720px** | Volume slider hidden (phones cannot use the SDK anyway) |
 | **521-1099px** | One column, 680px container, now-playing card horizontal at 224px |
-| **>= 1100px** | 1120px container. Home: the card centered at 680px. Radio two columns: player, moment panel and artist panel (640px) on the left, Up next as a panel of equal height on the right (min 468px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum). Artist photo shown |
+| **>= 1100px** | 1120px container. Home: the card centered at 680px. Radio two columns: player, moment panel and artist panel (640px) on the left, Up next as a panel of equal height on the right (min 476px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum). Artist photo shown |
 
 ---
 

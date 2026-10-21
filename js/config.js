@@ -37,6 +37,7 @@ const RADIO_CONCURRENCY = 4;    // parallel Last.fm requests per round
 const RADIO_MAX_ATTEMPTS = 40;  // Last.fm fetches per fill before giving up
 const RADIO_UPNEXT_ROWS = 6;    // rows shown in the Up next list (phones, tablets)
 const RADIO_UPNEXT_ROWS_WIDE = 8;  // ...and on wide desktop (1100px and up), where the list panel is taller and the rows tighter
+const RADIO_ROW_PX_WIDE = 51;     // height of one Up next row in the wide panel (5px + 40px cover + 5px + 1px divider); the list shows as many as fit
 const RADIO_LOW_WATER = RADIO_UPNEXT_ROWS - 1;  // top up when fewer than a full Up next list remains after the current one (phones)
 let radioActive = false, radioUser = "", radioTotal = 0;
 let radioSession = 0;           // bumped on every start/stop; stale fills compare against it
