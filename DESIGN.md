@@ -117,11 +117,11 @@ The progress fill width stays 0.25s linear. Transitions name their properties, n
 ### Theme toggle (`.theme-toggle`)
 44px square in the header, 1.5px border, icon at 70% opacity (full on hover).
 
-### Station picker (`.station-picker`)
-Three full-width options stacked: Library, Discover, Mix. Each is a 64px-min card with an icon, a name, a one-line description and a radio dot on the right. Active: red border, subtle red fill, red icon and dot. It stays visible while a radio runs (it chooses the *next* radio; the running one is unaffected). The headline above it follows the picked station. Remembered in `localStorage` (`stm_station`).
+### Station tabs (`.station-tabs`) and panel (`.station-panel`)
+One segmented bar with three tabs, Library | Discover | Mix (44px min, icon + name, `role="tablist"`). A sliding indicator (subtle red fill, 1.5px red border, 8px radius) moves to the picked tab (`transform`, 0.35s ease-out-quart). Under the bar sits one panel (`--bg-tertiary`, 12px radius, 16px padding) with a one-line description of the station and that station's options: the Library options, the Mix balance, or for Discover a note that there is nothing to set. Changing tab fades the panel content out and in (150ms) and the panel eases to the new height (`fitStationPanel()`, driven by a `ResizeObserver`, so a changed help line or the year list also animates). It stays visible while a radio runs (it chooses the *next* radio; the running one is unaffected). The headline above follows the picked station. Remembered in `localStorage` (`stm_station`). Reduced motion: no transitions.
 
 ### Library options (`.library-options`)
-Only visible when Library is picked, in a `--bg-tertiary` box (12px radius, 16px padding) under the station picker. Two blocks, each an option label (12px caps, tertiary), a segmented control (`.seg` on `--bg-secondary`) and a line of help (13px, tertiary) that changes with the choice:
+Only visible when Library is picked, inside the station panel. Two blocks, each an option label (12px caps, tertiary), a segmented control (`.seg` on `--bg-secondary`) and a line of help (13px, tertiary) that changes with the choice:
 - **How it plays:** **Songs** ("One song at a time, each from a different day of your history.") or **Moments** ("A stretch of what you played back then, in the order you played it. When it ends, the radio jumps to another moment."). Remembered (`stm_library_how`).
 - **When:** **Every year** or **One year**; One year shows the year list (`.lib-year`, a native select, 50px tall, red border, mono 15px) from the year of the first scrobble to today. Remembered (`stm_library_year`).
 The headline follows them: "Your library, shuffled across every year.", "Your 2014, shuffled.", "Your past, one moment at a time.", "Back in 2014, as you played it."
@@ -162,7 +162,7 @@ Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify
 
 ### Home (`#homeView`)
 - **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and two numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Connect Spotify** (disabled until there is a username; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
-- **Connected, idle:** headline, `username · N scrobbles`, station picker (+ Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
+- **Connected, idle:** headline, `username · N scrobbles`, station tabs and panel (Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
 - **Wide desktop (>=1100px):** the same card, centered at 680px.
 
@@ -196,10 +196,10 @@ Full-screen overlay (title and close button in its own header) with an iframe of
 
 - Contrast: all text tokens meet AA on the three background tokens, in both themes (automated).
 - Targets: at least 44px; the heart in the player is 44px.
-- Semantics: real `<button>` elements; the station picker and Mix balance are `role="group"` with `aria-pressed` on options; icon-only buttons have `aria-label`; the radio view has `aria-label="Radio"`.
+- Semantics: real `<button>` elements; the station tabs use `role="tablist"`/`tab`/`tabpanel` with `aria-selected`, the Mix balance is a `role="group"` with `aria-pressed` on options; icon-only buttons have `aria-label`; the radio view has `aria-label="Radio"`.
 - Selection never relies on color alone (dot, border and fill change together).
 - Focus: one global ring, `2px solid var(--lastfm-red-text)` at 2px offset, on every button, link, range input and `[tabindex]` under `:focus-visible`. Exceptions: text inputs (their red border and glow).
-- Toggle buttons expose their state with `aria-pressed` (station picker, Mix balance, hearts).
+- Toggle buttons expose their state with `aria-pressed` (Mix balance, Library options, hearts).
 - Reduced motion respected.
 
 ---

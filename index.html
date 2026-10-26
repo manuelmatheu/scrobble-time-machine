@@ -114,38 +114,46 @@
       <span class="eyebrow" id="radioEyebrow">Library radio</span>
       <h2 class="home-headline" id="homeHeadline">Your library, shuffled across every year.</h2>
       <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
-      <div class="station-picker" id="stationPicker" role="group" aria-label="Station">
-        <button class="station-opt active" data-station="library" aria-pressed="true" onclick="radioSetStation('library')"><i class="ph-fill ph-vinyl-record" aria-hidden="true"></i><span class="station-text"><span class="station-name">Library</span><span class="station-desc">Your own scrobbles: songs or whole moments, any year or one</span></span><span class="station-dot" aria-hidden="true"></span></button>
-        <button class="station-opt" data-station="discover" aria-pressed="false" onclick="radioSetStation('discover')"><i class="ph ph-compass" aria-hidden="true"></i><span class="station-text"><span class="station-name">Discover</span><span class="station-desc">New music picked from Last.fm and your Spotify taste</span></span><span class="station-dot" aria-hidden="true"></span></button>
-        <button class="station-opt" data-station="mix" aria-pressed="false" onclick="radioSetStation('mix')"><i class="ph ph-shuffle" aria-hidden="true"></i><span class="station-text"><span class="station-name">Mix</span><span class="station-desc">Your past, with new music woven in</span></span><span class="station-dot" aria-hidden="true"></span></button>
+      <div class="station-tabs" id="stationPicker" role="tablist" aria-label="Station">
+        <span class="tab-ind" id="stationInd" aria-hidden="true"></span>
+        <button class="tab active" role="tab" data-station="library" aria-selected="true" aria-controls="stationPanel" onclick="radioSetStation('library')"><i class="ph-fill ph-vinyl-record" aria-hidden="true"></i><span>Library</span></button>
+        <button class="tab" role="tab" data-station="discover" aria-selected="false" aria-controls="stationPanel" onclick="radioSetStation('discover')"><i class="ph ph-compass" aria-hidden="true"></i><span>Discover</span></button>
+        <button class="tab" role="tab" data-station="mix" aria-selected="false" aria-controls="stationPanel" onclick="radioSetStation('mix')"><i class="ph ph-shuffle" aria-hidden="true"></i><span>Mix</span></button>
       </div>
-      <div class="library-options" id="libraryOptions">
-        <div class="lib-opt">
-          <span class="lib-opt-label" id="libraryHowLabel">How it plays</span>
-          <div class="seg" role="group" aria-labelledby="libraryHowLabel">
-            <button class="seg-opt active" data-how="songs" aria-pressed="true" onclick="radioSetHow('songs')">Songs</button>
-            <button class="seg-opt" data-how="moments" aria-pressed="false" onclick="radioSetHow('moments')">Moments</button>
-          </div>
-          <p class="lib-opt-help" id="libraryHowHelp">One song at a time, each from a different day of your history.</p>
-        </div>
-        <div class="lib-opt">
-          <span class="lib-opt-label" id="libraryWhenLabel">When</span>
-          <div class="lib-when">
-            <div class="seg" role="group" aria-labelledby="libraryWhenLabel">
-              <button class="seg-opt active" data-when="all" aria-pressed="true" onclick="radioSetYear(0)">Every year</button>
-              <button class="seg-opt" data-when="one" aria-pressed="false" onclick="radioSetYear('one')">One year</button>
+      <div class="station-panel" id="stationPanel" role="tabpanel">
+        <div class="station-panel-in" id="stationPanelIn">
+          <p class="station-blurb" id="stationBlurb"></p>
+          <div class="library-options" id="libraryOptions">
+            <div class="lib-opt">
+              <span class="lib-opt-label" id="libraryHowLabel">How it plays</span>
+              <div class="seg" role="group" aria-labelledby="libraryHowLabel">
+                <button class="seg-opt active" data-how="songs" aria-pressed="true" onclick="radioSetHow('songs')">Songs</button>
+                <button class="seg-opt" data-how="moments" aria-pressed="false" onclick="radioSetHow('moments')">Moments</button>
+              </div>
+              <p class="lib-opt-help" id="libraryHowHelp">One song at a time, each from a different day of your history.</p>
             </div>
-            <select class="lib-year" id="libraryYear" aria-label="Year" onchange="radioSetYear(this.value)" style="display:none"></select>
+            <div class="lib-opt">
+              <span class="lib-opt-label" id="libraryWhenLabel">When</span>
+              <div class="lib-when">
+                <div class="seg" role="group" aria-labelledby="libraryWhenLabel">
+                  <button class="seg-opt active" data-when="all" aria-pressed="true" onclick="radioSetYear(0)">Every year</button>
+                  <button class="seg-opt" data-when="one" aria-pressed="false" onclick="radioSetYear('one')">One year</button>
+                </div>
+                <select class="lib-year" id="libraryYear" aria-label="Year" onchange="radioSetYear(this.value)" style="display:none"></select>
+              </div>
+              <p class="lib-opt-help" id="libraryWhenHelp">Anywhere in your history, from your first scrobble to today.</p>
+            </div>
           </div>
-          <p class="lib-opt-help" id="libraryWhenHelp">Anywhere in your history, from your first scrobble to today.</p>
-        </div>
-      </div>
-      <div class="mix-balance" id="mixBalance" style="display:none">
-        <span class="mix-balance-label" id="mixBalanceLabel">How much is new</span>
-        <div class="seg" role="group" aria-labelledby="mixBalanceLabel">
-          <button class="seg-opt" data-balance="mostly-past" aria-pressed="false" onclick="radioSetBalance('mostly-past')">Mostly past</button>
-          <button class="seg-opt active" data-balance="balanced" aria-pressed="true" onclick="radioSetBalance('balanced')">Balanced</button>
-          <button class="seg-opt" data-balance="mostly-new" aria-pressed="false" onclick="radioSetBalance('mostly-new')">Mostly new</button>
+          <div class="mix-balance" id="mixBalance" style="display:none">
+            <span class="lib-opt-label" id="mixBalanceLabel">How much is new</span>
+            <div class="seg" role="group" aria-labelledby="mixBalanceLabel">
+              <button class="seg-opt" data-balance="mostly-past" aria-pressed="false" onclick="radioSetBalance('mostly-past')">Mostly past</button>
+              <button class="seg-opt active" data-balance="balanced" aria-pressed="true" onclick="radioSetBalance('balanced')">Balanced</button>
+              <button class="seg-opt" data-balance="mostly-new" aria-pressed="false" onclick="radioSetBalance('mostly-new')">Mostly new</button>
+            </div>
+            <p class="lib-opt-help" id="mixBalanceHelp">One song from your past, then one new.</p>
+          </div>
+          <p class="lib-opt-help" id="discoverNote" style="display:none">Nothing to set. Songs you have already played or saved are skipped.</p>
         </div>
       </div>
       <div class="radio-playing" id="radioPlaying" style="display:none"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>

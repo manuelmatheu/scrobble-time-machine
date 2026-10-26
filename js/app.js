@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   radioSetYear(saved("stm_library_year", "0"));
   radioFillYears();  // until the first scrobble's year arrives: this year down to the saved one
   radioSetStation(saved("stm_station", "library"));
+  if (window.ResizeObserver && $("stationPanelIn")) { new ResizeObserver(fitStationPanel).observe($("stationPanelIn")); fitStationPanel(); }
   radioSetBalance(saved("stm_mix_balance", "balanced"));
   loadPlaybackDevice();
 
