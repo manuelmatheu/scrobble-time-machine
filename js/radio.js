@@ -457,7 +457,7 @@ function beginSession() {
   radioStop();
   currentPhase = "working"; updateRadioButton();
   $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
-  searchCache = {}; sessionQueue = new Set(); sessionPaused = false; stopPolling(); hideStatus();
+  searchCache = {}; sessionQueue = new Set(); sessionPaused = false; sdkInactive = false; stopPolling(); hideStatus();
 }
 function endSessionUI() {
   $("cancelBtn").style.display = "none"; $("usernameInput").disabled = false; updateRadioButton();

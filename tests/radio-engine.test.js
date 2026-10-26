@@ -879,6 +879,28 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("radioUpNextRows()"), run("RADIO_UPNEXT_ROWS"));  // no media query support: the phone count
   }
 
+  // 30b. another window took the music: Play brings this window's own queue back here, from where it stopped
+  {
+    const saved = { token: global.getSpotifyToken, play: global.spotifyPlay, hide: global.hideStatus };
+    const plays = [];
+    global.getSpotifyToken = async () => "tok";
+    global.spotifyPlay = async (t, uris, pos) => { plays.push({ uris, pos }); return true; };
+    global.hideStatus = () => {};
+    const setup = () => run("sessionQueue = new Set(['u1','u2','u3']); matchedUris = {0:'u1',1:'u2',2:'u3'}; allTrackCount = 3; _sdkCurrentUri = 'u2'; _sdkPositionMs = 61000; sdkInactive = true; sessionPaused = true; _resumeBusy = false;");
+    setup(); await run("radioResumeHere()");
+    assert.deepEqual(plays[0], { uris: ["u2", "u3"], pos: 61000 }, "resumes the song that was playing, from its position");
+    assert.equal(run("sdkInactive"), false); assert.equal(run("sessionPaused"), false);
+    setup(); await run("radioResumeHere('next')");
+    assert.deepEqual(plays[1], { uris: ["u3"], pos: 0 }, "Next starts the following song");
+    setup(); await run("radioResumeHere('restart')");
+    assert.deepEqual(plays[2], { uris: ["u2", "u3"], pos: 0 }, "Previous restarts the current song");
+    // the controls route there while the window is not the active player
+    setup(); plays.length = 0; await run("playerPlayPause()"); await new Promise(r => setTimeout(r, 20));
+    assert.equal(plays.length, 1, "Play resumes here instead of toggling a player that is not active");
+    global.getSpotifyToken = saved.token; global.spotifyPlay = saved.play; global.hideStatus = saved.hide;
+    run("sdkInactive = false; sessionPaused = false; sessionQueue = new Set(); matchedUris = {}; allTrackCount = 0;");
+  }
+
   // 31. the artist photo comes from Spotify, once per artist, and only for the artist that is playing
   {
     const els = {};

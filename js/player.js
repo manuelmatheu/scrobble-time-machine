@@ -87,6 +87,7 @@ function onSDKStateChange(state) {
   const track = state.track_window && state.track_window.current_track;
   if (!track) return;
 
+  if (sdkInactive && !state.paused) { sdkInactive = false; if (sessionPaused) { sessionPaused = false; hideStatus(); } }  // this window has the music again
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
@@ -163,14 +164,17 @@ async function releaseDeadDevice(resume) {
   else showStatus("Playback stopped. Click a track to continue.", "warn");
 }
 async function playerPlayPause() {
+  if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere(); return; }
   if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.togglePlay(); return; }
   playerRest("toggle");
 }
 async function playerPrev() {
+  if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere("restart"); return; }
   if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.previousTrack(); return; }
   playerRest("prev");
 }
 async function playerNext() {
+  if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere("next"); return; }
   if (radioSkipHandled()) return;
   if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
@@ -298,16 +302,51 @@ async function sdkLostPlayback() {
   if (!sdkPlaying() || sessionQueue.size === 0) return;
   const token = await getSpotifyToken();
   const data = token ? await getCurrentlyPlaying(token) : null;
-  if (!data || !data.device || data.device.id === sdkDeviceId) return;
-  followPlaybackDevice(data);
-  if (!sdkPlaying()) { clearInterval(_sdkProgressTimer); startPolling(); }
+  if (data && data.device && data.device.id === sdkDeviceId) return;  // still ours: a passing null state
+  if (data && data.item && sessionQueue.has(data.item.uri)) {
+    followPlaybackDevice(data);
+    if (!sdkPlaying()) { clearInterval(_sdkProgressTimer); startPolling(); }
+    return;
+  }
+  // Nothing of this session plays anywhere: another window (a second tab, another STM) or another app took the music, or it
+  // stopped. Do not mirror what plays there; show this window paused, and let Play bring its own queue back here.
+  radioPausedElsewhere(!!(data && data.item));
+}
+// This window's player is no longer the active one. Paused look, no seam re-issues (radioPaused), and Play resumes here.
+function radioPausedElsewhere(somethingElsePlays) {
+  sdkInactive = true;
+  clearInterval(_sdkProgressTimer);
+  radioSetPaused(true);
+  radioNowPaused = true;
+  if ($("radioPlay")) $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
+  if (radioMinimized) radioSyncHome();
+  if (somethingElsePlays && !sessionPaused) { sessionPaused = true; showStatus("Playing in another window or device. Press play to bring it back here.", "warn"); }
+}
+// Play (or Next / Previous) while this window is not the active player: carry on with this window's own queue on this browser,
+// from where it stopped. mode: "next" starts the following song, "restart" the current one from its start.
+let _resumeBusy = false;
+async function radioResumeHere(mode) {
+  if (_resumeBusy) return;
+  _resumeBusy = true;
+  try {
+    const token = await getSpotifyToken();
+    if (!token) return;
+    const last = [_sdkCurrentUri, radioCurrentUri].find(u => u && sessionQueue.has(u)) || null;
+    let uris = radioUrisFrom(matchedUris, allTrackCount, last);
+    let pos = last && last === _sdkCurrentUri ? _sdkPositionMs : 0;
+    if (mode === "next" && uris.length > 1) { uris = uris.slice(1); pos = 0; }
+    if (mode === "restart") pos = 0;
+    if (!uris.length) { showStatus("Nothing left to resume. Start a new radio.", "warn"); return; }
+    if (await spotifyPlay(token, uris, pos)) { sdkInactive = false; sessionPaused = false; hideStatus(); }
+    else showStatus("Could not resume here. Click a track to continue.", "warn");
+  } finally { _resumeBusy = false; }
 }
 
 // The SDK does not always send its null state when the music is moved away (a Sonos taken over from the Spotify
 // app never did), so while the SDK is the player and a session runs, check now and then that it still has a state.
 let _sdkWatchBusy = false;
 async function sdkWatchPlayback() {
-  if (_sdkWatchBusy || !sdkPlaying() || sessionQueue.size === 0 || !window._stmPlayer) return;
+  if (_sdkWatchBusy || sdkInactive || !sdkPlaying() || sessionQueue.size === 0 || !window._stmPlayer) return;
   _sdkWatchBusy = true;
   try {
     const st = await window._stmPlayer.getCurrentState();
