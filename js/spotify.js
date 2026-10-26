@@ -237,13 +237,20 @@ async function spotifyPlay(token, uris, positionMs, opts) {
       if (sdkPlaying() && sdkDeviceId) return spotifyPlay(token, uris, positionMs, opts);
     } else if (!device.is_active) await transferPlayback(token, device.id);
   }
-  if (!device) device = devices.find(d => d.is_active);
+  // Another STM window's browser player is not a speaker for this window: one without a player of its own (a phone) would
+  // otherwise take over the music of the window that has one
+  const otherStm = d => d.name === STM_PLAYER_NAME && d.id !== sdkDeviceId;
+  const usable = devices.filter(d => !otherStm(d));
+  if (!device) device = usable.find(d => d.is_active);
   // Nothing listed as active: Spotify may still be playing on a device it does not list (moved there from the
   // Spotify app, e.g. a Sonos). A play without device_id goes to that device; only if there is none, pick one
-  if (!device && devices.length && await spotifyPlayDirect(token, body)) { radioContextLastUri = lastUri; return true; }
+  const stmIsActive = devices.some(d => d.is_active && otherStm(d));
+  if (!device && !stmIsActive && devices.length && await spotifyPlayDirect(token, body)) { radioContextLastUri = lastUri; return true; }
 
   if (!device) {
-    device = devices.find(d => !d.is_restricted) || devices[0];
+    const onPhone = typeof navigator !== "undefined" && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || "");
+    device = (onPhone && usable.find(d => d.type === "Smartphone" && !d.is_restricted)) || usable.find(d => !d.is_restricted) || usable[0];
+    if (!device && devices.length) { showStatus("There is no device to play on here. Open Spotify on this device, then press play again.", "warn"); return false; }
     if (!device) {
       // No devices at all — try without device_id as last resort
       const r = await fetch("https://api.spotify.com/v1/me/player/play", {
@@ -310,7 +317,7 @@ function initSDKPlayer() {
   if (!spotifyToken) return;
   if (window._stmPlayer) return; // guard: localStorage tokens cause both DOMContentLoaded and onSpotifyWebPlaybackSDKReady to call this
   const player = new Spotify.Player({
-    name: 'Scrobble Time Machine',
+    name: STM_PLAYER_NAME,
     getOAuthToken: async cb => {
       // Proactively refresh if token expires within 5 minutes (matches SpotiMix)
       const expiry = parseInt(localStorage.getItem("spotify_token_expires") || "0");

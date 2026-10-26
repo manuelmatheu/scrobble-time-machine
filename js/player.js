@@ -87,7 +87,14 @@ function onSDKStateChange(state) {
   const track = state.track_window && state.track_window.current_track;
   if (!track) return;
 
-  if (sdkInactive && !state.paused) { sdkInactive = false; if (sessionPaused) { sessionPaused = false; hideStatus(); } }  // this window has the music again
+  // Not one of this session's songs? Another window or app started its own music on this browser's player (a phone has no
+  // player of its own, so it plays on the active one). The song after the last one we sent is Spotify's own autoplay: not that.
+  const foreign = sessionQueue.size > 0 && !sessionQueue.has(track.uri);
+  if (foreign && !sdkInactive && radioActive && _sdkCurrentUri && sessionQueue.has(_sdkCurrentUri) && _sdkCurrentUri !== radioContextLastUri) radioPausedElsewhere(true);
+  if (sdkInactive) {
+    if (foreign || state.paused) return;  // keep this window's own song and position for Play
+    sdkInactive = false; if (sessionPaused) { sessionPaused = false; hideStatus(); }  // this window has the music again
+  }
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
