@@ -2,12 +2,13 @@
 // Network first, so a deploy is never hidden behind a stale cache; the cache is only the fallback.
 // Spotify, Last.fm, the font and icon CDNs and /api/ are never cached (they are cross-origin or live data).
 const CACHE = "stm-shell-v1";
-const SHELL = ["./", "index.html", "css/style.css", "favicon.ico", "manifest.webmanifest", "changelog.html",
+const SHELL = ["./", "index.html", "css/style.css", "favicon.ico", "changelog.html",
   "js/config.js", "js/spotify.js", "js/lastfm.js", "js/ui.js", "js/player.js", "js/radio.js", "js/app.js",
   "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // one file that cannot be fetched (a protected preview redirects to a login) must not fail the whole install
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
