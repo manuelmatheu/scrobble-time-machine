@@ -16,11 +16,11 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .setup-banner code { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lastfm-red-text); background:var(--lastfm-red-subtle); padding:1px 6px; border-radius:8px; }
 .setup-banner a { color:var(--lastfm-red-text); text-decoration:underline; text-underline-offset:2px; }
 .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:28px; }
-/* Text fields: one spec for the username and the mode inputs (44px tall, red glow on focus) */
-.input-username, .mode-input-field { min-height:44px; padding:10px 14px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); font-size:14px; font-family:inherit; transition:border-color var(--dur-base); }
+/* Text field: the username (44px tall, red glow on focus) */
+.input-username { min-height:44px; padding:10px 14px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); font-size:14px; font-family:inherit; transition:border-color var(--dur-base); }
 .input-username { flex:1 1 200px; }
-.input-username:focus, .mode-input-field:focus { outline:none; border-color:var(--lastfm-red); box-shadow:0 0 0 3px var(--lastfm-red-glow); }
-.input-username::placeholder, .mode-input-field::placeholder { color:var(--text-muted); }
+.input-username:focus { outline:none; border-color:var(--lastfm-red); box-shadow:0 0 0 3px var(--lastfm-red-glow); }
+.input-username::placeholder { color:var(--text-muted); }
 .input-username:disabled { opacity:0.5; }
 .btn { min-height:44px; padding:11px 20px; border:none; border-radius:8px; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; white-space:nowrap; transition:background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast); }
 .btn:active:not(:disabled) { transform:scale(0.98); }
@@ -36,65 +36,20 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .btn-disconnect { position:relative; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; background:none; border:none; border-radius:4px; cursor:pointer; color:var(--spotify-green); opacity:0.7; font-size:12px; line-height:1; }
 .btn-disconnect::before { content:""; position:absolute; inset:-12px; }
 .btn-disconnect:hover { opacity:1; }
-.track-list-wrapper { margin-bottom:48px; }
-.track-list-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 4px; }
-.track-list-header h3 { font-size:22px; font-weight:700; color:var(--text-primary); }
-.track-list-header .match-count { font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text-tertiary); }
 .btn-save-playlist { min-height:44px; padding:0 16px; border:1.5px solid var(--spotify-green); border-radius:8px; background:transparent; color:var(--spotify-green); font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast); white-space:nowrap; }
 .btn-save-playlist:hover { background:var(--spotify-green-subtle); }
 .btn-save-playlist:disabled { opacity:0.4; cursor:not-allowed; }
 .btn-save-playlist.saved { border-color:var(--success); color:var(--success); cursor:default; }
-/* List rows: .track-row (Time Travel) and .radio-row (Up next) share size, cover, type and divider; see DESIGN.md */
-.track-list { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:12px; overflow:hidden; }
-.track-row { display:flex; align-items:center; gap:12px; padding:10px 16px; transition:background var(--dur-base) var(--ease-out-quart), opacity var(--dur-base) var(--ease-out-quart); cursor:default; }
-.track-row.playable { cursor:pointer; }
-.track-row.playable:hover { background:var(--bg-tertiary); }
-.track-row.now-playing { background:var(--lastfm-red-subtle); }
-.track-row.now-playing .track-name { color:var(--lastfm-red-text); }
-.track-row.not-matched { opacity:0.4; }
-.track-row:not(:last-child) { border-bottom:1px solid var(--border-subtle); }
-.track-num-wrap { width:22px; flex-shrink:0; position:relative; display:flex; align-items:center; justify-content:flex-end; }
-.track-num { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-muted); }
-.play-icon { display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-primary); font-size:12px; }
-.track-row.playable:hover .track-num { display:none; }
-.track-row.playable:hover .play-icon { display:flex; }
-.track-art-wrap { width:40px; height:40px; flex-shrink:0; }
-.track-art, .track-art-placeholder { width:40px; height:40px; border-radius:6px; flex-shrink:0; background:var(--bg-tertiary); }
-.track-art { object-fit:cover; }
-.track-art-placeholder { display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:16px; }
-.track-info { flex:1; min-width:0; }
-.track-name { transition:color var(--dur-base) var(--ease-out-quart); font-size:14px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.track-meta { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.track-date { font-size:12px; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
-/* status classes are the match states set by setTrackStatus() in ui.js: found / not_found / searching / skipped */
-.track-status { width:20px; text-align:center; font-size:14px; font-weight:700; flex-shrink:0; transition:color var(--dur-base) var(--ease-out-quart); }
-.track-status.found { color:var(--success); } .track-status.not_found { color:var(--error); } .track-status.searching { color:var(--warning); } .track-status.skipped { color:var(--text-muted); }
-.mode-inputs { animation:view-in var(--dur-slow) var(--ease-out-expo); position:relative; display:flex; gap:8px; margin-bottom:20px; justify-content:flex-start; flex-wrap:wrap; }
-.mood-grid { max-width:500px; }
-.mood-btn { min-height:44px; padding:8px 14px; border:1px solid var(--border); border-radius:8px; background:var(--bg-secondary); color:var(--text-secondary); font-size:13px; font-family:inherit; cursor:pointer; transition:background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast); }
-.mood-btn:hover { border-color:var(--text-tertiary); color:var(--text-primary); }
-.mood-btn.active { border-color:var(--lastfm-red); color:var(--lastfm-red-text); background:var(--lastfm-red-subtle); }
-select.mode-input-field { cursor:pointer; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23606068' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:30px; }
-select.mode-input-field option { background:var(--bg-secondary); color:var(--text-primary); }
-.artist-input { flex:1; min-width:200px; max-width:320px; }
 .footer { margin-top:auto; padding:32px 20px; font-size:12px; color:var(--text-muted); text-align:center; }
 .footer a { color:var(--text-tertiary); text-decoration:none; }
 .footer a:hover { color:var(--lastfm-red-text); }
 @media (max-width:520px) {
-  .track-date { display:none; }
   .controls { flex-direction:column; }
   .input-username { flex:1 1 100%; }
   .btn { width:100%; text-align:center; }
   .spotify-badge { width:100%; text-align:center; }
-  .mood-btn { padding:6px 10px; font-size:12px; }
 }
 
-/* Autocomplete: a floating list, so it may cast --shadow-float */
-.autocomplete-box { animation:fade-in var(--dur-fast) var(--ease-out-quart); position:absolute; top:100%; left:50%; transform:translateX(-50%); min-width:280px; max-width:400px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); z-index:100; overflow:hidden; margin-top:4px; }
-.autocomplete-item { display:flex; justify-content:space-between; align-items:center; min-height:44px; padding:10px 14px; cursor:pointer; transition:background var(--dur-fast); }
-.autocomplete-item:hover, .autocomplete-item.ac-active { background:var(--bg-tertiary); }
-.ac-name { color:var(--text-primary); font-size:14px; }
-.ac-count { color:var(--text-tertiary); font-size:12px; font-family:'JetBrains Mono',monospace; }
 
 /* Changelog overlay */
 .overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-primary); z-index:1000; display:flex; flex-direction:column; animation:overlayIn var(--dur-slow) var(--ease-out-expo); }
@@ -107,11 +62,7 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .overlay-close:hover { background:var(--bg-secondary); color:var(--text-primary); }
 .overlay-frame { flex:1; border:none; width:100%; }
 
-/* Track row heart: 44px target, state in aria-pressed (see setHeartBtn() in player.js) */
-.heart-btn { width:44px; height:44px; margin:-2px 0; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:none; border:none; border-radius:8px; color:var(--text-muted); cursor:pointer; line-height:1; transition:color var(--dur-fast), background var(--dur-fast); }
-.heart-btn:hover { color:var(--text-primary); background:var(--bg-tertiary); }
-.heart-btn.liked { color:var(--lastfm-red-text); }
-.heart-btn.liked i, .radio-btn.liked i { animation:heart-pop var(--dur-slow) var(--ease-out-expo); }
+.radio-btn.liked i { animation:heart-pop var(--dur-slow) var(--ease-out-expo); }
 @keyframes heart-pop { from { transform:scale(0.6); } to { transform:scale(1); } }
 
 /* Home view */
@@ -127,9 +78,6 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .home-headline { font-size:clamp(28px,6vw,44px); font-weight:800; letter-spacing:-1px; line-height:1.05; margin-bottom:12px; }
 .home-meta { color:var(--text-secondary); font-size:14px; margin-bottom:20px; }
 .btn-radio { flex:1 1 100%; min-height:56px; padding:14px 28px; border-radius:12px; font-size:18px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
-.section-heading { font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:16px; }
-.time-travel { margin-top:0; }
-.mode-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
 .station-picker { display:flex; flex-direction:column; gap:10px; margin:0 0 16px; }
 .station-opt { display:flex; align-items:center; gap:14px; width:100%; min-height:64px; padding:12px 16px; box-sizing:border-box; text-align:left; font-family:inherit; color:var(--text-primary); background:var(--bg-tertiary); border:1.5px solid var(--border); border-radius:12px; cursor:pointer; transition:border-color var(--dur-fast), background var(--dur-fast); }
 .station-opt:hover { border-color:var(--text-muted); }
@@ -154,13 +102,17 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .seg-opt { flex:1; min-height:40px; padding:0 8px; font-family:inherit; font-size:13px; font-weight:600; color:var(--text-secondary); background:none; border:1.5px solid transparent; border-radius:8px; cursor:pointer; }
 .seg-opt:hover { color:var(--text-primary); }
 .seg-opt.active { color:var(--text-primary); background:var(--lastfm-red-subtle); border-color:var(--lastfm-red); }
-.mode-card { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-height:44px; padding:14px 16px; text-align:left; font-family:inherit; color:var(--text-primary); background:var(--bg-secondary); border:1.5px solid var(--border); border-radius:12px; cursor:pointer; transition:border-color var(--dur-fast), background var(--dur-fast); }
-.mode-card:hover { border-color:var(--text-muted); }
-.mode-card.active { border-color:var(--lastfm-red); background:var(--lastfm-red-subtle); }
-.mode-card i { font-size:20px; color:var(--text-tertiary); }
-.mode-card.active i { color:var(--lastfm-red-text); }
-.mode-card-name { font-size:15px; font-weight:700; }
-.mode-card-desc { font-size:13px; line-height:1.35; color:var(--text-secondary); }
+/* Library options (only while Library is picked): How it plays and When, each a segmented control with a line of help */
+.library-options { display:flex; flex-direction:column; gap:16px; margin:0 0 16px; padding:16px; border-radius:12px; background:var(--bg-tertiary); border:1px solid var(--border); animation:view-in var(--dur-slow) var(--ease-out-expo); }
+.library-options .seg { background:var(--bg-secondary); }
+.lib-opt { display:flex; flex-direction:column; gap:6px; }
+.lib-opt-label { font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-tertiary); }
+.lib-opt-help { font-size:13px; line-height:1.4; color:var(--text-tertiary); }
+.lib-when { display:flex; gap:8px; flex-wrap:wrap; }
+.lib-when .seg { flex:1 1 220px; }
+.lib-year { flex:1 0 120px; min-height:50px; padding:0 34px 0 14px; border-radius:12px; border:1.5px solid var(--lastfm-red); background-color:var(--bg-secondary); color:var(--text-primary); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:600; cursor:pointer; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23606068' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; }
+.lib-year:focus-visible { outline:2px solid var(--lastfm-red-text); outline-offset:2px; }
+.lib-year option { background:var(--bg-secondary); color:var(--text-primary); }
 .radio-playing { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:12px 14px; border-radius:12px; background:var(--bg-tertiary); font-size:14px; color:var(--text-secondary); min-width:0; }
 .radio-playing i { color:var(--lastfm-red-text); font-size:18px; flex-shrink:0; }
 /* Equalizer: four bars that dance while it plays and freeze (mid-beat) when paused */
@@ -172,9 +124,25 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .radio-playing.paused .eq i { animation-play-state:paused; }
 .radio-playing strong { color:var(--text-primary); }
 .radio-playing-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-@media (max-width:520px) { .mode-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .radio-card { padding:20px; } }
-.go-row { display:flex; justify-content:flex-start; margin-bottom:20px; }
-.mood-btn i { margin-right:2px; vertical-align:-1px; }
+@media (max-width:520px) { .radio-card { padding:20px; } }
+/* First run: username, then Connect Spotify. The Home card with every option comes after connecting. */
+#homeView .radio-card.landing { max-width:560px; margin-left:auto; margin-right:auto; }
+.landing-steps { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:20px; }
+.landing-step { display:flex; align-items:flex-start; gap:14px; position:relative; }
+.landing-step:not(:last-child)::after { content:""; position:absolute; left:13.25px; top:34px; bottom:-14px; width:1.5px; background:var(--border); }
+.step-badge { flex:0 0 28px; width:28px; height:28px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; border-radius:50%; border:1.5px solid var(--border); color:var(--text-tertiary); font-size:13px; font-weight:700; }
+.step-check { display:none; font-size:14px; }
+.landing-step.active .step-badge { background:var(--lastfm-red); border-color:var(--lastfm-red); color:var(--on-accent); }
+.landing-step.done .step-badge { background:var(--bg-elevated); border-color:var(--spotify-green); color:var(--spotify-green); }
+.landing-step.done .step-num { display:none; }
+.landing-step.done .step-check { display:inline; }
+.step-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.step-title { font-size:16px; font-weight:700; line-height:28px; color:var(--text-primary); }
+.landing-step.locked .step-title { color:var(--text-secondary); }
+.step-help { font-size:13px; line-height:1.4; color:var(--text-tertiary); }
+.landing-input { flex:none; width:100%; min-height:48px; font-size:16px; }
+.landing .btn-radio { flex:none; width:100%; }
+
 @media (max-width:520px) { .app-brand h1 { font-size:16px; } }
 
 /* Library radio view */
@@ -207,7 +175,6 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .radio-btn:hover { background:var(--bg-tertiary); }
 .radio-btn:active { transform:scale(0.96); }
 .radio-play { width:56px; height:56px; font-size:24px; background:var(--text-primary); color:var(--bg-primary); border-radius:999px; }
-.list-head-right { display:flex; align-items:center; gap:12px; }
 .radio-volume { display:none; align-items:center; gap:8px; margin-left:auto; color:var(--text-secondary); }
 .radio-volume.sdk { display:flex; }
 .radio-volume i { font-size:20px; }
@@ -265,38 +232,41 @@ select.mode-input-field option { background:var(--bg-secondary); color:var(--tex
 .radio-artist-photo { display:none; }  /* wide desktop only: see the min-width:1100px block */
 .radio-info-body { min-width:0; flex:1; }
 
-/* Time travel inside the radio view */
 .radio-top-left { display:flex; align-items:center; gap:16px; }
-.radio-view .track-list-wrapper { margin-bottom:24px; }
 .btn-text:disabled { opacity:0.4; cursor:not-allowed; }
 .radio-row-play { cursor:pointer; transition:background var(--dur-fast); }
 .radio-row-play:hover { background:var(--bg-tertiary); }
+/* Library in Moments: the first song of the next moment gets a stronger line above it; the chips carry the dates */
+.radio-row.moment-start { box-shadow:inset 0 1px 0 var(--text-muted); }
+/* This moment: when it was, how many songs, Save this moment and Next moment */
+.radio-moment { display:flex; flex-direction:column; gap:8px; margin-bottom:28px; padding:20px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); animation:view-in var(--dur-slow) var(--ease-out-expo); }
+.radio-moment-label { font-size:20px; font-weight:700; letter-spacing:-0.3px; line-height:1.25; }
+.radio-moment-meta { font-size:14px; line-height:1.5; color:var(--text-secondary); }
+.radio-moment-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+.radio-moment-actions .btn-save-playlist, .radio-moment-actions .btn { display:inline-flex; align-items:center; gap:6px; }
+@media (max-width:520px) { .radio-moment-actions > * { flex:1 1 100%; justify-content:center; } }
 
-/* Wide desktop (1100px and up): a 1120px container. Home: the radio card on the left (420px), the Time Travel modes on the right.
-   Radio / Time Travel: player + artist panel on the left (640px), the list on the right as a panel of the same height
-   (rows grow or scroll inside it). Narrower screens keep one column. */
+/* Wide desktop (1100px and up): a 1120px container. Home: the radio card, centered at 680px.
+   Radio: player, moment and artist panels on the left (640px), Up next on the right as a panel of the same height
+   (as many rows as fit). Narrower screens keep one column. */
 @media (min-width:1100px) {
   .container { max-width:1120px; }
-  #homeView.connected { display:grid; grid-template-columns:420px minmax(0,1fr); column-gap:40px; align-items:start; }
-  #homeView.connected .radio-card { margin-bottom:0; }
-  #homeView.connected .home-headline { font-size:40px; }
-  #homeView:not(.connected) .radio-card { max-width:680px; margin-left:auto; margin-right:auto; }
-  .radio-cols { display:grid; grid-template-columns:640px minmax(0,1fr); grid-template-rows:minmax(468px,auto); gap:28px; align-items:stretch; }
+  #homeView .radio-card { max-width:680px; margin-left:auto; margin-right:auto; }
+  .radio-cols { display:grid; grid-template-columns:640px minmax(0,1fr); grid-template-rows:minmax(476px,auto); gap:28px; align-items:stretch; }
   .radio-col-main { display:flex; flex-direction:column; gap:28px; min-width:0; }
-  .radio-col-main .radio-now { margin-bottom:0; }
+  .radio-col-main .radio-now, .radio-col-main .radio-moment { margin-bottom:0; }
   .radio-col-main .radio-info { margin-bottom:0; padding:20px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); }
   .radio-info .radio-stats { padding:0; border:none; background:none; }
   .radio-col-main .radio-info { display:flex; gap:20px; align-items:flex-start; }
   .radio-artist-photo { position:relative; display:flex; align-items:center; justify-content:center; flex:0 0 148px; width:148px; height:148px; border-radius:12px; overflow:hidden; background:var(--bg-tertiary); color:var(--text-tertiary); font-size:48px; }
   .radio-artist-photo img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .radio-col-list { position:relative; min-height:0; }
-  .radio-col-list > #radioUpNextBlock, .radio-col-list > .track-list-wrapper { position:absolute; inset:0; display:flex; flex-direction:column; margin:0; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); overflow:hidden; }
-  .radio-col-list .radio-upnext-title, .radio-col-list .track-list-header { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:64px; box-sizing:border-box; margin:0; padding:10px 16px 10px 20px; border-bottom:1px solid var(--border); }
-  .radio-col-list .radio-upnext, .radio-col-list .track-list { flex:1; min-height:0; margin:0; border:none; border-radius:0; background:none; }
+  .radio-col-list > #radioUpNextBlock { position:absolute; inset:0; display:flex; flex-direction:column; margin:0; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--border); overflow:hidden; }
+  .radio-col-list .radio-upnext-title { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:64px; box-sizing:border-box; margin:0; padding:10px 16px 10px 20px; border-bottom:1px solid var(--border); }
+  .radio-col-list .radio-upnext { flex:1; min-height:0; margin:0; border:none; border-radius:0; background:none; }
   .radio-col-list .radio-upnext { display:flex; flex-direction:column; }
-  .radio-col-list .radio-row, .radio-col-list .track-row { padding-top:5px; padding-bottom:5px; }  /* tighter rows: 8 fit where 6 did (the 40px cover still gets 44px+ per row) */
-  .radio-col-list .radio-upnext .radio-row { flex:0 0 calc(100% / var(--upnext-rows, 6)); }  /* every row keeps the same height, even with fewer tracks queued */
-  .radio-col-list .track-list { position:relative; overflow-y:auto; }
+  .radio-col-list .radio-row { padding-top:5px; padding-bottom:5px; }  /* tighter rows: 8 fit where 6 did (the 40px cover still gets 44px+ per row) */
+  .radio-col-list .radio-upnext .radio-row { flex:0 0 auto; }  /* every row has its natural height (51px with the divider), as in the phone list; radioUpNextRows() shows as many as fit */
 }
 
 /* Toasts: errors and warnings, bottom center, one at a time (showStatus() in ui.js). Inverted like the play button; errors take the accent fill. */

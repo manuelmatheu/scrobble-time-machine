@@ -138,15 +138,70 @@ assert.equal(r.radioTrackPlaysFromInfo({ track: { userplaycount: "1" } }), 1);
 assert.equal(r.radioTrackPlaysFromInfo({ track: {} }), null);
 assert.equal(r.radioTrackPlaysFromInfo(undefined), null);
 
-// radioEraLabel: playlist/status label for a set of Last.fm tracks
-const dayLabel = uts => new Date(uts * 1000).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-const monthLabel = uts => new Date(uts * 1000).toLocaleDateString("en-US", { year: "numeric", month: "long" });
-const sameDay = [{ date: { uts: "1331640000" } }, { date: { uts: "1331639000" } }];
-assert.equal(r.radioEraLabel(sameDay), dayLabel(1331639000));
-const spread = [{ date: { uts: "1331640000" } }, { date: { uts: "1321640000" } }];
-assert.equal(r.radioEraLabel(spread), monthLabel(1321640000));
-assert.equal(r.radioEraLabel([{ name: "no date" }]), "Random");
-assert.equal(r.radioEraLabel([]), "Random");
+// radioYearRange: a calendar year in local time, as unix seconds; 0 means every year
+assert.equal(r.radioYearRange(0), null);
+const y14 = r.radioYearRange(2014);
+assert.equal(new Date(y14.from * 1000).getFullYear(), 2014);
+assert.equal(new Date(y14.to * 1000).getFullYear(), 2014);
+assert.equal(new Date((y14.to + 1) * 1000).getFullYear(), 2015);
+assert.equal(new Date((y14.from - 1) * 1000).getFullYear(), 2013);
+
+// radioMomentFromTracks: a Last.fm page (newest first) -> the run around one point, oldest first
+const sc = (name, uts, extra) => Object.assign({ name, artist: { "#text": "A" }, album: { "#text": "Al" }, date: { uts: String(uts) } }, extra);
+const T0 = 1394560000;
+// newest first: an evening session (3 songs, 4 minutes apart), then 5 hours of silence, then an older session of 2
+const page = [sc("e3", T0 + 480), sc("e2", T0 + 240), sc("e1", T0), sc("o2", T0 - 5 * 3600), sc("o1", T0 - 5 * 3600 - 200)];
+const mom = r.radioMomentFromTracks(page, 1, 2 * 3600, 15);
+assert.deepEqual(mom.tracks.map(t => t.track), ["e1", "e2", "e3"]);  // in the order they were played
+assert.equal(mom.start, T0); assert.equal(mom.end, T0 + 480);
+assert.deepEqual(mom.tracks[0], { artist: "A", track: "e1", album: "Al", uts: T0 });
+assert.deepEqual(r.radioMomentFromTracks(page, 4, 2 * 3600, 15).tracks.map(t => t.track), ["o1", "o2"]);  // the point picks the session
+// a long session is cut at max, starting at the point
+const long = []; for (let k = 9; k >= 0; k--) long.push(sc("s" + k, T0 + k * 200));
+assert.deepEqual(r.radioMomentFromTracks(long, 9, 3600, 4).tracks.map(t => t.track), ["s0", "s1", "s2", "s3"]);
+assert.deepEqual(r.radioMomentFromTracks(long, 0, 3600, 4).tracks.map(t => t.track), ["s6", "s7", "s8", "s9"]);
+// the song playing now, entries without a date or artist and a missing page are skipped
+const odd = [sc("now", 0, { "@attr": { nowplaying: "true" }, date: undefined }), sc("ok", T0), { name: "noartist", date: { uts: String(T0 - 10) } }];
+assert.deepEqual(r.radioMomentFromTracks(odd, 0, 3600, 15).tracks.map(t => t.track), ["ok"]);
+assert.equal(r.radioMomentFromTracks(undefined, 0, 3600, 15), null);
+assert.deepEqual(r.radioMomentFromTracks(sc("single", T0), 0, 3600, 15).tracks.map(t => t.track), ["single"]);  // Last.fm sends one object for one result
+
+// radioMomentLabel / radioMomentChip / radioMomentMeta: the moment's date, part of day and songs
+const at = (y, mo, d, h, mi) => Math.floor(new Date(y, mo - 1, d, h, mi).getTime() / 1000);
+assert.equal(r.radioMomentLabel(at(2014, 3, 11, 21, 4)), "Tuesday, March 11, 2014 · evening");
+assert.match(r.radioMomentLabel(at(2014, 3, 11, 9, 0)), /morning$/);
+assert.match(r.radioMomentLabel(at(2014, 3, 11, 15, 0)), /afternoon$/);
+assert.match(r.radioMomentLabel(at(2014, 3, 11, 2, 0)), /night$/);
+assert.equal(r.radioMomentChip(at(2014, 3, 11, 21, 4)), "Mar 11, 2014");
+assert.equal(r.radioMomentMeta({ size: 11, start: at(2014, 3, 11, 21, 4), end: at(2014, 3, 11, 21, 52) }), "11 songs you played between 21:04 and 21:52, in that order.");
+assert.equal(r.radioMomentMeta({ size: 1, start: at(2014, 3, 11, 8, 5), end: at(2014, 3, 11, 8, 5) }), "1 song you played at 08:05.");
+assert.equal(r.radioMomentMeta(null), "");
+
+// radioHomeHeadline / radioSessionTitle: the Library options show in the headline and the radio title
+assert.equal(r.radioHomeHeadline("library", "songs", 0), "Your library, shuffled across every year.");
+assert.equal(r.radioHomeHeadline("library", "songs", 2014), "Your 2014, shuffled.");
+assert.equal(r.radioHomeHeadline("library", "moments", 0), "Your past, one moment at a time.");
+assert.equal(r.radioHomeHeadline("library", "moments", 2014), "Back in 2014, as you played it.");
+assert.equal(r.radioHomeHeadline("discover", "moments", 2014), "New music, picked from your taste.");  // the options belong to Library
+assert.equal(r.radioSessionTitle("library", "songs", 0), "Library radio");
+assert.equal(r.radioSessionTitle("library", "moments", 2014), "Library radio · Moments · 2014");
+assert.equal(r.radioSessionTitle("mix", "songs", 0), "Mix radio");
+
+// radioLibraryYears: newest first, down to the first scrobble (a saved year older than that stays listed)
+assert.deepEqual(r.radioLibraryYears(2022, 2025, 0), [2025, 2024, 2023, 2022]);
+assert.deepEqual(r.radioLibraryYears(0, 2025, 0), [2025]);  // not loaded yet: this year only
+assert.deepEqual(r.radioLibraryYears(0, 2025, 2023), [2025, 2024, 2023]);
+
+// radioChipText: the Discover reason, else the moment's date, else the year
+assert.equal(r.radioChipText({ source: "Last.fm pick", fromPast: false }), "Last.fm pick");
+assert.equal(r.radioChipText({ fromPast: true, year: 2014, moment: { chip: "Mar 11, 2014" } }), "Mar 11, 2014");
+assert.equal(r.radioChipText({ fromPast: true, year: 2014 }), "From 2014");
+assert.equal(r.radioChipText({}), "");
+// a row that starts a new moment gets the divider class, with the moment date in its chip
+const mrow = r.radioQueueRowHtml(2, { name: "S", artist: "A", fromPast: true, year: 2014, moment: { chip: "Mar 11, 2014" } }, s => s, true);
+assert.match(mrow, /radio-row radio-row-play moment-start/);
+assert.match(mrow, /radio-chip past.*Mar 11, 2014/);
+assert.doesNotMatch(r.radioQueueRowHtml(2, { name: "S", artist: "A" }, s => s, false), /moment-start/);
 
 // radioRateLimitText: how long until Spotify lets searches through again
 assert.equal(r.radioRateLimitText(0), "a moment");

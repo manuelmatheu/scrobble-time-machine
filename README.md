@@ -1,34 +1,25 @@
 # Scrobble Time Machine
 
-Your Last.fm history meets Spotify playback. Time travel through your music.
+Your Last.fm history meets Spotify playback. An endless radio of your own past.
 
 **Live:** [https://stm-lastfm.vercel.app/](https://stm-lastfm.vercel.app/)
 
 ## What it does
 
-Scrobble Time Machine connects your Last.fm scrobble history with Spotify playback. Start an endless radio of random scrobbles from your whole history, or time travel by date, artist, mood, decade and more — then listen to exactly what you were playing months or years ago.
+Scrobble Time Machine connects your Last.fm scrobble history with Spotify playback. Start an endless radio of your own scrobbles: random songs from any year, or whole moments played back in the order you played them, so you hear exactly what you were listening to months or years ago.
 
 ## Features
 
 - **Stations** - pick **Library** (below), **Discover** (new music from Last.fm's recommendations and artists similar to your recent top artists, skipping songs you played or saved) or **Mix** (your past and new music, alternating)
-- **Library Radio** - one click starts an endless stream of random scrobbles from your whole history; songs you played more often come up more often. Shows an Up next list (click to jump), the artist's Last.fm bio and your play counts for the artist and track
-- **Random time travel** - lands on a random moment in your history, labelled by date
-- **Date search** - jump to a specific year, month, or day
-- **Artist search** - find a random page where a specific artist appears
-- **Mood search** - pick a vibe (Chill, Melancholy, Energetic, Raw, Dreamy, Soul, Indie) and find matching tracks from your history using Last.fm tags
-- **On This Day** - one click to hear what you were listening to on today's date in a random past year
-- **Artist autocomplete** - suggestions from your top 500 artists as you type, with play counts
-- **Smart matching** - deduplicates searches, caches results, respects Spotify rate limits (5 searches first, more as you listen, with a cooldown after a 429)
-- **Auto-continuation** - as you listen, the next batch of tracks loads automatically
-- **Live now-playing tracking** - highlights the currently playing track in real time
-- **Session-aware polling** - detects if another device takes over Spotify playback
-- **Decade mode** - quick-access buttons for an era (My 2010s, The 2000s, etc.)
-- **Album mode** - find when you first listened to a specific album
-- **First Listen** - discover the exact date you first scrobbled an artist
-- **Streak finder** - surface your longest consecutive listening run for an artist
+- **Library Radio** - one click starts an endless stream from your own history; songs you played more often come up more often. Two options:
+  - **How it plays:** **Songs** (random scrobbles, each from a different day) or **Moments** (a stretch of what you played back then, in the order you played it; when it ends the radio jumps to another moment)
+  - **When:** every year, or one year you pick
+- **This moment** - while Moments plays, a panel says when it was ("Tuesday, March 11, 2014 · evening"), with **Save this moment** (a Spotify playlist named after it) and **Next moment**
+- **Up next and artist info** - click a queued song to jump to it; the artist's Last.fm bio and your play counts for the artist and track
+- **Smart matching** - deduplicates searches, caches results, respects Spotify rate limits (a cooldown after a 429)
+- **Session-aware polling** - follows the music if it moves to another device
 - **Embedded player** - Spotify Web Playback SDK streams audio in-browser; no external device required
-- **Liked songs** - heart button on each track row and in the radio view; saves/removes tracks from Spotify Liked Songs with one click
-- **Save as Playlist** - in Time Travel, one-click, auto-named (includes mode context: date, artist, etc.), opens result in Spotify
+- **Liked songs** - heart button in the radio view; saves/removes tracks from Spotify Liked Songs with one click
 
 ## How it works
 
@@ -36,9 +27,9 @@ No build step, no dependencies. Everything runs client-side in your browser (pla
 
 1. Enter your Last.fm username
 2. Connect your Spotify account (OAuth PKCE - no secrets stored)
-3. Press Start radio, or pick a Time Travel mode (Random, Date, Artist, Mood, On This Day, Decade, Album, First Listen, Streak)
+3. Pick a station (Library with its options, Discover or Mix) and press Start radio
 4. Tracks are matched against Spotify's catalog and played back immediately
-5. Optionally save the matched tracks as a Spotify playlist
+5. In Moments, optionally save the moment as a Spotify playlist
 
 ## Setup (self-hosting)
 

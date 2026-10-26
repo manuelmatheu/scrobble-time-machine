@@ -471,6 +471,42 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.ok(run("radioFailures") > 0);
   run("radioActiveStation = 'library'; radioActiveBalance = 'balanced';");
 
+  // 12j. Library in Moments: one random point, the scrobbles around it in the order played, each carrying its moment
+  reset();
+  run("radioActiveStation = 'library'; radioActiveHow = 'moments'; radioRange = null; radioMomentSeq = 0;");
+  const mPage = (base, names) => ({ track: names.map((nm, k) => ({ name: nm, artist: { "#text": "M" }, date: { uts: String(base - k * 240) } })) });  // newest first
+  const mPages = [mPage(1394567000, ["m3", "m2", "m1"]), mPage(1401631000, ["n2", "n1"])];
+  let mp = 0; const mAsked = [];
+  global.getLastFmScrobbles = async (user, page, limit, range) => { mAsked.push({ page, limit, range }); return mPages[mp++ % 2]; };
+  global.spotifySearch = defaultSearch;
+  assert.equal(await run("radioFill(5)"), 5);
+  assert.deepEqual([0, 1, 2, 3, 4].map(i => run("trackMeta[" + i + "].name")), ["m1", "m2", "m3", "n1", "n2"]);
+  assert.equal(run("trackMeta[0].moment.id"), 1);
+  assert.equal(run("trackMeta[3].moment.id"), 2);
+  assert.equal(run("trackMeta[0].moment.size"), 3);
+  assert.equal(run("trackMeta[0].fromPast"), true);
+  assert.equal(mAsked[0].limit, 30);
+  assert.ok(mAsked[0].page >= 1 && mAsked[0].page <= Math.ceil(1000 / 30));
+  // a fill that stops mid-moment keeps the rest of it, in order, for the next one
+  reset(); mp = 0; run("radioMomentSeq = 0;");
+  assert.equal(await run("radioFill(2)"), 2);
+  assert.equal(await run("radioFill(1)"), 1);
+  assert.equal(run("trackMeta[2].name"), "m3");
+  // a failing Last.fm page counts as a failure (backoff), not as an empty library
+  reset(); let mFails = 2, mCalls = 0;
+  global.getLastFmScrobbles = async () => { mCalls++; if (mFails-- > 0) throw new Error("down"); return mPages[0]; };
+  assert.equal(await run("radioFill(1)"), 1);
+  assert.equal(mCalls, 3, "two failures, then a moment");
+  assert.equal(run("radioFailures"), 0);
+
+  // 12k. One year: every pick is asked inside that year
+  reset(); run("radioActiveHow = 'songs'; radioRange = radioYearRange(2014);");
+  const yRanges = []; n = 0;
+  global.getLastFmScrobbleAt = async (user, page, range) => { yRanges.push(range); return song(n++); };
+  assert.equal(await run("radioFill(2)"), 2);
+  assert.ok(yRanges.length && yRanges.every(r => r && r.from === run("radioYearRange(2014).from") && r.to === run("radioYearRange(2014).to")));
+  run("radioRange = null; radioActiveHow = 'songs';");
+
   // 13. disconnecting Spotify tears the session down
   let resets = 0;
   global.handleReset = () => { resets++; };
@@ -511,88 +547,39 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 17. an index with no metadata yields nothing
   assert.equal(await run("radioInfoFor(99)"), null);
 
-  // 18. radioInfoSource / radioInfoFor fall back to Last.fm track objects (time travel has no trackMeta)
-  reset(); artistCalls = 0; trackCalls = 0; failArtist = false;
-  run("currentTracks = [{ name: 'Ready To Start', artist: { '#text': 'Arcade Fire' } }, { name: 'Wake Up', artist: { name: 'Arcade Fire' } }];");
-  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Arcade Fire", track: "Ready To Start" });
-  assert.deepEqual(run("radioInfoSource(1)"), { artist: "Arcade Fire", track: "Wake Up" });
-  assert.equal(run("radioInfoSource(5)"), null);
-  const travelInfo = await run("radioInfoFor(0)");
-  assert.equal(travelInfo.artist, "Arcade Fire");
-  assert.equal(travelInfo.plays, 62);
-  assert.equal(travelInfo.trackPlays, 1);
-  // trackMeta still wins when present (radio)
+  const realGetElementById = global.document.getElementById;
+  // 18. the artist panel only reads the running radio's own scrobble names (left-over metadata is ignored)
+  reset();
   run("trackMeta = { 0: { lfmArtist: 'Radio Artist', lfmTrack: 'Radio Song' } };");
   assert.deepEqual(run("radioInfoSource(0)"), { artist: "Radio Artist", track: "Radio Song" });
+  assert.equal(run("radioInfoSource(5)"), null);
+  run("radioActive = false;");
+  assert.equal(run("radioInfoSource(0)"), null);
+  run("radioActive = true;");
 
-  // 19. time travel: radioSyncInfo loads the panel from currentTracks (no trackMeta) using the username field
-  const realGetElementById = global.document.getElementById;
-  const els = {};
-  global.document.getElementById = id => els[id] || (els[id] = { style: {}, textContent: "", innerHTML: "", value: id === "usernameInput" ? "tester" : "" });
-  global.escHtml = s => s;
-  reset();
-  run("radioUser = ''; travelActive = true; trackMeta = {}; nowPlayingIndex = 0; radioInfoIdx = -1; currentTracks = [{ name: 'Ready To Start', artist: { '#text': 'Arcade Fire' } }];");
-  let seenUser = null;
-  global.getLastFmArtistInfo = async (user, artist) => { seenUser = user; return { artist: { bio: { summary: "Indie band." }, stats: { userplaycount: "62" } } }; };
-  global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "1" } });
-  run("radioSyncInfo()");
-  await new Promise(r => setTimeout(r, 20));
-  assert.equal(seenUser, "tester");
-  assert.match(els.radioStats.innerHTML, /You've listened to/);
-  assert.equal(els.radioInfo.style.display, "");
-  // 20. time travel uses the username field, never a stale radioUser, and the info caches are per user
-  reset();
-  run("radioUser = 'stale'; travelActive = true; trackMeta = {}; currentTracks = [{ name: 'Song A', artist: { '#text': 'Band A' } }];");
-  const infoUsers = [];
-  global.getLastFmArtistInfo = async user => { infoUsers.push(user); return { artist: { bio: { summary: "b" }, stats: { userplaycount: "5" } } }; };
-  global.getLastFmTrackInfo = async () => ({ track: { userplaycount: "2" } });
-  els.usernameInput.value = "tester";
-  await run("radioInfoFor(0)");
-  els.usernameInput.value = "other";
-  await run("radioInfoFor(0)");
-  assert.deepEqual(infoUsers, ["tester", "other"]);
-
-  // 21. stale radio trackMeta must not outrank the time-travel tracks when the radio is not running
-  reset();
-  run("radioActive = false; travelActive = true; trackMeta = { 0: { lfmArtist: 'Stale Radio Artist', lfmTrack: 'Stale Song' } }; currentTracks = [{ name: 'Song A', artist: { '#text': 'Band A' } }];");
-  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Band A", track: "Song A" });
-  run("radioActive = true; travelActive = false;");
-  assert.deepEqual(run("radioInfoSource(0)"), { artist: "Stale Radio Artist", track: "Stale Song" });
-
-  // 22. Again is ignored while a session is still loading
-  let goCalls = 0;
-  global.handleGo = () => { goCalls++; };
-  run("currentPhase = 'working'"); run("travelAgain()");
-  assert.equal(goCalls, 0);
-  run("currentPhase = 'done'"); run("travelAgain()");
-  assert.equal(goCalls, 1);
-
-  // 23. time travel: following the playing row must not scroll the page away from the hero
-  let rowScrolls = 0;
-  const fakeRow = { classList: { add() {}, remove() {} }, scrollIntoView() { rowScrolls++; } };
-  const travelEls = {};
-  global.document.getElementById = id => id === "track-2" ? fakeRow : (travelEls[id] || (travelEls[id] = { style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild() {} }));
+  // 19. opening the radio view starts at the top, once (not on every refresh), and the title names the Library options
+  const viewEls = {};
+  global.document.getElementById = id => viewEls[id] || (viewEls[id] = { style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild() {} });
   global.document.querySelectorAll = () => [];
   global.document.body = { classList: { add() {}, remove() {} } };
-  run("travelActive = true; nowPlayingIndex = -1;"); run("highlightNowPlaying(2)");
-  assert.equal(rowScrolls, 0);
-  run("travelActive = false; nowPlayingIndex = -1;"); run("highlightNowPlaying(2)");
-  assert.equal(rowScrolls, 1);
-  // ...and opening the view starts at the top, once (not on every refresh)
+  global.escHtml = s => s;
   const windowScrolls = [];
   global.window.scrollTo = (x, y) => windowScrolls.push([x, y]);
-  run('showRadioView("travel")');
+  run("radioActiveStation = 'library'; radioActiveHow = 'moments'; radioActiveYear = 2014;");
+  run("showRadioView()");
   assert.deepEqual(windowScrolls, [[0, 0]]);
-  run('showRadioView("travel")');
+  assert.equal(viewEls.radioTitle.textContent, "Library radio · Moments · 2014");
+  run("showRadioView()");
   assert.deepEqual(windowScrolls, [[0, 0]]);
+  run("radioActiveHow = 'songs'; radioActiveYear = 0;");
 
   // 24. the radio's Up next rows play from the clicked track onward
   reset(); played = [];
   run("matchedUris = { 0: 'a', 1: 'b', 2: 'c', 3: 'd' }; allTrackCount = 4; trackMeta = { 1: { name: 'B', artist: 'x' }, 2: { name: 'C', artist: 'y' }, 3: { name: 'D', artist: 'z' } }; nowPlayingIndex = 0; radioRefilling = false;");
   run("radioRenderQueue()");
-  assert.match(travelEls.radioUpNext.innerHTML, /radioPlayFrom\(2\)/);
-  assert.match(travelEls.radioUpNext.innerHTML, /radioPlayFrom\(3\)/);
-  assert.doesNotMatch(travelEls.radioUpNext.innerHTML, /radioPlayFrom\(0\)/);
+  assert.match(viewEls.radioUpNext.innerHTML, /radioPlayFrom\(2\)/);
+  assert.match(viewEls.radioUpNext.innerHTML, /radioPlayFrom\(3\)/);
+  assert.doesNotMatch(viewEls.radioUpNext.innerHTML, /radioPlayFrom\(0\)/);
   await run("radioPlayFrom(1)");
   assert.deepEqual(played, [["b", "c", "d"]]);
   await run("radioPlayFrom(9)");
@@ -604,27 +591,10 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   // 25. showing the radio view and going back home
   const slotEls = {};
   global.document.getElementById = id => slotEls[id] || (slotEls[id] = { id, style: id === "radioView" ? { display: "none" } : {}, textContent: "", innerHTML: "", children: [], classList: { add() {}, remove() {} }, removeAttribute() {}, appendChild(c) { this.children.push(c); } });
-  run('showRadioView("travel")');
+  run("showRadioView()");
   run("hideRadioView()");
-
-  // 26. time travel searches BATCH_SIZE (5) tracks first and loads the rest in batches of 5
-  const ttTracks = Array.from({ length: 12 }, (_, i) => ({ name: "TT Song " + i, artist: { "#text": "TT Artist " + i } }));
-  reset();
-  run("searchCache = {}; skippedPlan = []; isContinuing = false; abortController = { signal: { aborted: false } };");
-  let ttSearches = 0;
-  global.spotifySearch = async (token, artist, track) => { ttSearches++; return { uri: uriFor(track), name: track, album: { images: [] } }; };
-  global.setTrackStatus = () => {}; global.updateTrackArt = () => {}; global.updateMatchCount = () => {};
   global.showStatus = () => {}; global.checkLikedTracks = () => {};
   global.spotifyPlay = async () => true;
-  const realSetTimeout = global.setTimeout;
-  global.setTimeout = fn => realSetTimeout(fn, 0);
-  await run("smartMatch(" + JSON.stringify(ttTracks) + ", 'token')");
-  assert.equal(ttSearches, 5);
-  assert.equal(run("skippedPlan.length"), 7);
-  await run("continueMatching()");
-  assert.equal(ttSearches, 10);
-  assert.equal(run("skippedPlan.length"), 2);
-  global.setTimeout = realSetTimeout;
 
   // 27. a long Retry-After trips a cooldown: no sleeping, no retries, and later searches make no requests
   let fetchCalls = 0;
@@ -667,36 +637,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(run("spotifyLooseMatch('Air', 'Fair')"), false);
   assert.equal(run("spotifyLooseMatch('Beyoncé', 'beyonce')"), true);
 
-  // 28. time travel: a rate limit stops the batch, keeps the rest pending, and never marks tracks as not found
-  run("spotifyBlockedUntil = 0; searchCache = {}; skippedPlan = []; isContinuing = false; abortController = { signal: { aborted: false } };");
-  let blockSearches = 0;
-  const tstat = {};
-  global.setTrackStatus = (i, s) => { tstat[i] = s; };
-  global.spotifySearch = async (token, artist, track) => {
-    blockSearches++;
-    if (blockSearches === 2) { run("spotifyBlockedUntil = Date.now() + 60000; lastSearchError = 'Rate limited (429)'"); return null; }
-    return { uri: uriFor(track), name: track, album: { images: [] } };
-  };
-  global.setTimeout = fn => realTimeout(fn, 0);
-  await run("smartMatch(" + JSON.stringify(ttTracks) + ", 'token')");
-  assert.equal(blockSearches, 2);
-  assert.equal(run("totalMatched"), 1);
-  assert.equal(run("skippedPlan.length"), 11);
-  assert.equal(tstat[1], "skipped");
-  // continuing while blocked makes no searches and says why
-  blockSearches = 0;
-  const limitMessages = [];
-  global.showStatus = m => limitMessages.push(m);
-  await run("continueMatching()");
-  assert.equal(blockSearches, 0);
-  assert.ok(limitMessages.some(m => /Spotify is limiting searches/.test(m)));
-  // once the cooldown ends it resumes with the next batch
-  run("spotifyBlockedUntil = 0;");
-  global.spotifySearch = async (token, artist, track) => { blockSearches++; return { uri: uriFor(track), name: track, album: { images: [] } }; };
-  await run("continueMatching()");
-  assert.equal(blockSearches, 5);
-  global.setTimeout = realTimeout;
-
   // 29. radio: a rate limit stops the fill, and a cooldown never marks the library exhausted
   reset();
   run("spotifyBlockedUntil = 0; lastSearchError = null;");
@@ -723,7 +663,7 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     global.document.getElementById = id => els[id] || (els[id] = mk(id));
     global.window.scrollTo = () => {};
     reset();
-    run("radioActive = true; travelActive = false;");
+    run("radioActive = true;");
     run("showRadioView()");
     assert.equal(els.radioBackBtn.style.display, "none", "no Back to radio while the radio view is showing");
     run("radioMinimize()");
@@ -779,11 +719,11 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     // minimizing a view that is not showing, or with no session, does nothing
     run("radioMinimize()");
     assert.equal(run("radioMinimized"), false);
-    run("radioActive = false; travelActive = false;"); els.radioView.style.display = "";
+    run("radioActive = false;"); els.radioView.style.display = "";
     run("radioMinimize()");
     assert.equal(run("radioMinimized"), false);
-    // a time travel session minimizes too, and ending the session clears the home card
-    run("travelActive = true;"); run("radioMinimize()");
+    // ending the session clears the home card
+    run("radioActive = true;"); run("radioMinimize()");
     assert.equal(run("radioMinimized"), true);
     assert.equal(els.radioBackBtn.style.display, "");
     run("hideRadioView()");
@@ -797,9 +737,51 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.match(els.radioHeartTitle.innerHTML, /ph-fill/);
     run("likedSet = new Set();"); run("updateNowPlayingHeart()");
     assert.ok(!els.radioHeart.cl.has("liked") && !els.radioHeartTitle.cl.has("liked"));
-    // Save as Playlist exists only in Time Travel: showing the radio view never touches it
-    run('showRadioView("travel")'); run("showRadioView()");
-    assert.equal(els.savePlaylistBtn, undefined, "the radio view does not create or show the save button");
+
+    // This moment: shown only for a moment's track; Next moment needs a later moment queued; Save saves the moment's songs
+    const mA = { id: 1, label: "Tuesday, March 11, 2014 · evening", chip: "Mar 11, 2014", start: 1394564640, end: 1394567520, size: 2 };
+    const mB = { id: 2, label: "Sunday, June 1, 2014 · afternoon", chip: "Jun 1, 2014", start: 1401631200, end: 1401631400, size: 1 };
+    run("matchedUris = { 0: 'u0', 1: 'u1', 2: 'u2', 3: 'u3' }; allTrackCount = 4; nowPlayingIndex = 0; radioActive = true; radioMomentShown = null;");
+    global.__mA = mA; global.__mB = mB;
+    run("trackMeta = { 0: { name: 'a', artist: 'x', moment: globalThis.__mA }, 1: { name: 'b', artist: 'x', moment: globalThis.__mA }, 2: { name: 'c', artist: 'y' }, 3: { name: 'd', artist: 'z', moment: globalThis.__mB } };");
+    run("radioSyncMoment()");
+    assert.equal(els.radioMoment.style.display, "");
+    assert.equal(els.radioMomentLabel.textContent, mA.label);
+    assert.match(els.radioMomentMeta.textContent, /^2 songs you played between/);
+    assert.equal(els.momentNextBtn.disabled, false);
+    assert.equal(run("radioNextMomentIndex(0)"), 3, "the next moment is the next track with another moment");
+    assert.deepEqual(run("radioMomentIndices(1)"), [0, 1]);
+    let saved = null;
+    global.saveAsPlaylist = async (btn, uris, label) => { saved = { uris, label }; };
+    await run("saveMomentPlaylist()");
+    assert.deepEqual(saved, { uris: ["u0", "u1"], label: mA.label });
+    played = []; global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
+    await run("radioNextMoment()");
+    assert.deepEqual(played, [["u3"]]);
+    run("nowPlayingIndex = 3;"); run("radioSyncMoment()");
+    assert.equal(els.radioMomentLabel.textContent, mB.label);
+    assert.equal(els.momentNextBtn.disabled, false, "no later moment queued yet: pressing it fetches one");
+    run("radioExhausted = true; radioMomentShown = null;"); run("radioSyncMoment()");
+    assert.equal(els.momentNextBtn.disabled, true, "nothing left to fetch");
+    run("radioExhausted = false;");
+    // pressing it then drops the rest of this moment, fetches the next one and plays its first song as soon as it is matched
+    global.__mC = { id: 3, label: "c", chip: "c", start: 1, end: 1, size: 1 };
+    run("radioCarry = [{ artist: 'A', track: 'rest of B', moment: globalThis.__mB }]; radioRefilling = true;");
+    run("radioNextMoment()");
+    assert.equal(run("radioJumpFrom"), 2);
+    assert.equal(run("radioCarry.length"), 0, "the rest of the playing moment is dropped");
+    played = [];
+    run("radioRefilling = false; radioCarry = [{ artist: 'A', track: 'first of C', moment: globalThis.__mC }];");
+    global.spotifySearch = async (token, artist, track) => ({ uri: uriFor(track), name: track, album: { images: [] } });
+    await run("radioFill(1)");
+    assert.equal(run("radioJumpFrom"), null);
+    assert.deepEqual(played, [["spotify:track:first_of_C"]]);
+    run("nowPlayingIndex = 2;"); run("radioSyncMoment()");
+    assert.equal(els.radioMoment.style.display, "none", "a track without a moment hides the panel");
+    // Up next marks where the next moment starts
+    run("nowPlayingIndex = 0;"); run("radioRenderQueue()");
+    assert.match(els.radioUpNext.innerHTML, /radio-row-play" onclick="radioPlayFrom\(1\)/, "no divider inside the playing moment");
+    assert.match(els.radioUpNext.innerHTML, /moment-start" onclick="radioPlayFrom\(3\)/);
   }
 
   // 29. toasts: only errors and warnings show, one at a time; success dismisses; they expire on their own
@@ -875,7 +857,6 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     run("radioRenderQueue()");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, run("RADIO_UPNEXT_ROWS"));
     assert.doesNotMatch(q.innerHTML, /Tuning/, "no Tuning row when the list is already full");
-    assert.equal(q.style["--upnext-rows"], run("RADIO_UPNEXT_ROWS"));
     run("allTrackCount = 4;");
     run("radioRenderQueue()");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 3);
@@ -888,7 +869,12 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("RADIO_UPNEXT_ROWS_WIDE"), 8);
     run("radioRenderQueue()");
     assert.equal((q.innerHTML.match(/radio-row-play/g) || []).length, 8);
-    assert.equal(q.style["--upnext-rows"], 8);
+    // the panel is taller than 8 rows (the moment panel stretches the left column): rows keep their height and more of them show
+    q.clientHeight = 10 * 51 - 1;  // ten rows, the last one without divider
+    assert.equal(run("radioUpNextRows()"), 10);
+    q.clientHeight = 300;
+    assert.equal(run("radioUpNextRows()"), 8, "never fewer than the wide minimum");
+    delete q.clientHeight;
     delete global.window.matchMedia;
     assert.equal(run("radioUpNextRows()"), run("RADIO_UPNEXT_ROWS"));  // no media query support: the phone count
   }

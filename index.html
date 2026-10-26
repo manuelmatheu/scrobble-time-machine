@@ -22,6 +22,7 @@
   v2.8  2026-10-08  Stations: Library, Discover (new music) and Mix
   v2.9  2026-10-10  Spotify Connect device picker + following the music to Sonos
   v2.10 2026-10-16  Smooth track swaps on other devices, toasts, 8 Up next rows, year chip in Library radio
+  v2.11 2026-10-19  Time Travel folded into Library radio: Moments, One year, Save this moment
 -->
 <html lang="en">
 <head>
@@ -85,14 +86,59 @@
     (set redirect URI to <code id="currentUrl"></code>)</div>
 
   <div id="homeView">
-    <section class="radio-card">
+    <section class="radio-card landing" id="landing" aria-label="Get started">
+      <span class="eyebrow">Last.fm &middot; Spotify</span>
+      <h2 class="home-headline">Your listening history, played back as a radio.</h2>
+      <p class="home-meta">Hear your own scrobbles again, song by song or as whole moments from any year.</p>
+      <ol class="landing-steps">
+        <li class="landing-step active" id="landingStepUser">
+          <span class="step-badge" aria-hidden="true"><span class="step-num">1</span><i class="ph ph-check step-check"></i></span>
+          <div class="step-body">
+            <label class="step-title" for="landingUser">Your Last.fm username</label>
+            <input type="text" class="input-username landing-input" id="landingUser" placeholder="Last.fm username" autocomplete="off" spellcheck="false">
+            <p class="step-help">We only read your public scrobbles. No Last.fm password.</p>
+          </div>
+        </li>
+        <li class="landing-step locked" id="landingStepSpotify">
+          <span class="step-badge" aria-hidden="true"><span class="step-num">2</span><i class="ph ph-check step-check"></i></span>
+          <div class="step-body">
+            <span class="step-title">Connect Spotify</span>
+            <p class="step-help">Plays the music in this browser. Needs Spotify Premium.</p>
+            <button class="btn btn-spotify btn-radio" id="landingConnectBtn" onclick="initiateSpotifyAuth()" disabled>Connect Spotify</button>
+            <p class="step-help">Then pick what to play: your Library, new music, or a mix of both.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+    <section class="radio-card" id="homeCard" style="display:none">
       <span class="eyebrow" id="radioEyebrow">Library radio</span>
       <h2 class="home-headline" id="homeHeadline">Your library, shuffled across every year.</h2>
       <p class="home-meta" id="homeMeta">Enter your Last.fm username to start.</p>
       <div class="station-picker" id="stationPicker" role="group" aria-label="Station">
-        <button class="station-opt active" data-station="library" aria-pressed="true" onclick="radioSetStation('library')"><i class="ph-fill ph-vinyl-record" aria-hidden="true"></i><span class="station-text"><span class="station-name">Library</span><span class="station-desc">Random scrobbles from every year of your history</span></span><span class="station-dot" aria-hidden="true"></span></button>
+        <button class="station-opt active" data-station="library" aria-pressed="true" onclick="radioSetStation('library')"><i class="ph-fill ph-vinyl-record" aria-hidden="true"></i><span class="station-text"><span class="station-name">Library</span><span class="station-desc">Your own scrobbles: songs or whole moments, any year or one</span></span><span class="station-dot" aria-hidden="true"></span></button>
         <button class="station-opt" data-station="discover" aria-pressed="false" onclick="radioSetStation('discover')"><i class="ph ph-compass" aria-hidden="true"></i><span class="station-text"><span class="station-name">Discover</span><span class="station-desc">New music picked from Last.fm and your Spotify taste</span></span><span class="station-dot" aria-hidden="true"></span></button>
         <button class="station-opt" data-station="mix" aria-pressed="false" onclick="radioSetStation('mix')"><i class="ph ph-shuffle" aria-hidden="true"></i><span class="station-text"><span class="station-name">Mix</span><span class="station-desc">Your past, with new music woven in</span></span><span class="station-dot" aria-hidden="true"></span></button>
+      </div>
+      <div class="library-options" id="libraryOptions">
+        <div class="lib-opt">
+          <span class="lib-opt-label" id="libraryHowLabel">How it plays</span>
+          <div class="seg" role="group" aria-labelledby="libraryHowLabel">
+            <button class="seg-opt active" data-how="songs" aria-pressed="true" onclick="radioSetHow('songs')">Songs</button>
+            <button class="seg-opt" data-how="moments" aria-pressed="false" onclick="radioSetHow('moments')">Moments</button>
+          </div>
+          <p class="lib-opt-help" id="libraryHowHelp">One song at a time, each from a different day of your history.</p>
+        </div>
+        <div class="lib-opt">
+          <span class="lib-opt-label" id="libraryWhenLabel">When</span>
+          <div class="lib-when">
+            <div class="seg" role="group" aria-labelledby="libraryWhenLabel">
+              <button class="seg-opt active" data-when="all" aria-pressed="true" onclick="radioSetYear(0)">Every year</button>
+              <button class="seg-opt" data-when="one" aria-pressed="false" onclick="radioSetYear('one')">One year</button>
+            </div>
+            <select class="lib-year" id="libraryYear" aria-label="Year" onchange="radioSetYear(this.value)" style="display:none"></select>
+          </div>
+          <p class="lib-opt-help" id="libraryWhenHelp">Anywhere in your history, from your first scrobble to today.</p>
+        </div>
       </div>
       <div class="mix-balance" id="mixBalance" style="display:none">
         <span class="mix-balance-label" id="mixBalanceLabel">How much is new</span>
@@ -112,55 +158,11 @@
       </div>
     </section>
 
-    <section class="time-travel" id="timeTravel" style="display:none">
-      <h3 class="section-heading">Or time travel</h3>
-      <div class="mode-grid" id="modeSelector">
-        <button class="mode-card active" data-mode="random" onclick="setMode('random')"><i class="ph ph-shuffle" aria-hidden="true"></i><span class="mode-card-name">Random</span><span class="mode-card-desc">A random moment from your history</span></button>
-        <button class="mode-card" data-mode="date" onclick="setMode('date')"><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="mode-card-name">Date</span><span class="mode-card-desc">Jump to a year, month or day</span></button>
-        <button class="mode-card" data-mode="artist" onclick="setMode('artist')"><i class="ph ph-microphone-stage" aria-hidden="true"></i><span class="mode-card-name">Artist</span><span class="mode-card-desc">Where one artist shows up</span></button>
-        <button class="mode-card" data-mode="onthisday" onclick="setMode('onthisday')"><i class="ph ph-calendar-star" aria-hidden="true"></i><span class="mode-card-name">On this day</span><span class="mode-card-desc">Today's date, a random past year</span></button>
-        <button class="mode-card" data-mode="mood" onclick="setMode('mood')"><i class="ph ph-smiley" aria-hidden="true"></i><span class="mode-card-name">Mood</span><span class="mode-card-desc">Chill, raw, dreamy and more</span></button>
-        <button class="mode-card" data-mode="decade" onclick="setMode('decade')"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i><span class="mode-card-name">Decade</span><span class="mode-card-desc">My 2010s, the 2000s...</span></button>
-        <button class="mode-card" data-mode="album" onclick="setMode('album')"><i class="ph ph-vinyl-record" aria-hidden="true"></i><span class="mode-card-name">Album</span><span class="mode-card-desc">When you first played an album</span></button>
-        <button class="mode-card" data-mode="discovery" onclick="setMode('discovery')"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="mode-card-name">First listen</span><span class="mode-card-desc">The day you first scrobbled an artist</span></button>
-        <button class="mode-card" data-mode="streak" onclick="setMode('streak')"><i class="ph ph-flame" aria-hidden="true"></i><span class="mode-card-name">Streak</span><span class="mode-card-desc">Your longest run for an artist</span></button>
-      </div>
-      <div class="mode-inputs" id="modeInputDate" style="display:none">
-        <select id="dateYear" class="mode-input-field" aria-label="Year"></select>
-        <select id="dateMonth" class="mode-input-field" aria-label="Month"><option value="">Month (any)</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select>
-        <select id="dateDay" class="mode-input-field" aria-label="Day"><option value="">Day (any)</option></select>
-      </div>
-      <div class="mode-inputs" id="modeInputArtist" style="display:none">
-        <input type="text" class="mode-input-field artist-input" id="artistInput" placeholder="Artist name" autocomplete="off" spellcheck="false" aria-label="Artist name">
-      </div>
-      <div class="mode-inputs mood-grid" id="modeInputMood" style="display:none">
-        <button class="mood-btn active" data-mood="chill" onclick="selectMood(this)"><i class="ph ph-coffee" aria-hidden="true"></i> Chill</button>
-        <button class="mood-btn" data-mood="melancholy" onclick="selectMood(this)"><i class="ph ph-cloud-rain" aria-hidden="true"></i> Melancholy</button>
-        <button class="mood-btn" data-mood="energetic" onclick="selectMood(this)"><i class="ph ph-lightning" aria-hidden="true"></i> Energetic</button>
-        <button class="mood-btn" data-mood="raw" onclick="selectMood(this)"><i class="ph ph-guitar" aria-hidden="true"></i> Raw</button>
-        <button class="mood-btn" data-mood="dreamy" onclick="selectMood(this)"><i class="ph ph-moon-stars" aria-hidden="true"></i> Dreamy</button>
-        <button class="mood-btn" data-mood="soul" onclick="selectMood(this)"><i class="ph ph-heart" aria-hidden="true"></i> Soul</button>
-        <button class="mood-btn" data-mood="indie" onclick="selectMood(this)"><i class="ph ph-confetti" aria-hidden="true"></i> Indie</button>
-      </div>
-      <div class="mode-inputs mood-grid" id="modeInputDecade" style="display:none"></div>
-      <div class="mode-inputs" id="modeInputAlbum" style="display:none">
-        <input type="text" class="mode-input-field artist-input" id="albumArtistInput" placeholder="Artist name" autocomplete="off" spellcheck="false" aria-label="Artist name">
-        <input type="text" class="mode-input-field artist-input" id="albumInput" placeholder="Album name" autocomplete="off" spellcheck="false" aria-label="Album name">
-      </div>
-      <div class="mode-inputs" id="modeInputDiscovery" style="display:none">
-        <input type="text" class="mode-input-field artist-input" id="discoveryInput" placeholder="Artist name" autocomplete="off" spellcheck="false" aria-label="Artist name">
-      </div>
-      <div class="mode-inputs" id="modeInputStreak" style="display:none">
-        <input type="text" class="mode-input-field artist-input" id="streakInput" placeholder="Artist name" autocomplete="off" spellcheck="false" aria-label="Artist name">
-      </div>
-      <div class="go-row"><button class="btn btn-primary" id="goBtn" onclick="handleGo()" disabled>Time Travel</button></div>
-    </section>
   </div>
   <section id="radioView" class="radio-view" style="display:none" aria-label="Radio">
     <div class="radio-top">
       <div class="radio-top-left">
         <button class="btn-text" onclick="radioMinimize()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Home</button>
-        <button class="btn-text" id="radioAgainBtn" onclick="travelAgain()" style="display:none"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Again</button>
       </div>
       <h2 class="radio-title" id="radioTitle">Library radio</h2>
     </div>
@@ -189,6 +191,15 @@
         <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" id="radioVolumeIcon" aria-hidden="true"></i><input type="range" class="volume-range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
       </div>
     </section>
+    <section class="radio-moment" id="radioMoment" style="display:none" aria-label="This moment">
+      <span class="lib-opt-label">This moment</span>
+      <h3 class="radio-moment-label" id="radioMomentLabel"></h3>
+      <p class="radio-moment-meta" id="radioMomentMeta"></p>
+      <div class="radio-moment-actions">
+        <button class="btn-save-playlist" id="momentSaveBtn" onclick="saveMomentPlaylist()"><i class="ph ph-plus" aria-hidden="true"></i> Save this moment</button>
+        <button class="btn btn-ghost" id="momentNextBtn" onclick="radioNextMoment()" disabled><i class="ph ph-skip-forward" aria-hidden="true"></i> Next moment</button>
+      </div>
+    </section>
     <div class="radio-info" id="radioInfo" style="display:none">
       <a class="radio-artist-photo" id="radioArtistPhoto" target="_blank" rel="noopener noreferrer" title="Open the artist on Spotify" aria-label="Open the artist on Spotify"><i class="ph ph-microphone-stage" aria-hidden="true"></i><img id="radioArtistImg" alt="" style="display:none"></a>
       <div class="radio-info-body">
@@ -206,10 +217,6 @@
       <h3 class="radio-upnext-title">Up next</h3>
       <div class="radio-upnext" id="radioUpNext"></div>
     </div>
-    <div class="track-list-wrapper" id="trackListWrapper" style="display:none">
-      <div class="track-list-header"><h3>Tracks</h3><span class="list-head-right"><span class="match-count" id="matchCount"></span><span id="saveSlotTravel"><button class="btn-save-playlist" id="savePlaylistBtn" onclick="saveAsPlaylist()" style="display:none">Save as Playlist</button></span></span></div>
-      <div class="track-list" id="trackList"></div>
-    </div>
     </div>
     </div>
   </section>
@@ -218,7 +225,7 @@
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.10</a></div>
+  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.11</a></div>
 </div>
 
 <div class="overlay" id="changelogOverlay" style="display:none">
@@ -236,7 +243,6 @@
 <script src="js/ui.js"></script>
 <script src="js/player.js"></script>
 <script src="js/radio.js"></script>
-<script src="js/modes.js"></script>
 <script src="js/app.js"></script>
 
 </body>
