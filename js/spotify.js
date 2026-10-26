@@ -357,6 +357,8 @@ function initSDKPlayer() {
   });
   // connect() resolves false when Spotify refuses the browser player; without this the radio silently plays on another device
   player.connect().then(ok => { if (ok === false) showStatus("Spotify could not start the browser player, so the music will play on another device if one is open.", "warn"); }).catch(() => {});
+  // connect() can also hang with no error when the connection to Spotify is blocked (VPN, DNS filter, ad blocker)
+  setTimeout(() => { if (!sdkReady && window._stmPlayer === player) showStatus("The browser player did not connect to Spotify. A VPN, ad blocker or DNS filter can block it; the music will play on another device if one is open.", "warn"); }, 12000);
   window._stmPlayer = player;
 }
 
