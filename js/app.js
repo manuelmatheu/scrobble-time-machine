@@ -54,5 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }
   });
 
+  // Installable app: the service worker needs https (or localhost)
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
   updateRadioButton();
 });

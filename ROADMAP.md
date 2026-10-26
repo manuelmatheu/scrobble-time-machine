@@ -8,6 +8,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Library **How it plays**: Songs (random scrobbles) or Moments (a stretch of consecutive scrobbles in the order played, then a jump to another moment: an endless Random mode)
 - [x] Library **When**: every year or one year (`user.getrecenttracks` with `from`/`to`, so positions stay inside the year)
 - [x] This moment panel: when it was, how many songs, Save this moment (playlist) and Next moment
+- [x] PWA: web manifest, icons and a network-first service worker, so Chrome can install it on a phone; the Spotify sign-in keeps its PKCE verifier in `localStorage` too for the installed app
 - [x] Station picker is a tab bar with one options panel that eases between stations (Design canvas, Proposals B)
 - [x] First run is a landing: username, then Connect Spotify (Premium stated up front); the full Home card appears once connected (Design canvas v2.11, Home - first run)
 - [ ] Open: should the past half of a Mix follow When too?

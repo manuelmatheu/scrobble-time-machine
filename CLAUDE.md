@@ -39,6 +39,7 @@ No build step, no package manager, no linter -- there is nothing to install or c
 ```
 index.html          -- Page shell, script load order
 changelog.html      -- Release notes shown in the in-app overlay (openChangelog() in ui.js)
+manifest.webmanifest, sw.js, icons/ -- PWA: install on a phone or desktop. sw.js is network first (never hides a deploy) and caches only the same-origin shell; add a new js/css file to its SHELL list, or the offline fallback lacks it (a file in the list that 404s fails the install)
 ROADMAP.md          -- Shipped and planned work, newest first
 docs/architecture.md -- Detailed behavior behind the summaries below (auth, SDK, spotifyPlay, radio, seams, views)
 docs/superpowers/   -- Design notes and plans
@@ -91,7 +92,7 @@ The SDK script must load first so `window.onSpotifyWebPlaybackSDKReady` can be s
 Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the relevant section there before changing auth, `spotifyPlay()`, the SDK listeners, the radio engine or the seams.
 
 - **Scopes** (`SPOTIFY_SCOPES`, `js/config.js`): `streaming` for the SDK, `user-library-*` for likes, `user-top-read` for Discover (an older token gets a 403 there; Discover then plays the Last.fm station only and asks the user to reconnect).
-- **Auth:** PKCE (`initiateSpotifyAuth()` / `exchangeCodeForToken()` / `refreshSpotifyToken()` / `getSpotifyToken()`). Tokens live in `localStorage`; only the code verifier and a spare copy of the username go through `sessionStorage`.
+- **Auth:** PKCE (`initiateSpotifyAuth()` / `exchangeCodeForToken()` / `refreshSpotifyToken()` / `getSpotifyToken()`). Tokens live in `localStorage`; the code verifier and a spare copy of the username go through `sessionStorage` for the round trip, with a copy in `localStorage` too because an installed app (PWA) can come back from Spotify in a fresh browsing context (the verifier is deleted after the exchange).
 - **SDK:** `initSDKPlayer()` can be called from the SDK-ready callback and from the auth callbacks in `app.js`; it guards on `window._stmPlayer`. Its `ready` / `not_ready` / `authentication_error` listeners stop and start polling and re-transfer playback after a reconnect (`sdkNeedsRetransfer`).
 - **Who is playing:** every SDK-driven decision goes through `sdkPlaying()` (`sdkReady && !playbackDeviceId`), not `sdkReady`. When it is true, `player_state_changed` -> `onSDKStateChange()` drives the UI; otherwise `pollNowPlaying()` reads `/me/player` every `POLL_INTERVAL` (5s) and follows the device the music moved to (`followPlaybackDevice()`).
 - **`spotifyPlay(token, uris, opts)`:** caps at 100 URIs. With the SDK: transfer, then turn shuffle and repeat off, then play with `device_id`. Otherwise it picks a device (the followed one, then the active one, then any). Shuffle and repeat persist on the user's account and would reorder or loop the queue, so every full play resets them. `{quick:true}` (used at seams) sends a single `play` request.

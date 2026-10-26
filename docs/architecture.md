@@ -16,7 +16,7 @@ streaming user-library-modify user-library-read user-top-read
 
 ### PKCE Auth
 
-- `initiateSpotifyAuth()` -- generates code verifier + challenge, redirects to Spotify authorize; the verifier and the Last.fm username are stashed in `sessionStorage` for the round trip
+- `initiateSpotifyAuth()` -- generates code verifier + challenge, redirects to Spotify authorize; the verifier and the Last.fm username are stashed in `sessionStorage` for the round trip, and also in `localStorage` (an installed PWA can return from Spotify in a fresh browsing context where `sessionStorage` is empty; `exchangeCodeForToken()` reads either and deletes the verifier afterwards)
 - `exchangeCodeForToken(code)` -- exchanges auth code for tokens, stores `spotify_access_token` / `spotify_refresh_token` / `spotify_token_expires` in **localStorage**
 - `refreshSpotifyToken()` -- refreshes using the stored refresh token, updates the same `localStorage` keys
 - `getSpotifyToken()` -- returns cached token or refreshes if within 60s of expiry
@@ -173,3 +173,7 @@ Start radio plays an endless stream, from one of three stations (Library, Discov
 ## Status messages (toasts)
 
 `showStatus(msg, type)` (ui.js) shows `"error"` and `"warn"` messages as a toast (`#toastHost`, a persistent `role="status"` live region at the bottom of the page; the toast is built with `textContent`, never parsed as HTML). One toast at a time: a new message replaces the current one, the same message again only re-arms its timer. Warnings go away after 6s, errors after 9s (`TOAST_MS`), hovering or focusing holds it, and the close button (`hideStatus()`) dismisses it. `"success"` dismisses the current toast (the problem it reported is over: e.g. playback resumed); plain progress text (`""`) is ignored. The interface itself (hero "Tuning...", Cancel button, now-playing row) shows loading and success state, so keep `showStatus` for failures, rate-limit notices (`spotifyLimitMessage()`, type `"error"`) and things the user must act on (type `"warn"`).
+
+## PWA
+
+`manifest.webmanifest` (standalone, `start_url` and `scope` `./`, theme and background `#0b0b0f`), the icons in `icons/` (a red record on the dark background; the maskable one keeps the disc inside the 80% safe zone) and `sw.js`, registered from `app.js` on https or localhost. The service worker is network first for every same-origin GET: a deploy is never hidden behind a stale copy, and the cache (`stm-shell-v1`) is only the fallback when the network fails (the shell opens offline, but nothing plays: Spotify and Last.fm are live). It never touches `/api/` or other origins, and does not cache a page load that carries `?code=` (the Spotify redirect). Add new js/css files to its `SHELL` list. The theme-color meta follows the in-app theme. The Spotify redirect URI is the page's own origin and path, so an installed app needs no new registration, but the first sign-in inside the installed app should be tried on a real phone.

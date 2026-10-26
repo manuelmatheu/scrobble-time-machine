@@ -8,19 +8,23 @@ function b64url(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).
 
 async function initiateSpotifyAuth() {
   const v = rndStr(128), ch = b64url(await sha256(v));
+  const user = $("usernameInput").value.trim();
   sessionStorage.setItem("spotify_code_verifier", v);
-  sessionStorage.setItem("lastfm_username", $("usernameInput").value.trim());
+  sessionStorage.setItem("lastfm_username", user);
+  // an installed app (PWA) can come back from Spotify in a new browsing context where sessionStorage is empty: keep a copy for the round trip
+  try { localStorage.setItem("spotify_code_verifier", v); localStorage.setItem("lastfm_username", user || localStorage.getItem("lastfm_username") || ""); } catch {}
   window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch, show_dialog:"true" });
 }
 async function exchangeCodeForToken(code) {
   const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
-    body: new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, grant_type:"authorization_code", code, redirect_uri:SPOTIFY_REDIRECT_URI, code_verifier:sessionStorage.getItem("spotify_code_verifier") }) });
+    body: new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, grant_type:"authorization_code", code, redirect_uri:SPOTIFY_REDIRECT_URI, code_verifier:sessionStorage.getItem("spotify_code_verifier") || localStorage.getItem("spotify_code_verifier") }) });
+  try { localStorage.removeItem("spotify_code_verifier"); } catch {}  // single use
   if (!r.ok) throw new Error("Token exchange failed");
   const d = await r.json();
   localStorage.setItem("spotify_access_token", d.access_token);
   localStorage.setItem("spotify_refresh_token", d.refresh_token);
   localStorage.setItem("spotify_token_expires", Date.now() + d.expires_in * 1000);
-  const u = sessionStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshLibraryYears(); }
+  const u = sessionStorage.getItem("lastfm_username") || localStorage.getItem("lastfm_username"); if (u) { $("usernameInput").value = u; refreshLibraryYears(); }
   window.history.replaceState({}, document.title, window.location.pathname);
   return d.access_token;
 }
