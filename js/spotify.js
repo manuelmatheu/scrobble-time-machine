@@ -339,6 +339,11 @@ function initSDKPlayer() {
   });
   player.addListener('initialization_error', () => {
     sdkReady = false;
+    showStatus("This browser can't run the Spotify player, so the music will play on another device if one is open.", "warn");
+  });
+  player.addListener('account_error', () => {
+    sdkReady = false;
+    showStatus("Spotify Premium is needed to play in this browser. The music will play on another device if one is open.", "warn");
   });
   player.addListener('authentication_error', async () => {
     sdkReady = false;
@@ -350,7 +355,8 @@ function initSDKPlayer() {
       player.connect();
     }
   });
-  player.connect();
+  // connect() resolves false when Spotify refuses the browser player; without this the radio silently plays on another device
+  player.connect().then(ok => { if (ok === false) showStatus("Spotify could not start the browser player, so the music will play on another device if one is open.", "warn"); }).catch(() => {});
   window._stmPlayer = player;
 }
 
