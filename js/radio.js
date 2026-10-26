@@ -164,9 +164,9 @@ function radioShouldRefill(s, lowWater) {
 
 // ===== Stations =====
 const RADIO_STATIONS = {
-  library: { eyebrow: "Library radio", headline: "Your library, shuffled across every year.", title: "Library radio", button: "Start Library radio" },
-  discover: { eyebrow: "Discover radio", headline: "New music, picked from your taste.", title: "Discover radio", button: "Start Discover radio" },
-  mix: { eyebrow: "Mix radio", headline: "Your past, with new music woven in.", title: "Mix radio", button: "Start Mix radio" }
+  library: { blurb: "Your own scrobbles: songs or whole moments, any year or one", eyebrow: "Library radio", headline: "Your library, shuffled across every year.", title: "Library radio", button: "Start Library radio" },
+  discover: { blurb: "New music picked from Last.fm and your Spotify taste", eyebrow: "Discover radio", headline: "New music, picked from your taste.", title: "Discover radio", button: "Start Discover radio" },
+  mix: { blurb: "Your past, with new music woven in", eyebrow: "Mix radio", headline: "Your past, with new music woven in.", title: "Mix radio", button: "Start Mix radio" }
 };
 
 // Mix: which source the next track comes from. A pattern per balance, repeated.
@@ -457,7 +457,7 @@ function beginSession() {
   radioStop();
   currentPhase = "working"; updateRadioButton();
   $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
-  searchCache = {}; sessionQueue = new Set(); sessionPaused = false; stopPolling(); hideStatus();
+  searchCache = {}; sessionQueue = new Set(); sessionPaused = false; sdkInactive = false; stopPolling(); hideStatus();
 }
 function endSessionUI() {
   $("cancelBtn").style.display = "none"; $("usernameInput").disabled = false; updateRadioButton();
@@ -735,6 +735,7 @@ function radioResetHero() {
   $("radioTrack").textContent = "Tuning...";
   $("radioArtist").textContent = "";
   $("radioArt").removeAttribute("src"); radioArtUrl = "";
+  if ($("radioArt").classList) $("radioArt").classList.remove("failed");
   $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
   $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioInfoIdx = -1; radioHideInfo();
@@ -757,25 +758,50 @@ function radioShowSource(text, past) {
 }
 
 // Home card: how much of a Mix is new
+const MIX_BALANCE_HELP = {
+  "mostly-past": "Three songs from your past for each new one.",
+  "balanced": "One song from your past, then one new.",
+  "mostly-new": "One song from your past for every three new ones."
+};
 function radioSetBalance(name) {
   if (!MIX_PATTERNS[name]) name = "balanced";
   radioBalance = name;
   try { localStorage.setItem("stm_mix_balance", name); } catch {}
+  if ($("mixBalanceHelp")) $("mixBalanceHelp").textContent = MIX_BALANCE_HELP[name];
   document.querySelectorAll(".seg-opt[data-balance]").forEach(b => { const on = b.dataset.balance === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
 }
 
 // Home card: the station picked here is the one Start radio plays
+let radioStationShown = false;  // the first call (page load) sets the panel without the cross-fade
 function radioSetStation(name) {
   if (!RADIO_STATIONS[name]) name = "library";
+  const changed = name !== radioStation;
   radioStation = name;
   try { localStorage.setItem("stm_station", name); } catch {}
-  document.querySelectorAll(".station-opt").forEach(b => { const on = b.dataset.station === name; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+  document.querySelectorAll(".station-tabs .tab").forEach(b => { const on = b.dataset.station === name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
+  const ind = $("stationInd");
+  if (ind && ind.style && ind.style.setProperty) ind.style.setProperty("--i", Object.keys(RADIO_STATIONS).indexOf(name));
   const s = RADIO_STATIONS[name];
-  if ($("mixBalance")) $("mixBalance").style.display = name === "mix" ? "" : "none";
-  if ($("libraryOptions")) $("libraryOptions").style.display = name === "library" ? "" : "none";
+  const show = (id, on) => { if ($(id)) $(id).style.display = on ? "" : "none"; };
+  const apply = () => {
+    if ($("stationBlurb")) $("stationBlurb").textContent = s.blurb;
+    show("libraryOptions", name === "library"); show("mixBalance", name === "mix"); show("discoverNote", name === "discover");
+  };
+  const inner = $("stationPanelIn");
+  if (changed && radioStationShown && inner && inner.classList) {
+    inner.classList.add("out");
+    setTimeout(() => { if (radioStation === name) apply(); inner.classList.remove("out"); }, 140);  // the panel's height follows the new content (fitStationPanel)
+  } else apply();
+  radioStationShown = true;
   if ($("radioEyebrow")) $("radioEyebrow").textContent = s.eyebrow;
   radioSyncHeadline();
   radioSyncHome();
+}
+// The station panel eases to the height of its content. The inline height is only set while the card is visible, so it never starts from 0.
+function fitStationPanel() {
+  const panel = $("stationPanel"), inner = $("stationPanelIn");
+  if (!panel || !inner) return;
+  panel.style.height = inner.offsetHeight > 0 ? inner.offsetHeight + "px" : "";
 }
 function radioSyncHeadline() {
   if ($("homeHeadline")) $("homeHeadline").textContent = radioHomeHeadline(radioStation, radioHow, radioYear);
@@ -1006,9 +1032,11 @@ function radioSetArt(url) {
   const el = $("radioArt");
   if (url === radioArtUrl) return;
   radioArtUrl = url;
+  if (el.classList) el.classList.remove("failed");
   if (el.classList && url) {
     el.classList.add("loading");
-    el.onload = el.onerror = () => { if (radioArtUrl === url) el.classList.remove("loading"); };
+    el.onload = () => { if (radioArtUrl === url) el.classList.remove("loading"); };
+    el.onerror = () => { if (radioArtUrl === url) { el.classList.remove("loading"); el.classList.add("failed"); } };
   }
   if (url) el.src = url; else el.removeAttribute("src");
 }

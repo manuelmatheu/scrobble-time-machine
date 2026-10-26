@@ -89,7 +89,7 @@ function handleReset() {
   radioStop(); trackMeta = {};
   stopPolling();
   currentPhase = "idle"; matchedUris = {}; allTrackCount = 0; uriToIndices = {};
-  sessionQueue = new Set(); sessionPaused = false;
+  sessionQueue = new Set(); sessionPaused = false; sdkInactive = false;
   endSessionUI();
   hideStatus();
 }

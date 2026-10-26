@@ -26,6 +26,8 @@ const $ = id => document.getElementById(id);
 let sdkReady = false;
 let sdkDeviceId = null;
 let sdkNeedsRetransfer = false;
+const STM_PLAYER_NAME = "Scrobble Time Machine";  // the name of this app's browser player in Spotify's device list
+let sdkInactive = false;  // another window or device took the music from this browser's player: Play brings this window's queue back here
 // Spotify Connect: the device the user picked to play on (null = automatic: this browser through the SDK, else the active device)
 let playbackDeviceId = null, playbackDeviceName = "", playbackDeviceType = "";
 let likedSet = new Set();

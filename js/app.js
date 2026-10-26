@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   radioSetYear(saved("stm_library_year", "0"));
   radioFillYears();  // until the first scrobble's year arrives: this year down to the saved one
   radioSetStation(saved("stm_station", "library"));
+  if (window.ResizeObserver && $("stationPanelIn")) { new ResizeObserver(fitStationPanel).observe($("stationPanelIn")); fitStationPanel(); }
   radioSetBalance(saved("stm_mix_balance", "balanced"));
   loadPlaybackDevice();
 
@@ -53,5 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }
   });
 
+  // Installable app: the service worker needs https (or localhost)
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
   updateRadioButton();
 });

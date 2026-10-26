@@ -879,6 +879,71 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(run("radioUpNextRows()"), run("RADIO_UPNEXT_ROWS"));  // no media query support: the phone count
   }
 
+  // 30b. another window took the music: Play brings this window's own queue back here, from where it stopped
+  {
+    const saved = { token: global.getSpotifyToken, play: global.spotifyPlay, hide: global.hideStatus };
+    const plays = [];
+    global.getSpotifyToken = async () => "tok";
+    global.spotifyPlay = async (t, uris, pos) => { plays.push({ uris, pos }); return true; };
+    global.hideStatus = () => {};
+    const setup = () => run("sessionQueue = new Set(['u1','u2','u3']); matchedUris = {0:'u1',1:'u2',2:'u3'}; allTrackCount = 3; _sdkCurrentUri = 'u2'; _sdkPositionMs = 61000; sdkInactive = true; sessionPaused = true; _resumeBusy = false;");
+    setup(); await run("radioResumeHere()");
+    assert.deepEqual(plays[0], { uris: ["u2", "u3"], pos: 61000 }, "resumes the song that was playing, from its position");
+    assert.equal(run("sdkInactive"), false); assert.equal(run("sessionPaused"), false);
+    setup(); await run("radioResumeHere('next')");
+    assert.deepEqual(plays[1], { uris: ["u3"], pos: 0 }, "Next starts the following song");
+    setup(); await run("radioResumeHere('restart')");
+    assert.deepEqual(plays[2], { uris: ["u2", "u3"], pos: 0 }, "Previous restarts the current song");
+    // the controls route there while the window is not the active player
+    setup(); plays.length = 0; await run("playerPlayPause()"); await new Promise(r => setTimeout(r, 20));
+    assert.equal(plays.length, 1, "Play resumes here instead of toggling a player that is not active");
+    global.getSpotifyToken = saved.token; global.spotifyPlay = saved.play; global.hideStatus = saved.hide;
+    run("sdkInactive = false; sessionPaused = false; sessionQueue = new Set(); matchedUris = {}; allTrackCount = 0;");
+  }
+
+  // 30c. two windows on one account: a window without a player of its own never plays on another STM window's player,
+  // and a window whose player starts playing someone else's music stops treating it as its own
+  {
+    const realFetch = global.fetch, realDevices = global.getSpotifyDevices, stubPlay = global.spotifyPlay, savedStatus = global.showStatus;
+    global.spotifyPlay = realSpotifyPlay;
+    const calls = [], warns = [];
+    global.fetch = async (url, init) => { calls.push({ url: String(url), body: init && init.body }); return { ok: true, status: 204 }; };
+    global.showStatus = (m, t) => { if (t === "warn") warns.push(m); };
+    run("sdkReady = false; sdkDeviceId = null; playbackDeviceId = null;");
+    // only the desktop window's player is listed (and active): nothing to play on, and nothing is sent to it
+    global.getSpotifyDevices = async () => [{ id: "desk", name: "Scrobble Time Machine", type: "Computer", is_active: true }];
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), false);
+    assert.ok(!calls.some(c => /device_id=desk|me\/player\/play/.test(c.url)), "no play on another STM window");
+    assert.ok(/Open Spotify/.test(warns[0]));
+    // the phone's own Spotify app is listed too: that is where it plays, after a transfer
+    calls.length = 0;
+    global.getSpotifyDevices = async () => [{ id: "desk", name: "Scrobble Time Machine", type: "Computer", is_active: true }, { id: "pixel", name: "Pixel", type: "Smartphone", is_active: false }];
+    assert.equal(await realSpotifyPlay("t", ["spotify:track:a"]), true);
+    assert.ok(calls.some(c => /\/me\/player$/.test(c.url) && /"pixel"/.test(c.body)), "transfers to the phone app");
+    assert.ok(calls.some(c => /me\/player\/play\?device_id=pixel/.test(c.url)));
+    global.fetch = realFetch; global.getSpotifyDevices = realDevices; global.spotifyPlay = stubPlay; global.showStatus = savedStatus;
+    // the desktop window: its player starts playing a song that is not in its queue
+    run("sdkReady = true; sdkDeviceId = 'desk'; playbackDeviceId = null; radioActive = true; sdkInactive = false; sessionPaused = false;");
+    run("sessionQueue = new Set(['u1','u2']); radioContextLastUri = 'u2'; _sdkCurrentUri = 'u1'; radioCurrentUri = 'u1';");
+    const st = uri => ({ paused: false, position: 5000, duration: 200000, track_window: { current_track: { uri } } });
+    const warned = []; global.showStatus = (m, t) => warned.push(t);
+    run("onSDKStateChange(" + JSON.stringify(st("u2")) + ")");  // our own next song: nothing special
+    assert.equal(run("sdkInactive"), false);
+    run("_sdkCurrentUri = 'u1';"); run("onSDKStateChange(" + JSON.stringify(st("phone-song")) + ")");
+    assert.equal(run("sdkInactive"), true, "someone else's song in the middle of our queue");
+    assert.equal(run("_sdkCurrentUri"), "u1", "this window keeps its own song for Play");
+    assert.ok(warned.includes("warn"));
+    run("onSDKStateChange(" + JSON.stringify(st("phone-song-2")) + ")");
+    assert.equal(run("sdkInactive"), true, "stays inactive while someone else's music plays");
+    run("onSDKStateChange(" + JSON.stringify(st("u2")) + ")");
+    assert.equal(run("sdkInactive"), false, "its own song again: active");
+    // Spotify's own autoplay after the last song we sent is not a takeover
+    run("sdkInactive = false; sessionPaused = false; _sdkCurrentUri = 'u2';"); run("onSDKStateChange(" + JSON.stringify(st("autoplay")) + ")");
+    assert.equal(run("sdkInactive"), false);
+    global.showStatus = savedStatus;
+    run("sdkReady = false; sdkDeviceId = null; radioActive = false; sdkInactive = false; sessionPaused = false; sessionQueue = new Set(); radioContextLastUri = null; _sdkCurrentUri = null; radioCurrentUri = null;");
+  }
+
   // 31. the artist photo comes from Spotify, once per artist, and only for the artist that is playing
   {
     const els = {};
