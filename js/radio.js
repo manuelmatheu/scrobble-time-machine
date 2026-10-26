@@ -735,6 +735,7 @@ function radioResetHero() {
   $("radioTrack").textContent = "Tuning...";
   $("radioArtist").textContent = "";
   $("radioArt").removeAttribute("src"); radioArtUrl = "";
+  if ($("radioArt").classList) $("radioArt").classList.remove("failed");
   $("radioFill").style.width = "0"; $("radioElapsed").textContent = "0:00"; $("radioDuration").textContent = "0:00";
   $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioInfoIdx = -1; radioHideInfo();
@@ -1031,9 +1032,11 @@ function radioSetArt(url) {
   const el = $("radioArt");
   if (url === radioArtUrl) return;
   radioArtUrl = url;
+  if (el.classList) el.classList.remove("failed");
   if (el.classList && url) {
     el.classList.add("loading");
-    el.onload = el.onerror = () => { if (radioArtUrl === url) el.classList.remove("loading"); };
+    el.onload = () => { if (radioArtUrl === url) el.classList.remove("loading"); };
+    el.onerror = () => { if (radioArtUrl === url) { el.classList.remove("loading"); el.classList.add("failed"); } };
   }
   if (url) el.src = url; else el.removeAttribute("src");
 }
