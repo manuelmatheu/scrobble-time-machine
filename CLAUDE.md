@@ -119,7 +119,7 @@ Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the
 
 2. **Unicode box-drawing characters in HTML comments cause tool failures** -- use ASCII-only comments in HTML (e.g., use `===` separators, not `═══`).
 
-3. **Spotify tokens live in `localStorage`, not `sessionStorage`** -- intentional (v2.3+), so a reconnect isn't needed every time a tab closes. Only the PKCE code verifier and a spare copy of the Last.fm username use `sessionStorage`. Don't revert the token storage to `sessionStorage` without checking why it was changed (commit `bd8354c`).
+3. **Spotify tokens live in `localStorage`, not `sessionStorage`** -- intentional (v2.3+), so a reconnect isn't needed every time a tab closes. Only the PKCE code verifier and a spare copy of the Last.fm username use `sessionStorage` (each also has a short-lived copy in `localStorage` for an installed PWA, see Auth). Don't revert the token storage to `sessionStorage` without checking why it was changed (commit `bd8354c`).
 
 4. **`pollNowPlaying()` only runs when `!sdkPlaying()`** -- first line is `if (sdkPlaying() || _pollBusy) return;`. When the SDK is the player, `player_state_changed` events handle all updates; when the session was moved to another device (`playbackDeviceId` set by `followPlaybackDevice()`), polling does, even though `sdkReady` is true.
 
