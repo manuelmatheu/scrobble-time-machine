@@ -45,6 +45,18 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   assert.deepEqual(connectDeviceRows([dev(null, "Ghost", "Speaker")], ctx).rows.map(x => x.id), ["me"]);
   assert.equal(connectOnPhone(), false);
 
+  // === the list's rows ===
+  const html = connectRowHtml(connectDeviceRows([dev("k", "Kitchen", "Speaker", { is_active: true })], ctx).rows[1], s => s);
+  assert.match(html, /Kitchen/); assert.match(html, /aria-pressed="false"/); assert.match(html, /min-height|connect-row/);
+  const off = connectRowHtml(connectDeviceRows([dev("s", "Sonos Den", "Speaker", { is_restricted: true })], ctx).restricted[0], s => s);
+  assert.match(off, /disabled/);
+  // the current device is pressed; an active phone row still says it is playing
+  assert.match(connectRowHtml(connectDeviceRows([], ctx).rows[0], s => s), /aria-pressed="true"/);
+  const phoneRow = connectDeviceRows([dev("p", "Pixel 9", "Smartphone", { is_active: true })], { onPhone: true }).rows[0];
+  assert.match(connectRowHtml(phoneRow, s => s), /Plays through your Spotify app · playing/);
+  // a quote in an id cannot break out of the attribute
+  assert.doesNotMatch(connectRowHtml({ id: 'a"b', name: "X", line: "Speaker", icon: "ph-speaker-high" }, s => s), /data-id="a"b"/);
+
   // === picking a device ===
   const run = code => vm.runInThisContext(code);
   const fetches = [], plays = [], toasts = [], soon = [];
@@ -138,6 +150,34 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   setupRadio({}); await run("pollNowPlaying()"); assert.equal(asked, 1);
   global.document.visibilityState = "visible";
   assert.equal(run("pollVisible()"), true);
+
+  // === Home: where the next radio plays, and the phone strip ===
+  run("playbackDeviceId = 'k'; playbackDeviceName = 'Kitchen'; playbackDeviceType = 'Speaker'; sdkReady = true; sdkDeviceId = 'me';");
+  assert.equal(connectHomeTarget().name, "Kitchen");
+  run("playbackDeviceId = null;");
+  assert.equal(connectHomeTarget().name, "This browser");
+  run("sdkReady = false; sdkDeviceId = null; connectDevices = [];");
+  assert.equal(connectHomeTarget().name, "This browser");  // a desktop whose player is not ready yet
+  global.window.matchMedia = () => ({ matches: true });  // a phone
+  assert.equal(connectHomeTarget().name, "Spotify on this phone");
+  run("connectDevices = [{ id: 'k', name: 'Kitchen', type: 'Speaker', is_active: true }];");
+  assert.equal(connectHomeTarget().name, "Kitchen");
+  run("connectDevices = [];"); delete global.window.matchMedia;
+  // the strip's Pause / Play come from its own reading, not from radioPaused
+  fetches.length = 0; run("radioPaused = true; connectStripReading = { is_playing: true, device: { id: 'k' }, item: {} };");
+  await connectNowControl("toggle");
+  assert.match(fetches.at(-1).url, /\/me\/player\/pause$/); assert.equal(fetches.at(-1).method, "PUT");
+  run("connectStripReading = { is_playing: false, device: { id: 'k' }, item: {} };");
+  await connectNowControl("toggle");
+  assert.match(fetches.at(-1).url, /\/me\/player\/play$/);
+  await connectNowControl("next");
+  assert.match(fetches.at(-1).url, /\/me\/player\/next$/); assert.equal(fetches.at(-1).method, "POST");
+  // Home's "Playing now" line drops the old song too when nothing can be vouched for
+  els.radioPlayingTrack = { textContent: "Old song", style: {} };
+  run("radioMinimized = true;"); radioShowChecking();
+  assert.equal(els.radioPlayingTrack.textContent, "Checking what's playing…");
+  run("radioMinimized = false;");
+  connectStopTimers();
 
   stopPolling();  // a successful pick starts the poll interval
   console.log("connect: ok");

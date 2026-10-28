@@ -50,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Global keyboard shortcuts
   document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && connectIsOpen()) { connectClose(); return; }  // the Play on list first: it sits on top
     if (e.key === "Escape" && $("changelogOverlay").style.display !== "none") { closeChangelog(); return; }
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }
   });

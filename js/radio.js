@@ -747,7 +747,7 @@ function radioResetHero() {
 
 // No reading to vouch for: a neutral hero instead of the last song
 function radioShowChecking() {
-  radioHeroLive = false; radioNowLabel = ""; radioNowPaused = false;
+  radioHeroLive = false; radioNowPaused = false;
   const set = (id, t) => { const el = $(id); if (el) el.textContent = t; };
   set("radioTrack", "Checking what's playing…"); set("radioArtist", "");
   const art = $("radioArt");
@@ -756,6 +756,8 @@ function radioShowChecking() {
   if ($("radioFill")) $("radioFill").style.width = "0";
   set("radioElapsed", "0:00"); set("radioDuration", "0:00");
   if ($("radioPlay")) $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
+  radioNowLabel = "Checking what's playing…";  // Home's "Playing now" line must not keep the old song either
+  if (radioMinimized) radioSyncHome();
 }
 
 // The "why this track" chip next to NOW PLAYING (Discover only)

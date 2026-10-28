@@ -166,10 +166,21 @@
         </div>
       </div>
       <div class="radio-playing" id="radioPlaying" style="display:none"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="radio-playing-text"><strong id="radioPlayingState">Playing now</strong> &middot; <span id="radioPlayingTrack"></span></span></div>
+      <div class="connect-now" id="connectNowOn" hidden>
+        <i class="ph ph-speaker-high connect-now-icon" id="connectNowIcon" aria-hidden="true"></i>
+        <span class="connect-now-text"><span class="connect-now-line">Playing on <strong id="connectNowDevice"></strong></span><span class="connect-now-track" id="connectNowTrack"></span></span>
+        <button type="button" class="radio-btn connect-now-btn" id="connectNowToggle" onclick="connectNowControl('toggle')" aria-label="Pause"><i class="ph-fill ph-pause" aria-hidden="true"></i></button>
+        <button type="button" class="radio-btn connect-now-btn" onclick="connectNowControl('next')" aria-label="Next"><i class="ph-fill ph-skip-forward" aria-hidden="true"></i></button>
+      </div>
       <div class="controls">
         <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
         <button class="btn btn-spotify btn-radio" id="spotifyConnectBtn" onclick="initiateSpotifyAuth()">Connect Spotify</button>
         <button class="btn btn-primary btn-radio" id="radioBackBtn" onclick="radioReopen()" style="display:none"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to radio</button>
+        <div class="connect-anchor connect-home" id="connectHomeRow">
+          <i class="ph ph-desktop connect-home-icon" id="connectHomeIcon" aria-hidden="true"></i>
+          <span class="connect-home-text">Plays on <strong id="connectHomeName">This browser</strong></span>
+          <button type="button" class="connect-change" id="connectHomeBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="connectList" onclick="connectOpen(this)">Change<i class="ph ph-caret-down" aria-hidden="true"></i></button>
+        </div>
         <button class="btn btn-primary btn-radio" id="radioBtn" onclick="startRadio()" style="display:none" disabled><i class="ph-fill ph-play" aria-hidden="true"></i> Start Library radio</button>
         <button class="btn btn-ghost" id="cancelBtn" onclick="handleReset()" style="display:none">Cancel</button>
       </div>
@@ -208,6 +219,11 @@
         <div class="radio-volume" id="radioVolumeWrap"><i class="ph ph-speaker-high" id="radioVolumeIcon" aria-hidden="true"></i><input type="range" class="volume-range" id="radioVolume" min="0" max="100" value="80" aria-label="Volume" oninput="setVolume(this)"></div>
       </div>
     </section>
+    <div class="connect-anchor connect-bar checking" id="connectBar">
+      <i class="ph ph-speaker-high connect-bar-icon" id="connectBarIcon" aria-hidden="true"></i>
+      <p class="connect-bar-text"><span class="connect-bar-label">Playing on </span><strong class="connect-bar-name" id="connectBarName">Checking what's playing&hellip;</strong><span class="connect-bar-kind" id="connectBarKind"></span></p>
+      <button type="button" class="connect-change" id="connectBarBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="connectList" onclick="connectOpen(this)">Change<i class="ph ph-caret-down" aria-hidden="true"></i></button>
+    </div>
     <section class="radio-moment" id="radioMoment" style="display:none" aria-label="This moment">
       <span class="lib-opt-label">This moment</span>
       <h3 class="radio-moment-label" id="radioMomentLabel"></h3>
@@ -239,6 +255,17 @@
   </section>
 </div>
 <div class="toast-host" id="toastHost" role="status" aria-live="polite"></div>
+<!-- Play on: the device list. connectOpen() moves it under the Change that opened it (a dropdown), or keeps it here as a bottom sheet over the scrim on phones -->
+<div class="connect-scrim" id="connectScrim" hidden onclick="connectClose()"></div>
+<div class="connect-list" id="connectList" role="dialog" aria-label="Play on" hidden>
+  <span class="connect-grab" aria-hidden="true"></span>
+  <div class="connect-head">
+    <h2 class="connect-title">Play on</h2>
+    <button type="button" class="connect-refresh" id="connectRefreshBtn" onclick="connectRefresh(false)"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i>Refresh</button>
+  </div>
+  <div class="connect-rows" id="connectRows" onclick="connectRowClick(event)"></div>
+  <p class="connect-hint">Don't see a speaker? Play something on it once from the Spotify app, then Refresh.</p>
+</div>
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>

@@ -21,7 +21,7 @@ function ratio(a, b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-const texts = ["text-primary", "text-secondary", "text-tertiary", "text-muted", "lastfm-red-text"];
+const texts = ["text-primary", "text-secondary", "text-tertiary", "text-muted", "lastfm-red-text", "spotify-green-text"];
 const surfaces = ["bg-primary", "bg-secondary", "bg-tertiary"];
 const failures = [];
 for (const [theme, t] of [["dark", dark], ["light", light]]) {

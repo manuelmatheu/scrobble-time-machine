@@ -111,13 +111,6 @@ function connectSetCurrent(device) {
   if (typeof connectRender === "function") connectRender();
 }
 
-// A window that comes back to the front re-reads when its radio plays on another device
-if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined" && document.addEventListener) {
-  document.addEventListener("visibilitychange", () => {
-    if (pollVisible() && radioActive && !sdkPlaying()) pollNowPlaying();
-  });
-}
-
 // Where the current song is now, in ms
 function connectCurrentPosition() {
   if (sdkPlaying()) return _sdkPositionMs || 0;
@@ -168,6 +161,298 @@ async function connectPick(id) {
   } finally { connectBusy = false; }
 }
 
+// === The bar, the list, the Home row and the phone strip ===
+const CONNECT_REFRESH_MS = 4000;  // the open list re-reads the devices this often
+let connectOpenFrom = null;       // the Change button that opened the list (focus goes back to it)
+let connectTimer = null;          // the open list's quiet refresh
+let connectLoaded = false;        // a device list has been read at least once
+let connectShown = null;          // what the open list shows: { rows, restricted }
+let connectRefreshing = false, connectRefreshAgain = false;
+let connectWantFocus = false;     // opened before any row could take the focus: the first rows to arrive take it
+
+function connectEsc(s) { return typeof escHtml === "function" ? escHtml(s) : String(s); }
+
+// One row of the list: a button, pressed for the current device, disabled when Spotify does not let us play there
+function connectRowHtml(row, esc) {
+  esc = esc || (s => String(s));
+  const attr = s => String(esc(String(s == null ? "" : s))).replace(/"/g, "&quot;");
+  let line = row.line || "";
+  if (row.active && !row.disabled && !/playing$/.test(line)) line += " · playing";  // "This phone" keeps its own line
+  const cls = "connect-row" + (row.current ? " current" : "") + (row.active ? " active" : "");
+  return '<button type="button" class="' + cls + '" data-id="' + attr(row.id) + '" aria-pressed="' + (row.current ? "true" : "false") + '"' + (row.disabled ? " disabled" : "") + ">"
+    + '<i class="ph ' + attr(row.icon || "ph-speaker-high") + ' connect-row-icon" aria-hidden="true"></i>'
+    + '<span class="connect-row-text"><span class="connect-row-name">' + esc(row.name || "") + '</span><span class="connect-row-line">' + esc(line) + "</span></span>"
+    + (row.current ? '<i class="ph ph-check connect-row-check" aria-hidden="true"></i>' : "")
+    + "</button>";
+}
+
+// The device a pick is measured against (connectPick's rule), else where the next radio would start
+function connectPickedId() {
+  if (playbackDeviceId) return playbackDeviceId;
+  if (sdkReady && sdkDeviceId) return sdkDeviceId;
+  const d = connectDefaultDevice(connectDevices, { sdkDeviceId, sdkReady, onPhone: connectOnPhone() });
+  return d ? d.id : null;
+}
+function connectCtx() { return { sdkDeviceId, sdkReady, onPhone: connectOnPhone(), currentId: connectPickedId() }; }
+
+// Home "Plays on": the picked or followed device; this browser; the default of the last list read; the phone's own app
+function connectHomeTarget() {
+  const onPhone = connectOnPhone();
+  if (playbackDeviceId) {
+    const row = connectDeviceRows(connectDevices, { sdkDeviceId, sdkReady, onPhone }).rows.find(r => r.id === playbackDeviceId);
+    return row ? { name: row.name, type: row.type } : { name: playbackDeviceName || "that device", type: playbackDeviceType || "" };
+  }
+  if (sdkReady) return { name: "This browser", type: "Computer" };
+  const d = connectDefaultDevice(connectDevices, { sdkDeviceId, sdkReady, onPhone });
+  if (d) return { name: d.name, type: d.type };
+  // a desktop whose player is not ready yet plays here in a moment
+  return onPhone ? { name: "Spotify on this phone", type: "Smartphone" } : { name: "This browser", type: "Computer" };
+}
+
+function connectSetText(id, t) { const el = $(id); if (el) el.textContent = t; }
+
+// The bar (what Spotify reports) and the Home row (where the next radio starts)
+function connectRender() {
+  connectRenderBar();
+  connectRenderHome();
+}
+function connectRenderBar() {
+  const bar = $("connectBar");
+  if (!bar) return;
+  const d = connectCurrent, own = !!(d && sdkDeviceId && d.id === sdkDeviceId);
+  if (bar.classList) bar.classList.toggle("checking", !d);
+  connectSetText("connectBarName", d ? (own ? "This browser" : d.name || "Another device") : "Checking what's playing…");
+  connectSetText("connectBarKind", d ? " · " + connectKind(own ? "Computer" : d.type) : "");
+  const ic = $("connectBarIcon");
+  if (ic) ic.className = "ph " + (d ? connectDeviceIcon(own ? "Computer" : d.type) : "ph-speaker-high") + " connect-bar-icon";
+}
+function connectRenderHome() {
+  if (!$("connectHomeRow")) return;
+  const t = connectHomeTarget();
+  connectSetText("connectHomeName", t.name);
+  const ic = $("connectHomeIcon");
+  if (ic) ic.className = "ph " + connectDeviceIcon(t.type) + " connect-home-icon";
+}
+
+function connectIsOpen() { const l = $("connectList"); return !!(l && !l.hidden); }
+
+// Change: a dropdown under the bar or the Home row; on a phone a bottom sheet over a scrim
+function connectOpen(fromEl) {
+  const list = $("connectList");
+  if (!list) return;
+  if (connectIsOpen()) {
+    const same = connectOpenFrom === fromEl;
+    connectClose(true);
+    if (same) { if (fromEl && fromEl.focus) fromEl.focus(); return; }  // a second tap on Change closes it
+  }
+  connectOpenFrom = fromEl || null;
+  const phone = connectOnPhone();
+  const anchor = !phone && fromEl && fromEl.closest ? fromEl.closest(".connect-anchor") : null;
+  (anchor || document.body).appendChild(list);
+  list.classList.toggle("sheet", phone);
+  list.setAttribute("aria-modal", phone ? "true" : "false");
+  const scrim = $("connectScrim");
+  if (scrim) scrim.hidden = !phone;
+  if (phone) document.body.classList.add("connect-locked");
+  list.hidden = false;
+  if (fromEl) fromEl.setAttribute("aria-expanded", "true");
+  connectShown = null;
+  connectRenderList();
+  connectFocusFirst();
+  connectWantFocus = !list.querySelector(".connect-row:not([disabled])");
+  connectReveal(list);
+  list.onanimationend = () => { if (!list.hidden) connectReveal(list); };  // the page only scrolls that far once the list is full size
+  connectRefresh(false);
+  clearInterval(connectTimer);
+  connectTimer = setInterval(() => connectRefresh(true), CONNECT_REFRESH_MS);
+}
+
+// Escape, a scrim tap, a pick, Change again: close, and give the focus back to Change (noFocus: the user went elsewhere)
+function connectClose(noFocus) {
+  clearInterval(connectTimer); connectTimer = null;
+  const list = $("connectList");
+  if (!list || list.hidden) return;
+  list.hidden = true;
+  const scrim = $("connectScrim");
+  if (scrim) scrim.hidden = true;
+  document.body.classList.remove("connect-locked");
+  const from = connectOpenFrom;
+  connectOpenFrom = null;
+  connectWantFocus = false;
+  if (from) {
+    from.setAttribute("aria-expanded", "false");
+    if (!noFocus && from.focus) from.focus();
+  }
+  connectRender();
+}
+
+// Scroll the page so the whole dropdown shows (from the layout box: the opening animation scales the drawn one)
+function connectReveal(list) {
+  if (connectOnPhone() || !list.offsetParent || typeof window.scrollBy !== "function") return;
+  const top = list.offsetParent.getBoundingClientRect().top + list.offsetTop;
+  const over = top + list.offsetHeight + 16 - window.innerHeight;
+  if (over > 0) window.scrollBy(0, Math.min(over, top - 16));
+}
+
+function connectFocusFirst() {
+  const list = $("connectList");
+  if (!list) return;
+  const el = list.querySelector(".connect-row:not([disabled])") || $("connectRefreshBtn");
+  if (el && el.focus) el.focus();
+}
+
+function connectRenderList() {
+  const box = $("connectRows");
+  if (!box) return;
+  const ctx = connectCtx();
+  const shown = connectDeviceRows(connectDevices, ctx);
+  const act = document.activeElement;
+  const focusedId = act && box.contains(act) && act.getAttribute ? act.getAttribute("data-id") : null;
+  let html = shown.rows.map(r => connectRowHtml(r, connectEsc)).join("");
+  if (!shown.rows.length && connectLoaded && ctx.onPhone) {
+    html += '<p class="connect-empty">No devices found. Open Spotify on this phone or on a speaker, then Refresh.</p>';
+  }
+  if (shown.restricted.length) {
+    html += '<div class="connect-sep" aria-hidden="true"></div><h3 class="connect-group">Can\'t play from here</h3>'
+      + shown.restricted.map(r => connectRowHtml(r, connectEsc)).join("");
+  }
+  box.innerHTML = html;
+  connectShown = shown;
+  if (focusedId != null) {  // a rebuild must not drop the focus
+    const el = Array.from(box.querySelectorAll(".connect-row")).find(b => b.getAttribute("data-id") === focusedId);
+    if (el && !el.disabled) el.focus(); else connectFocusFirst();
+  } else if (connectWantFocus && box.querySelector(".connect-row:not([disabled])")) {
+    connectWantFocus = false;
+    const list = $("connectList");
+    if (list && list.contains(document.activeElement)) connectFocusFirst();  // only if the focus is still in the list (on Refresh)
+    if (list) connectReveal(list);
+  }
+}
+
+// Read the device list. Quiet (the 4 s timer): rebuild only when the rows changed, so a tap never lands on a row that moved
+async function connectRefresh(quiet) {
+  if (connectRefreshing) { if (!quiet) connectRefreshAgain = true; return; }
+  if (quiet && connectBusy) return;
+  connectRefreshing = true;
+  const btn = $("connectRefreshBtn");
+  if (!quiet && btn && btn.classList) btn.classList.add("busy");
+  try {
+    const token = await getSpotifyToken();
+    if (!token) return;
+    let devices;
+    try { devices = await getSpotifyDevices(token); } catch (e) { return; }
+    connectDevices = devices || [];
+    connectLoaded = true;
+    connectRenderHome();
+    if (!connectIsOpen()) return;
+    if (quiet && connectShown) {
+      const next = connectDeviceRows(connectDevices, connectCtx());
+      if (connectSameRows(connectShown.rows, next.rows) && connectSameRows(connectShown.restricted, next.restricted)) return;
+    }
+    connectRenderList();
+  } finally {
+    connectRefreshing = false;
+    if (btn && btn.classList) btn.classList.remove("busy");
+    if (connectRefreshAgain) { connectRefreshAgain = false; connectRefresh(false); }
+  }
+}
+
+function connectRowClick(e) {
+  const row = e && e.target && e.target.closest ? e.target.closest(".connect-row") : null;
+  if (!row || row.disabled || connectBusy) return;
+  row.classList.add("busy");
+  row.setAttribute("aria-busy", "true");
+  connectPick(row.getAttribute("data-id")).finally(() => { row.classList.remove("busy"); row.removeAttribute("aria-busy"); });
+}
+
+// === Phone home: what plays on another device (a speaker, the phone's own app), with Pause / Play and Next ===
+let connectStripReading = null;  // the strip's last /me/player reading (its controls are built from it)
+let _connectHomeBusy = false, _connectHomeSoon = null;
+function connectHomeShows() {
+  const card = $("homeCard"), view = $("homeView");
+  return !!(card && view && card.style.display !== "none" && view.style.display !== "none");
+}
+async function connectHomeTick() {
+  connectRenderHome();
+  if (!$("connectNowOn")) return;
+  if (radioActive || !spotifyToken || !connectOnPhone()) { connectStripShow(null); return; }
+  if (!connectHomeShows() || !pollVisible() || _connectHomeBusy) return;
+  _connectHomeBusy = true;
+  try {
+    const token = await getSpotifyToken();
+    if (!token) return;
+    if (!connectLoaded) connectRefresh(true);  // one device list read, for the Home row's default
+    connectStripShow(await getCurrentlyPlaying(token));
+  } finally { _connectHomeBusy = false; }
+}
+function connectHomeSoon(ms) {
+  clearTimeout(_connectHomeSoon);
+  _connectHomeSoon = setTimeout(() => { _connectHomeSoon = null; connectHomeTick(); }, ms);
+}
+function connectStripShow(data) {
+  const strip = $("connectNowOn");
+  if (!strip) return;
+  const d = data && data.device, item = data && data.item;
+  const show = !!(d && item && !(sdkDeviceId && d.id === sdkDeviceId));
+  connectStripReading = show ? data : null;
+  strip.hidden = !show;
+  if (!show) return;
+  connectSetText("connectNowDevice", d.name || "another device");
+  const artists = (item.artists || []).map(a => a && a.name).filter(Boolean).join(", ");
+  connectSetText("connectNowTrack", (item.name || "") + (artists ? " · " + artists : ""));
+  const ic = $("connectNowIcon");
+  if (ic) ic.className = "ph " + connectDeviceIcon(d.type) + " connect-now-icon";
+  const btn = $("connectNowToggle");
+  if (btn) {
+    btn.setAttribute("aria-label", data.is_playing ? "Pause" : "Play");
+    btn.innerHTML = '<i class="ph-fill ' + (data.is_playing ? "ph-pause" : "ph-play") + '" aria-hidden="true"></i>';
+  }
+}
+// The strip's controls act on the reading it shows (not radioPaused: that belongs to a radio this window does not run)
+async function connectNowControl(action) {
+  const r = connectStripReading;
+  if (!r) return;
+  const req = radioTransportRequest(action, !r.is_playing);
+  if (!req) return;
+  const token = await getSpotifyToken();
+  if (!token) return;
+  try { await fetch("https://api.spotify.com/v1" + req.path, { method: req.method, headers: { Authorization: "Bearer " + token } }); } catch (e) {}
+  if (action === "toggle" && connectStripReading === r) { r.is_playing = !r.is_playing; connectStripShow(r); }
+  connectHomeSoon(1500);  // re-read the strip (pollSoon reads for a radio, which this window does not run)
+}
+
+function connectStopTimers() {
+  clearInterval(connectTimer); connectTimer = null;
+  clearTimeout(_connectHomeSoon); _connectHomeSoon = null;
+}
+
+if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined" && document.addEventListener) {
+  // A window that comes back to the front re-reads when its radio plays on another device (and the phone strip)
+  document.addEventListener("visibilitychange", () => {
+    if (!pollVisible()) return;
+    if (radioActive && !sdkPlaying()) pollNowPlaying();
+    connectHomeTick();
+  });
+  setInterval(connectHomeTick, POLL_INTERVAL);
+  document.addEventListener("DOMContentLoaded", () => { connectRender(); connectHomeTick(); });
+  // The dropdown closes on a tap or a focus outside it; the sheet keeps the focus inside
+  document.addEventListener("pointerdown", e => {
+    if (!connectIsOpen() || connectOnPhone()) return;
+    const list = $("connectList");
+    if (list.contains(e.target) || (connectOpenFrom && connectOpenFrom.contains(e.target))) return;
+    connectClose(true);
+  });
+  document.addEventListener("focusin", e => {
+    if (!connectIsOpen()) return;
+    const list = $("connectList");
+    if (list.contains(e.target) || (connectOpenFrom && connectOpenFrom.contains(e.target))) return;
+    if (connectOnPhone()) connectFocusFirst(); else connectClose(true);
+  });
+  // Crossing the phone breakpoint turns the dropdown into a sheet or back: close rather than show the wrong one
+  try { window.matchMedia("(max-width:720px)").addEventListener("change", () => connectClose(true)); } catch (e) {}
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone, connectPick, connectTransfer, connectSetCurrent, connectCurrentPosition };
+  module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone, connectPick, connectTransfer, connectSetCurrent, connectCurrentPosition,
+    connectRowHtml, connectOpen, connectClose, connectRefresh, connectRender, connectHomeTick, connectHomeTarget, connectNowControl };
 }
