@@ -45,5 +45,64 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   assert.deepEqual(connectDeviceRows([dev(null, "Ghost", "Speaker")], ctx).rows.map(x => x.id), ["me"]);
   assert.equal(connectOnPhone(), false);
 
+  // === picking a device ===
+  const run = code => vm.runInThisContext(code);
+  const fetches = [], plays = [], toasts = [], soon = [];
+  let fetchStatus = 200, slowFetch = false, spotifyPlayOk = true;
+  global.fetch = async (url, opts) => {
+    fetches.push({ url, method: opts && opts.method, body: opts && opts.body });
+    if (slowFetch) await new Promise(r => setTimeout(r, 20));
+    return { ok: fetchStatus >= 200 && fetchStatus < 300, status: fetchStatus };
+  };
+  global.spotifyPlay = async (token, uris, pos) => { plays.push({ uris, pos }); return spotifyPlayOk; };
+  global.spotifyResetPlayMode = async () => {};
+  global.getSpotifyToken = async () => "tok";
+  global.showStatus = (msg, kind) => toasts.push([msg, kind]);
+  global.pollSoon = ms => soon.push(ms);
+  global.getSpotifyDevices = async () => [dev("k", "Kitchen", "Speaker")];
+  function setupRadio(o) {
+    fetches.length = 0; plays.length = 0; fetchStatus = 200; slowFetch = false; spotifyPlayOk = true;
+    run(`radioActive = true; sdkReady = false; playbackDeviceId = null; connectBusy = false; connectDevices = [];
+      matchedUris = { 0: "spotify:track:a", 1: "spotify:track:b", 2: "spotify:track:c" }; allTrackCount = 3;
+      radioContextLastUri = ${o.unsent ? '"spotify:track:b"' : '"spotify:track:c"'}; radioPendingReissue = false;
+      radioCurrentUri = ${JSON.stringify(o.current || "spotify:track:b")}; radioPaused = ${!!o.paused};
+      remoteNow = { uri: radioCurrentUri, pos: ${o.pos || 0}, dur: 200000, playing: false, at: Date.now() };`);
+  }
+  // no radio: the pick only sets the device
+  run("radioActive = false; playbackDeviceId = null; connectBusy = false;");
+  assert.equal(await connectPick("k"), true);
+  assert.equal(run("playbackDeviceId"), "k"); assert.equal(fetches.length, 0); assert.equal(plays.length, 0);
+  // radio with unsent songs: a full play from the current song at the current position
+  setupRadio({ unsent: true, current: "spotify:track:b", pos: 42000 });
+  await connectPick("k");
+  assert.deepEqual(plays[0].uris, ["spotify:track:b", "spotify:track:c"]); assert.equal(plays[0].pos, 42000);
+  // radio with nothing unsent: a transfer that keeps the play state
+  setupRadio({ unsent: false, paused: true });
+  await connectPick("k");
+  assert.deepEqual(JSON.parse(fetches[0].body), { device_ids: ["k"], play: false });
+  // failure: previous device back, the exact toast
+  setupRadio({ unsent: false }); fetchStatus = 404;
+  assert.equal(await connectPick("k"), false);
+  assert.equal(run("playbackDeviceId"), null);
+  assert.deepEqual(toasts.at(-1), ["Couldn't play on Kitchen. Play something on it from the Spotify app, then try again.", "error"]);
+  // a failed full play too
+  setupRadio({ unsent: true }); spotifyPlayOk = false;
+  assert.equal(await connectPick("k"), false); assert.equal(run("playbackDeviceId"), null);
+  // the current device sends nothing
+  setupRadio({ unsent: false }); run("playbackDeviceId = 'k';");
+  assert.equal(await connectPick("k"), true); assert.equal(fetches.length + plays.length, 0);
+  // this browser means no followed device
+  setupRadio({ unsent: false }); run("sdkReady = true; sdkDeviceId = 'me'; playbackDeviceId = 'k';");
+  await connectPick("me"); assert.equal(run("playbackDeviceId"), null); run("sdkReady = false; sdkDeviceId = null;");
+  // a second tap while the first is in flight sends one request
+  setupRadio({ unsent: false }); slowFetch = true;
+  await Promise.all([connectPick("k"), connectPick("k")]); assert.equal(fetches.length, 1);
+  // every pick re-reads soon
+  assert.ok(soon.length > 0 && soon.every(ms => ms === 1500));
+  // position: remote reading extrapolated while playing
+  run("remoteNow = { pos: 1000, at: Date.now() - 500, playing: true };");
+  const cp = connectCurrentPosition(); assert.ok(cp >= 1500 && cp < 2000);
+
+  stopPolling();  // a successful pick starts the poll interval
   console.log("connect: ok");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -10,6 +10,13 @@ function stopPolling() {
   nowPlayingIndex = -1;
 }
 
+// One extra read after ms (a pick has just moved the music), replacing any pending one
+let _pollSoonTimer = null;
+function pollSoon(ms) {
+  if (_pollSoonTimer) clearTimeout(_pollSoonTimer);
+  _pollSoonTimer = setTimeout(() => { _pollSoonTimer = null; pollNowPlaying(); }, ms);
+}
+
 let _pollBusy = false, _emptyPolls = 0;
 async function pollNowPlaying() {
   if (sdkPlaying() || _pollBusy) return;

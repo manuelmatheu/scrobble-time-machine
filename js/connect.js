@@ -88,6 +88,70 @@ function connectDefaultDevice(devices, ctx) {
   return rows.find(r => r.active) || null;
 }
 
+// === Picking a device ===
+let connectDevices = [];   // the last device list read (a refresh fills it)
+let connectBusy = false;   // a pick is in flight
+
+// PUT /me/player: move the session to a device. Resolves to the HTTP status (0 on a network error).
+async function connectTransfer(token, id, play) {
+  try {
+    const res = await fetch("https://api.spotify.com/v1/me/player", {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ device_ids: [id], play: !!play })
+    });
+    return res.status;
+  } catch (e) { return 0; }
+}
+
+// Where the current song is now, in ms
+function connectCurrentPosition() {
+  if (sdkPlaying()) return _sdkPositionMs || 0;
+  if (remoteNow && remoteNow.playing) return Math.max(0, Math.round(remoteNow.pos + (Date.now() - remoteNow.at)));
+  return remoteNow ? Math.max(0, remoteNow.pos || 0) : 0;
+}
+
+async function connectPick(id) {
+  if (connectBusy) return false;
+  connectBusy = true;
+  try {
+    const currentId = playbackDeviceId || (sdkReady ? sdkDeviceId : null);
+    if (id === currentId) { if (typeof connectClose === "function") connectClose(); return true; }
+    const token = await getSpotifyToken();
+    if (!token) return false;
+    let d = connectDevices.find(x => x && x.id === id);
+    if (!d) {
+      try { d = ((await getSpotifyDevices(token)) || []).find(x => x && x.id === id); } catch (e) { d = null; }
+    }
+    if (!d) d = { id, name: id === sdkDeviceId ? "this browser" : "that device", type: "" };
+    const prev = playbackDeviceId ? { id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType } : null;
+    const target = id === sdkDeviceId ? null : { id, name: d.name, type: d.type };
+    setPlaybackDevice(target);
+    let ok = true;
+    if (radioActive) {
+      const unsent = radioUnsentUris().length > 0 || radioPendingReissue;
+      if (unsent) {
+        const cur = sdkPlaying() ? _sdkCurrentUri : radioCurrentUri;
+        ok = !!(await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), connectCurrentPosition()));
+      } else {
+        const status = await connectTransfer(token, id, !radioPaused);
+        ok = status >= 200 && status < 300;
+        if (ok) await spotifyResetPlayMode(token, id);
+      }
+    }
+    if (ok) {
+      if (!pollTimer) startPolling();
+      if (typeof connectClose === "function") connectClose();
+    } else {
+      setPlaybackDevice(prev);
+      showStatus("Couldn't play on " + d.name + ". Play something on it from the Spotify app, then try again.", "error");
+      if (typeof connectRefresh === "function") connectRefresh(false);
+    }
+    pollSoon(1500);
+    return ok;
+  } finally { connectBusy = false; }
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone };
+  module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone, connectPick, connectTransfer, connectCurrentPosition };
 }
