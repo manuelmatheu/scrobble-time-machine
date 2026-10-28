@@ -159,7 +159,7 @@ Errors and warnings float at the bottom center of the screen (16px from the edge
 Under the now-playing card: a 60px-min row in a `--bg-secondary` card with a speaker icon (`--spotify-green-text`), "Playing on **Device**" (the name in `--text-primary`, 700; a kind line after it such as Speaker or Computer) and a **Change** button on the right (44px tall, 1.5px `--spotify-green` border, green text, caret). While Spotify reports nothing the bar reads "Checking what's playing..." with a grey icon.
 
 ### Device list (`.connect-list`)
-A dialog titled **Play on** with a Refresh button in its head. On wide screens a dropdown under the Change that opened it; below 720px a bottom sheet with a grab handle over a `--scrim` backdrop. Rows are 56px minimum (60px in the sheet): icon, name, kind, a green check on the current one. Restricted devices (Sonos) follow, greyed out and not selectable, with the reason as the second line. A hint closes the list ("Don't see a speaker? Play something on it once from the Spotify app, then Refresh."). The dropdown opens with a short pop-in (opacity, a small rise and scale) and the sheet slides up from the bottom; no overshoot, both off under reduced motion.
+A dialog titled **Play on** with a Refresh button in its head. On wide screens a dropdown under the Change that opened it; below 720px a bottom sheet with a grab handle over a `--scrim` backdrop. Rows are 56px minimum (60px in the sheet): icon, name, kind, a green check on the current one. Restricted devices (Sonos) follow, greyed out and not selectable, with the reason as the second line. A hint closes the list ("Don't see a speaker? Play something on it once from the Spotify app, then Refresh."). The dropdown opens with a short pop-in (opacity, a small drop and scale) and the sheet slides up from the bottom; no overshoot, both off under reduced motion.
 
 ### Home "Plays on" row (`.connect-home`)
 On the connected home card: a device icon, "Plays on **This browser**" (or the picked or followed device) and the same **Change** button, opening the same list.
@@ -178,7 +178,7 @@ Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify
 - **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and two numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Connect Spotify** (disabled until there is a username; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
 - **Connected, idle:** headline, `username · N scrobbles`, station tabs and panel (Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
-- **Plays on row:** under the options, "Plays on <device>" with Change. On phones a strip above the card shows what plays on another device (Pause/Next).
+- **Plays on row:** under the options, "Plays on <device>" with Change. On phones a strip inside the card, above the username field and buttons (`.controls`), shows what plays on another device (Pause/Next).
 - **Wide desktop (>=1100px):** the same card, centered at 680px.
 
 ### Radio view (`#radioView`, Library / Discover / Mix)
