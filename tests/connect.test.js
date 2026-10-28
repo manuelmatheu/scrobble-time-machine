@@ -88,6 +88,14 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   // a failed full play too
   setupRadio({ unsent: true }); spotifyPlayOk = false;
   assert.equal(await connectPick("k"), false); assert.equal(run("playbackDeviceId"), null);
+  // spotifyPlay falling back to this browser (device not listed) is a failed pick
+  setupRadio({ unsent: true }); run("playbackDeviceId = 'z'; playbackDeviceName = 'Den'; playbackDeviceType = 'TV';");
+  const realPlay = global.spotifyPlay;
+  global.spotifyPlay = async () => { run("setPlaybackDevice(null);"); return true; };
+  assert.equal(await connectPick("k"), false);
+  assert.equal(run("playbackDeviceId"), "z");
+  assert.deepEqual(toasts.at(-1), ["Couldn't play on Kitchen. Play something on it from the Spotify app, then try again.", "error"]);
+  global.spotifyPlay = realPlay;
   // the current device sends nothing
   setupRadio({ unsent: false }); run("playbackDeviceId = 'k';");
   assert.equal(await connectPick("k"), true); assert.equal(fetches.length + plays.length, 0);

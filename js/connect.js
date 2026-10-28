@@ -133,6 +133,8 @@ async function connectPick(id) {
       if (unsent) {
         const cur = sdkPlaying() ? _sdkCurrentUri : radioCurrentUri;
         ok = !!(await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), connectCurrentPosition()));
+        // spotifyPlay falls back to this browser (and returns true) when the device is not listed: that is not the pick
+        if (ok && playbackDeviceId !== (target ? target.id : null)) ok = false;
       } else {
         const status = await connectTransfer(token, id, !radioPaused);
         ok = status >= 200 && status < 300;
