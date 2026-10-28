@@ -104,6 +104,20 @@ async function connectTransfer(token, id, play) {
   } catch (e) { return 0; }
 }
 
+// The device Spotify reports as playing (null: checking). The bar (Task 4) renders it.
+let connectCurrent = null;
+function connectSetCurrent(device) {
+  connectCurrent = device ? { id: device.id, name: device.name, type: device.type } : null;
+  if (typeof connectRender === "function") connectRender();
+}
+
+// A window that comes back to the front re-reads when its radio plays on another device
+if (typeof window !== "undefined" && window.addEventListener && typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("visibilitychange", () => {
+    if (pollVisible() && radioActive && !sdkPlaying()) pollNowPlaying();
+  });
+}
+
 // Where the current song is now, in ms
 function connectCurrentPosition() {
   if (sdkPlaying()) return _sdkPositionMs || 0;
@@ -155,5 +169,5 @@ async function connectPick(id) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone, connectPick, connectTransfer, connectCurrentPosition };
+  module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone, connectPick, connectTransfer, connectSetCurrent, connectCurrentPosition };
 }

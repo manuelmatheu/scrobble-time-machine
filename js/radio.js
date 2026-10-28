@@ -745,6 +745,19 @@ function radioResetHero() {
   if ($("radioMoment")) $("radioMoment").style.display = "none";
 }
 
+// No reading to vouch for: a neutral hero instead of the last song
+function radioShowChecking() {
+  radioHeroLive = false; radioNowLabel = ""; radioNowPaused = false;
+  const set = (id, t) => { const el = $(id); if (el) el.textContent = t; };
+  set("radioTrack", "Checking what's playing…"); set("radioArtist", "");
+  const art = $("radioArt");
+  if (art) { if (art.removeAttribute) art.removeAttribute("src"); if (art.classList) art.classList.remove("failed"); }
+  radioArtUrl = "";
+  if ($("radioFill")) $("radioFill").style.width = "0";
+  set("radioElapsed", "0:00"); set("radioDuration", "0:00");
+  if ($("radioPlay")) $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
+}
+
 // The "why this track" chip next to NOW PLAYING (Discover only)
 function radioShowSource(text, past) {
   const el = $("radioSource");

@@ -111,6 +111,34 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   run("remoteNow = { pos: 1000, at: Date.now() - 500, playing: true };");
   const cp = connectCurrentPosition(); assert.ok(cp >= 1500 && cp < 2000);
 
+  // === what's playing is always true ===
+  let readings = [];
+  global.getCurrentlyPlaying = async () => readings.length ? readings.shift() : null;
+  const els = {};
+  ["radioTrack", "radioArtist", "radioArt", "radioPlay", "radioElapsed", "radioDuration", "radioFill"].forEach(n => {
+    els[n] = { textContent: "", innerHTML: "", style: {}, removeAttribute() {}, classList: { add() {}, remove() {} } };
+  });
+  global.document.getElementById = id => els[id] || null;
+  const heroText = () => els.radioTrack.textContent;
+  // the bar shows the device Spotify reports, even for music that is not the radio
+  setupRadio({}); readings = [{ item: { uri: "spotify:track:zzz", duration_ms: 1 }, device: { id: "k", name: "Kitchen", type: "Speaker" }, is_playing: true }];
+  await run("pollNowPlayingOnce()");
+  assert.equal(run("connectCurrent.id"), "k");
+  assert.equal(run("connectCurrent.name"), "Kitchen");
+  // two empty readings: the neutral hero, never the old song
+  setupRadio({}); readings = [null, null]; els.radioTrack.textContent = "Old song";
+  await run("pollNowPlayingOnce()"); assert.notEqual(heroText(), "Checking what's playing\u2026");
+  await run("pollNowPlayingOnce()"); assert.equal(heroText(), "Checking what's playing\u2026");
+  assert.equal(run("connectCurrent"), null);
+  assert.equal(run("radioHeroLive"), false);
+  // a hidden page with no radio does not poll; a hidden radio window does
+  run("radioActive = false;"); global.document.visibilityState = "hidden"; fetches.length = 0;
+  let asked = 0; global.getCurrentlyPlaying = async () => { asked++; return null; };
+  await run("pollNowPlaying()"); assert.equal(asked, 0);
+  setupRadio({}); await run("pollNowPlaying()"); assert.equal(asked, 1);
+  global.document.visibilityState = "visible";
+  assert.equal(run("pollVisible()"), true);
+
   stopPolling();  // a successful pick starts the poll interval
   console.log("connect: ok");
 })().catch(e => { console.error(e); process.exit(1); });

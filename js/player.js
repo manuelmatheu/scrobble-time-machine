@@ -18,8 +18,13 @@ function pollSoon(ms) {
 }
 
 let _pollBusy = false, _emptyPolls = 0;
+// connect.js loads after this file (and the radio test without it): reach the bar through a guard
+function setCurrentDevice(d) { if (typeof connectSetCurrent === "function") connectSetCurrent(d); }
+// A hidden page does not poll, unless it drives a radio (it tops up and seams the music on another device)
+function pollVisible() { return typeof document === "undefined" || document.visibilityState !== "hidden"; }
 async function pollNowPlaying() {
   if (sdkPlaying() || _pollBusy) return;
+  if (!pollVisible() && !radioActive) return;
   _pollBusy = true;
   try { await pollNowPlayingOnce(); } finally { _pollBusy = false; }
 }
@@ -27,10 +32,15 @@ async function pollNowPlayingOnce() {
   const token = await getSpotifyToken();
   if (!token) return;
   const data = await getCurrentlyPlaying(token);
+  if (data && data.device) setCurrentDevice(data.device);  // the bar shows what Spotify reports, even for outside music
   if (!data || !data.item) {
-    // Spotify drops a followed device that sat idle: /me/player then comes back empty for good. Let go of it, or the controls
-    // keep talking to a device that is gone
-    if (playbackDeviceId && ++_emptyPolls >= 2) releaseDeadDevice(false);
+    // Two empty readings in a row: show nothing we cannot vouch for, not the old song
+    if (++_emptyPolls >= 2) {
+      if (radioActive) { radioShowChecking(); setCurrentDevice(null); }
+      // Spotify drops a followed device that sat idle: /me/player then comes back empty for good. Let go of it, or the
+      // controls keep talking to a device that is gone
+      if (playbackDeviceId) releaseDeadDevice(false);
+    }
     return;
   }
   _emptyPolls = 0;
@@ -102,6 +112,7 @@ function onSDKStateChange(state) {
     if (foreign || state.paused) return;  // keep this window's own song and position for Play
     sdkInactive = false; if (sessionPaused) { sessionPaused = false; hideStatus(); }  // this window has the music again
   }
+  setCurrentDevice({ id: sdkDeviceId, name: "This browser", type: "Computer" });
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
