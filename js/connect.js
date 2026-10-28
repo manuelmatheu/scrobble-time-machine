@@ -264,7 +264,7 @@ function connectOpen(fromEl) {
   list.onanimationend = () => { if (!list.hidden) connectReveal(list); };  // the page only scrolls that far once the list is full size
   connectRefresh(false);
   clearInterval(connectTimer);
-  connectTimer = setInterval(() => connectRefresh(true), CONNECT_REFRESH_MS);
+  connectTimer = setInterval(connectTick, CONNECT_REFRESH_MS);
 }
 
 // Escape, a scrim tap, a pick, Change again: close, and give the focus back to Change (noFocus: the user went elsewhere)
@@ -275,7 +275,7 @@ function connectClose(noFocus) {
   list.hidden = true;
   const scrim = $("connectScrim");
   if (scrim) scrim.hidden = true;
-  document.body.classList.remove("connect-locked");
+  if (document.body) document.body.classList.remove("connect-locked");
   const from = connectOpenFrom;
   connectOpenFrom = null;
   connectWantFocus = false;
@@ -329,6 +329,31 @@ function connectRenderList() {
   }
 }
 
+// The open list's 4 s tick: closes when the Change that opened it is no longer shown (its view was hidden); a hidden page does not read
+function connectAnchorShown() {
+  const a = connectOpenFrom;
+  return !a || !a.getClientRects || a.getClientRects().length > 0;
+}
+function connectCheckAnchor() {
+  if (connectIsOpen() && !connectAnchorShown()) connectClose(true);
+}
+function connectTick() {
+  if (!connectIsOpen()) { clearInterval(connectTimer); connectTimer = null; return; }
+  connectCheckAnchor();
+  if (!connectIsOpen() || !pollVisible()) return;
+  connectRefresh(true);
+}
+
+// GET /me/player/devices for the picker: the devices, or null when the read failed (getSpotifyDevices returns [] then)
+async function connectReadDevices(token) {
+  try {
+    const r = await fetch("https://api.spotify.com/v1/me/player/devices", { headers: { Authorization: "Bearer " + token } });
+    if (!r || !r.ok) return null;
+    const j = await r.json();
+    return j && Array.isArray(j.devices) ? j.devices : [];
+  } catch (e) { return null; }
+}
+
 // Read the device list. Quiet (the 4 s timer): rebuild only when the rows changed, so a tap never lands on a row that moved
 async function connectRefresh(quiet) {
   if (connectRefreshing) { if (!quiet) connectRefreshAgain = true; return; }
@@ -339,9 +364,9 @@ async function connectRefresh(quiet) {
   try {
     const token = await getSpotifyToken();
     if (!token) return;
-    let devices;
-    try { devices = await getSpotifyDevices(token); } catch (e) { return; }
-    connectDevices = devices || [];
+    const devices = await connectReadDevices(token);
+    if (!devices) return;  // a failed read is not an empty list: keep what is shown
+    connectDevices = devices;
     connectLoaded = true;
     connectRenderHome();
     if (!connectIsOpen()) return;
@@ -432,6 +457,7 @@ if (typeof window !== "undefined" && window.addEventListener && typeof document 
     if (!pollVisible()) return;
     if (radioActive && !sdkPlaying()) pollNowPlaying();
     connectHomeTick();
+    if (connectIsOpen()) connectTick();  // the open list was not read while hidden: once now
   });
   setInterval(connectHomeTick, POLL_INTERVAL);
   document.addEventListener("DOMContentLoaded", () => { connectRender(); connectHomeTick(); });
@@ -454,5 +480,5 @@ if (typeof window !== "undefined" && window.addEventListener && typeof document 
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { connectDeviceRows, connectDeviceIcon, connectRestrictedLine, connectSameRows, connectDefaultDevice, connectOnPhone, connectPick, connectTransfer, connectSetCurrent, connectCurrentPosition,
-    connectRowHtml, connectOpen, connectClose, connectRefresh, connectRender, connectHomeTick, connectHomeTarget, connectNowControl };
+    connectRowHtml, connectOpen, connectClose, connectRefresh, connectRender, connectHomeTick, connectHomeTarget, connectNowControl, connectTick, connectCheckAnchor };
 }

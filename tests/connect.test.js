@@ -177,6 +177,34 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   run("radioMinimized = true;"); radioShowChecking();
   assert.equal(els.radioPlayingTrack.textContent, "Checking what's playing…");
   run("radioMinimized = false;");
+
+  // === the open list: hidden pages do not read, a failed read keeps the rows, a hidden anchor closes it ===
+  const devReads = () => fetches.filter(f => /\/me\/player\/devices$/.test(f.url)).length;
+  let shownRect = [1];
+  global.__opener = { getClientRects: () => shownRect, setAttribute() {}, focus() {} };
+  els.connectList = { hidden: false, contains: () => false, querySelector: () => null };
+  els.connectRows = { innerHTML: "ROWS", contains: () => false, querySelectorAll: () => [] };
+  run("connectOpenFrom = globalThis.__opener; connectBusy = false; connectRefreshing = false; sdkReady = false; playbackDeviceId = null;");
+  run("connectDevices = [{ id: 'k', name: 'Kitchen', type: 'Speaker', is_active: true }]; connectShown = connectDeviceRows(connectDevices, connectCtx());");
+  // a hidden page: the 4 s tick reads nothing
+  global.document.visibilityState = "hidden"; fetches.length = 0;
+  connectTick(); await new Promise(r => setTimeout(r, 10));
+  assert.equal(devReads(), 0);
+  global.document.visibilityState = "visible";
+  // a failed read (429 / 5xx) keeps the devices and the rows shown
+  fetchStatus = 503;
+  await connectRefresh(true);
+  assert.equal(devReads(), 1);
+  assert.deepEqual(run("connectDevices.map(d => d.id)"), ["k"]);
+  assert.equal(els.connectRows.innerHTML, "ROWS");
+  fetchStatus = 200;
+  // the view holding the Change was hidden: the list closes and its timer stops
+  run("connectTimer = setInterval(() => {}, 100000);");
+  shownRect = [];
+  connectTick();
+  assert.equal(els.connectList.hidden, true);
+  assert.equal(run("connectTimer"), null);
+  delete els.connectList; delete els.connectRows;
   connectStopTimers();
 
   stopPolling();  // a successful pick starts the poll interval

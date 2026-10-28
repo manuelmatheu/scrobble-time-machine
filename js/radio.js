@@ -884,6 +884,7 @@ function showRadioView() {
   radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
+  if (typeof connectCheckAnchor === "function") connectCheckAnchor();  // a Play on list opened from Home goes with it
   $("radioTitle").textContent = radioSessionTitle(radioActiveStation, radioActiveHow, radioActiveYear);
   radioResetHero();
   radioRenderQueue();
@@ -895,6 +896,7 @@ function hideRadioView() {
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
   $("radioUpNext").innerHTML = "";
+  if (typeof connectCheckAnchor === "function") connectCheckAnchor();  // a Play on list opened from the bar goes with the view
   radioQueueShown = []; radioHeroKey = "";
   restartClass($("homeView"), "view-in");
   radioResetHero();
@@ -906,6 +908,7 @@ function radioMinimize() {
   radioMinimized = true; radioSyncHome();
   $("radioView").style.display = "none";
   $("homeView").style.display = "";
+  if (typeof connectCheckAnchor === "function") connectCheckAnchor();
   restartClass($("homeView"), "view-in");
 }
 
@@ -915,6 +918,7 @@ function radioReopen() {
   radioMinimized = false; radioSyncHome();
   $("homeView").style.display = "none";
   $("radioView").style.display = "";
+  if (typeof connectCheckAnchor === "function") connectCheckAnchor();
   window.scrollTo(0, 0);
 }
 
