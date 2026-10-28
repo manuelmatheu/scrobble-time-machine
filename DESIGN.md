@@ -68,6 +68,8 @@ Defined on `:root` (dark) and overridden under `[data-theme="light"]`. Never har
 | `--on-accent` | `#ffffff` | same | text on a red fill (primary button) |
 | `--on-spotify` | `#0b0b0f` | same | text on a green fill (Connect Spotify) |
 | `--spotify-green-subtle` / `--spotify-green-border` | `rgba(29,185,84,.08)` / `.25` | same | Spotify badge fill and border, Save this moment hover |
+| `--spotify-green-text` | `#1DB954` | `#0f6b2f` | green as text or an icon (Playing on icon, Change button, current row); fills and borders keep `--spotify-green` |
+| `--scrim` | `rgba(0,0,0,.62)` | `.35` alpha | dims the page under the device sheet |
 | `--shadow-float` | `0 12px 32px rgba(0,0,0,.35)` | `.12` alpha | floating lists only (toasts) |
 
 The token lines are the first two lines of `style.css` (the contrast test reads them by line number). No hex or `rgba()` appears below them; `tests/design-system.test.js` fails if one does.
@@ -153,6 +155,18 @@ Equalizer icon + "**Playing now** · title · artist" (or "Paused") in a `--bg-t
 ### Toast (`.toast`, `showStatus()`)
 Errors and warnings float at the bottom center of the screen (16px from the edge, above everything, max 520px, full width minus 16px gutters on phones), one at a time; a new message replaces the current one and the same message again only keeps it up longer. Neutral warnings invert the page (`--text-primary` fill, `--bg-primary` text, like the play button); errors take the accent (`--lastfm-red` fill, `--on-accent` text, checked in `tests/contrast.test.js`). Each has an icon (info or warning circle), the text (wraps, never truncated), and a 44px close button. It slides up on a short spring (`toast-in`, 0.28s) and slides away; warnings stay 6s and errors 9s, hovering or focusing it holds it, leaving re-arms 2.5s. It lives in a persistent polite live region (`#toastHost`, `role="status"`), so screen readers announce it when it appears. Progress text is not shown, and a success message dismisses the current toast (the problem it reported is over).
 
+### Playing on bar (`.connect-bar`)
+Under the now-playing card: a 60px-min row in a `--bg-secondary` card with a speaker icon (`--spotify-green-text`), "Playing on **Device**" (the name in `--text-primary`, 700; a kind line after it such as Speaker or Computer) and a **Change** button on the right (44px tall, 1.5px `--spotify-green` border, green text, caret). While Spotify reports nothing the bar reads "Checking what's playing..." with a grey icon.
+
+### Device list (`.connect-list`)
+A dialog titled **Play on** with a Refresh button in its head. On wide screens a dropdown under the Change that opened it; below 720px a bottom sheet with a grab handle over a `--scrim` backdrop. Rows are 44px minimum: icon, name, kind, a green check on the current one. Restricted devices (Sonos) follow, greyed out and not selectable, with the reason as the second line. A hint closes the list ("Don't see a speaker? Play something on it once from the Spotify app, then Refresh."). Fade-in only, no overshoot; off under reduced motion.
+
+### Home "Plays on" row (`.connect-home`)
+On the connected home card: a device icon, "Plays on **This browser**" (or the picked or followed device) and the same **Change** button, opening the same list.
+
+### Phone strip (`.connect-now`)
+Phones only, on Home while something plays on another device (a speaker, the phone's own Spotify app): speaker icon, "Playing on **Device**" with the track under it, and Pause/Play and Next buttons that act on what the strip shows.
+
 ### Spotify badge
 Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify connected" with a small dot and an x to disconnect (20px visible, 44px hit area), in the header.
 
@@ -164,10 +178,11 @@ Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify
 - **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and two numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Connect Spotify** (disabled until there is a username; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
 - **Connected, idle:** headline, `username · N scrobbles`, station tabs and panel (Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
+- **Plays on row:** under the options, "Plays on <device>" with Change. On phones a strip above the card shows what plays on another device (Pause/Next).
 - **Wide desktop (>=1100px):** the same card, centered at 680px.
 
 ### Radio view (`#radioView`, Library / Discover / Mix)
-Top bar: **Home** on the left, the station label (LIBRARY / DISCOVER / MIX RADIO) in small red caps on the right. Then the now-playing card, the moment panel (Moments only), the artist panel and **Up next**. With Library options the label names them (LIBRARY RADIO · MOMENTS · 2014). The first row after the current track can show a "Tuning..." placeholder while more tracks load. Returning home does not stop the music.
+Top bar: **Home** on the left, the station label (LIBRARY / DISCOVER / MIX RADIO) in small red caps on the right. Then the now-playing card, the Playing on bar, the moment panel (Moments only), the artist panel and **Up next**. With Library options the label names them (LIBRARY RADIO · MOMENTS · 2014). The first row after the current track can show a "Tuning..." placeholder while more tracks load. Returning home does not stop the music.
 
 ### Changelog overlay
 Full-screen overlay (title and close button in its own header) with an iframe of `changelog.html`. Inside the overlay the page hides its own title block and back link (a `framed` class set before first paint), so the title appears once; standalone, the title, subtitle, back link and entries share one 680px column and one left edge.

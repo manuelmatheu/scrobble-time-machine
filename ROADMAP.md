@@ -2,7 +2,18 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.11 (current) ✅
+## v2.12 (current) ✅
+
+- [x] Play on: pick a speaker from the app, before starting or mid-session (a running radio moves with its queue); the list shows this browser first, other devices after, Sonos greyed out
+- [x] Playing on bar under the player; every window shows the device Spotify reports, and follows when the music moves (Spotify app, another window) within a few seconds
+- [x] Home "Plays on" row, and a phone strip with Pause/Next while something plays on another device
+- [x] Device list refreshes only while open and visible; a failed read keeps the rows; hidden pages do not poll (except a radio playing on another device)
+- [x] Tokens `--spotify-green-text` and `--scrim`
+- [ ] Next: session hand-off between devices (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2)
+
+---
+
+## v2.11 ✅
 
 - [x] Time Travel folded into Library radio (Design canvas "Time Travel into Radio", https://claude.ai/artifact/FxeAUu2yox3QMPWRoxfPbh): the nine mode cards are gone
 - [x] Library **How it plays**: Songs (random scrobbles) or Moments (a stretch of consecutive scrobbles in the order played, then a jump to another moment: an endless Random mode)
