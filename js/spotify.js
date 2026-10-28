@@ -217,6 +217,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
     // SDK play failed — fall through to remote
   }
+  // opts.sdkOnly: only this browser's player will do (a pick of This browser): no other device, so a success means it plays here
+  if (opts && opts.sdkOnly) return false;
 
   // The swap at the seam on another device: no device list, transfer or resets (the session's first play did them); straight to the
   // picked device, or wherever Spotify is already playing. If that fails the full logic below runs.

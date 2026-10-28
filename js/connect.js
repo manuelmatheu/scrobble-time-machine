@@ -111,19 +111,27 @@ function connectSetCurrent(device) {
   if (typeof connectRender === "function") connectRender();
 }
 
-// Where the current song is now, in ms
-function connectCurrentPosition() {
+// Where the song uri is now, in ms. Call it before the device changes (sdkPlaying() follows playbackDeviceId). A /me/player
+// reading only counts when it is of that song and fresh: another song's, or an old one extrapolated, would start it elsewhere
+function connectCurrentPosition(uri) {
   if (sdkPlaying()) return _sdkPositionMs || 0;
-  if (remoteNow && remoteNow.playing) return Math.max(0, Math.round(remoteNow.pos + (Date.now() - remoteNow.at)));
-  return remoteNow ? Math.max(0, remoteNow.pos || 0) : 0;
+  const r = remoteNow;
+  if (!r || !uri || r.uri !== uri || !(Date.now() - r.at < REMOTE_FRESH_MS)) return 0;
+  const pos = Math.max(0, Math.round((r.pos || 0) + (r.playing ? Date.now() - r.at : 0)));
+  return r.dur > 0 ? Math.min(pos, r.dur) : pos;
 }
 
 async function connectPick(id) {
   if (connectBusy) return false;
   connectBusy = true;
   try {
+    // A radio Spotify was sent. Before its first play (the first song is being picked) a pick only sets where it starts
+    const sent = radioActive && !!radioContextLastUri;
+    // Another window or app has the music (this window shows its radio paused): a pick brings this window's own queue back,
+    // even on the device it was on, and never moves their music
+    const elsewhere = sent && (sdkInactive || sessionPaused);
     const currentId = playbackDeviceId || (sdkReady ? sdkDeviceId : null);
-    if (id === currentId) { if (typeof connectClose === "function") connectClose(); return true; }
+    if (id === currentId && !elsewhere) { if (typeof connectClose === "function") connectClose(); return true; }
     const token = await getSpotifyToken();
     if (!token) return false;
     let d = connectDevices.find(x => x && x.id === id);
@@ -133,22 +141,40 @@ async function connectPick(id) {
     if (!d) d = { id, name: id === sdkDeviceId ? "this browser" : "that device", type: "" };
     const prev = playbackDeviceId ? { id: playbackDeviceId, name: playbackDeviceName, type: playbackDeviceType } : null;
     const target = id === sdkDeviceId ? null : { id, name: d.name, type: d.type };
+    const targetId = target ? target.id : null;
+    if (!sent) {
+      // Nothing to move, and nothing to read: an idle speaker reads empty, and empty readings are not a reason to drop the pick
+      setPlaybackDevice(target);
+      connectRenderHome();
+      if (typeof connectClose === "function") connectClose();
+      return true;
+    }
+    // Where the music is, read before the device changes
+    const cur = sdkPlaying() ? _sdkCurrentUri : radioCurrentUri;
+    const pos = connectCurrentPosition(cur);
+    const resume = elsewhere ? radioResumePoint() : null;
     setPlaybackDevice(target);
-    let ok = true;
-    if (radioActive) {
-      const unsent = radioUnsentUris().length > 0 || radioPendingReissue;
-      if (unsent) {
-        const cur = sdkPlaying() ? _sdkCurrentUri : radioCurrentUri;
-        ok = !!(await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), connectCurrentPosition()));
-        // spotifyPlay falls back to this browser (and returns true) when the device is not listed: that is not the pick
-        if (ok && playbackDeviceId !== (target ? target.id : null)) ok = false;
-      } else {
-        const status = await connectTransfer(token, id, !radioPaused);
-        ok = status >= 200 && status < 300;
-        if (ok) await spotifyResetPlayMode(token, id);
-      }
+    // This browser: only its own player counts (spotifyPlay would otherwise fall through to another device and report success)
+    const opts = target ? undefined : { sdkOnly: true };
+    const playFrom = async (uri, at) => {
+      const uris = radioUrisFrom(matchedUris, allTrackCount, uri);
+      if (!uris.length) return false;
+      // spotifyPlay falls back to this browser (and returns true) when the device is not listed: that is not the pick
+      return !!(await spotifyPlay(token, uris, at, opts)) && playbackDeviceId === targetId;
+    };
+    let ok;
+    if (elsewhere) {
+      ok = await playFrom(resume.last, resume.pos);
+      if (ok) { sdkInactive = false; sessionPaused = false; hideStatus(); }
+    } else if (radioUnsentUris().length > 0 || radioPendingReissue) {
+      ok = await playFrom(cur, pos);
+    } else {
+      const status = await connectTransfer(token, id, !radioPaused);
+      ok = status >= 200 && status < 300;
+      if (ok) await spotifyResetPlayMode(token, id);
     }
     if (ok) {
+      remoteNow = null;  // that reading was of the other device: the next one (pollSoon below) is of this one
       if (!pollTimer) startPolling();
       if (typeof connectClose === "function") connectClose();
     } else {

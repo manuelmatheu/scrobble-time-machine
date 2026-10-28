@@ -458,6 +458,7 @@ function beginSession() {
   currentPhase = "working"; updateRadioButton();
   $("cancelBtn").style.display = ""; $("usernameInput").disabled = true;
   searchCache = {}; sessionQueue = new Set(); sessionPaused = false; sdkInactive = false; stopPolling(); hideStatus();
+  if (typeof connectSetCurrent === "function") connectSetCurrent(null);  // the bar waits for this radio's first reading, not the last radio's device
 }
 function endSessionUI() {
   $("cancelBtn").style.display = "none"; $("usernameInput").disabled = false; updateRadioButton();
@@ -757,6 +758,13 @@ function radioShowChecking() {
   set("radioElapsed", "0:00"); set("radioDuration", "0:00");
   if ($("radioPlay")) $("radioPlay").innerHTML = '<i class="ph-fill ph-play"></i>';
   radioNowLabel = "Checking what's playing…";  // Home's "Playing now" line must not keep the old song either
+  // Nor the rest of the view: no now-playing track (heart, chip), no source chip, and the song's info and moment panels go
+  // (their buttons act on the now-playing track). The next reading brings them back.
+  highlightNowPlaying(-1);
+  radioShowSource("");
+  radioInfoIdx = -1; radioHideInfo();
+  radioMomentShown = null;
+  if ($("radioMoment")) $("radioMoment").style.display = "none";
   if (radioMinimized) radioSyncHome();
 }
 

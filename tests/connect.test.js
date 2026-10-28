@@ -66,6 +66,7 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
     if (slowFetch) await new Promise(r => setTimeout(r, 20));
     return { ok: fetchStatus >= 200 && fetchStatus < 300, status: fetchStatus };
   };
+  const sdkSpotifyPlay = global.spotifyPlay;  // the real one (a test below needs its fall-through)
   global.spotifyPlay = async (token, uris, pos) => { plays.push({ uris, pos }); return spotifyPlayOk; };
   global.spotifyResetPlayMode = async () => {};
   global.getSpotifyToken = async () => "tok";
@@ -75,6 +76,7 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   function setupRadio(o) {
     fetches.length = 0; plays.length = 0; fetchStatus = 200; slowFetch = false; spotifyPlayOk = true;
     run(`radioActive = true; sdkReady = false; playbackDeviceId = null; connectBusy = false; connectDevices = [];
+      sdkInactive = false; sessionPaused = false; sessionQueue = new Set(); _emptyPolls = 0;
       matchedUris = { 0: "spotify:track:a", 1: "spotify:track:b", 2: "spotify:track:c" }; allTrackCount = 3;
       radioContextLastUri = ${o.unsent ? '"spotify:track:b"' : '"spotify:track:c"'}; radioPendingReissue = false;
       radioCurrentUri = ${JSON.stringify(o.current || "spotify:track:b")}; radioPaused = ${!!o.paused};
@@ -120,8 +122,8 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   // every pick re-reads soon
   assert.ok(soon.length > 0 && soon.every(ms => ms === 1500));
   // position: remote reading extrapolated while playing
-  run("remoteNow = { pos: 1000, at: Date.now() - 500, playing: true };");
-  const cp = connectCurrentPosition(); assert.ok(cp >= 1500 && cp < 2000);
+  run("remoteNow = { uri: 'spotify:track:b', pos: 1000, at: Date.now() - 500, playing: true };");
+  const cp = connectCurrentPosition("spotify:track:b"); assert.ok(cp >= 1500 && cp < 2000);
 
   // === what's playing is always true ===
   let readings = [];
@@ -206,6 +208,129 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..",
   assert.equal(run("connectTimer"), null);
   delete els.connectList; delete els.connectRows;
   connectStopTimers();
+
+  // === desktop (the SDK ready): what a pick and a lost player show is what Spotify reports ===
+  const QUEUE = '["spotify:track:a", "spotify:track:b", "spotify:track:c"]';
+  function setupDesktop(o) {
+    setupRadio(o);
+    stopPolling(); soon.length = 0;
+    run(`sdkReady = true; sdkDeviceId = 'me'; sdkInactive = ${!!o.inactive}; sessionPaused = ${!!(o.inactive || o.sessionPaused)};
+      sessionQueue = new Set(${QUEUE}); _sdkCurrentUri = "spotify:track:b"; _sdkPositionMs = ${o.sdkPos || 0}; remoteNow = null;`);
+  }
+  const fastTimers = fn => async () => {  // sdkLostPlayback waits 1 s for Spotify to settle
+    const realSetTimeout = global.setTimeout;
+    global.setTimeout = (f, ms, ...a) => realSetTimeout(f, 0, ...a);
+    try { await fn(); } finally { global.setTimeout = realSetTimeout; }
+  };
+
+  // 1. no radio: a picked speaker that is idle (/me/player empty) is kept, and no poll starts
+  setupDesktop({}); run("radioActive = false; radioContextLastUri = null;");
+  assert.equal(await connectPick("k"), true);
+  assert.equal(run("playbackDeviceId"), "k");
+  assert.equal(run("pollTimer"), null); assert.equal(soon.length, 0);
+  readings = [null, null]; global.getCurrentlyPlaying = async () => readings.length ? readings.shift() : null;
+  await run("pollNowPlayingOnce()"); await run("pollNowPlayingOnce()");
+  assert.equal(run("playbackDeviceId"), "k"); assert.equal(connectHomeTarget().name, "Kitchen");
+  // a radio before its first play (still picking the first song): the pick only sets where it starts
+  setupDesktop({ unsent: true }); run("radioContextLastUri = null;");
+  assert.equal(await connectPick("k"), true);
+  assert.equal(run("playbackDeviceId"), "k"); assert.equal(fetches.length + plays.length, 0);
+  assert.equal(run("pollTimer"), null); assert.equal(soon.length, 0);
+
+  // 2. this browser -> a speaker mid-song keeps the song and its position (read before the device changes)
+  setupDesktop({ unsent: true, sdkPos: 95000 });
+  assert.equal(await connectPick("k"), true);
+  assert.deepEqual(plays[0].uris, ["spotify:track:b", "spotify:track:c"]); assert.equal(plays[0].pos, 95000);
+  assert.equal(run("remoteNow"), null);
+  // a stale reading of another song is not used
+  setupDesktop({ unsent: true, sdkPos: 95000 });
+  run("remoteNow = { uri: 'spotify:track:a', pos: 30000, dur: 200000, playing: true, at: Date.now() - 20 * 60000 };");
+  await connectPick("k"); assert.equal(plays[0].pos, 95000); assert.equal(run("remoteNow"), null);
+  // polling: only a fresh reading of the current song counts
+  setupRadio({ unsent: true, current: "spotify:track:b" });
+  run("remoteNow = { uri: 'spotify:track:a', pos: 30000, dur: 200000, playing: false, at: Date.now() };");
+  await connectPick("k"); assert.equal(plays[0].pos, 0);
+  setupRadio({ unsent: true, current: "spotify:track:b" });
+  run("remoteNow = { uri: 'spotify:track:b', pos: 30000, dur: 200000, playing: true, at: Date.now() - 20 * 60000 };");
+  await connectPick("k"); assert.equal(plays[0].pos, 0);
+
+  // 3. a window whose music another window took says where it plays now, not "This browser"
+  await fastTimers(async () => {
+    setupDesktop({}); run("connectCurrent = { id: 'me', name: 'This browser', type: 'Computer' };");
+    global.getCurrentlyPlaying = async () => ({ item: { uri: "spotify:track:zzz" }, device: { id: "o", name: "Office", type: "Computer" }, is_playing: true });
+    await sdkLostPlayback();
+    assert.equal(run("sdkInactive"), true); assert.equal(run("connectCurrent.id"), "o");
+    // its own music moved to a speaker: followed, and the bar says so at once
+    setupDesktop({}); run("connectCurrent = { id: 'me', name: 'This browser', type: 'Computer' };");
+    global.getCurrentlyPlaying = async () => ({ item: { uri: "spotify:track:b" }, device: { id: "k", name: "Kitchen", type: "Speaker" }, is_playing: true });
+    await sdkLostPlayback();
+    assert.equal(run("playbackDeviceId"), "k"); assert.equal(run("connectCurrent.id"), "k");
+    stopPolling();
+    // nothing plays anywhere: not "Checking" with nothing checking (an inactive window does not poll), this browser, where Play resumes
+    setupDesktop({}); run("connectCurrent = { id: 'k', name: 'Kitchen', type: 'Speaker' };");
+    global.getCurrentlyPlaying = async () => null;
+    await sdkLostPlayback();
+    assert.equal(run("sdkInactive"), true); assert.equal(run("connectCurrent && connectCurrent.id"), "me");
+  })();
+
+  // 4. an inactive window's pick plays its own queue from where it stopped, never a transfer of someone else's music
+  setupDesktop({ unsent: false, inactive: true, sdkPos: 61000 });
+  assert.equal(await connectPick("k"), true);
+  assert.equal(fetches.filter(f => f.method === "PUT" && /\/me\/player$/.test(f.url)).length, 0);
+  assert.deepEqual(plays[0].uris, ["spotify:track:b", "spotify:track:c"]); assert.equal(plays[0].pos, 61000);
+  assert.equal(run("sdkInactive"), false); assert.equal(run("sessionPaused"), false);
+  // the same from a window that polls (its speaker plays another app's music)
+  setupRadio({ unsent: false, current: "spotify:track:b" }); run(`sessionQueue = new Set(${QUEUE}); sessionPaused = true; playbackDeviceId = 'x';`);
+  assert.equal(await connectPick("k"), true);
+  assert.equal(fetches.filter(f => f.method === "PUT" && /\/me\/player$/.test(f.url)).length, 0);
+  assert.equal(plays.length, 1); assert.equal(run("sessionPaused"), false);
+  // an inactive window picking this browser (its own row) brings its queue back here
+  setupDesktop({ unsent: false, inactive: true, sdkPos: 61000 });
+  assert.equal(await connectPick("me"), true);
+  assert.equal(plays.length, 1); assert.equal(plays[0].pos, 61000);
+
+  // 6. a followed device that went away (two empty readings) with the SDK ready: the last song paused here, not "Checking" forever
+  setupDesktop({}); run("playbackDeviceId = 'k'; playbackDeviceName = 'Kitchen'; connectCurrent = { id: 'k', name: 'Kitchen', type: 'Speaker' };");
+  run("remoteNow = { uri: 'spotify:track:c', pos: 40000, dur: 200000, playing: false, at: Date.now() };");
+  els.radioTrack.textContent = "Song C"; readings = [null, null];
+  global.getCurrentlyPlaying = async () => readings.length ? readings.shift() : null;
+  await run("pollNowPlayingOnce()"); await run("pollNowPlayingOnce()");
+  assert.equal(run("playbackDeviceId"), null);
+  assert.equal(heroText(), "Song C"); assert.equal(run("radioPaused"), true); assert.equal(run("sdkInactive"), true);
+  assert.equal(run("connectCurrent && connectCurrent.id"), "me");
+  // Play then resumes that song from where it stopped, here
+  assert.deepEqual(run("[_sdkCurrentUri, _sdkPositionMs]"), ["spotify:track:c", 40000]);
+
+  // 7. "Checking" leaves no old song live: no now-playing index, no source chip, no info or moment panel
+  ["radioSource", "radioInfo", "radioMoment"].forEach(n => { els[n] = { style: { display: "" }, classList: { add() {}, remove() {} } }; });
+  run("nowPlayingIndex = 1; radioInfoIdx = 1;");
+  radioShowChecking();
+  assert.equal(run("nowPlayingIndex"), -1);
+  assert.equal(els.radioSource.style.display, "none"); assert.equal(els.radioInfo.style.display, "none"); assert.equal(els.radioMoment.style.display, "none");
+  ["radioSource", "radioInfo", "radioMoment"].forEach(n => delete els[n]);
+
+  // 8. a new radio does not show the previous radio's device
+  els.cancelBtn = { style: {} }; els.usernameInput = { value: "u", disabled: false };
+  run("var __radioStop = radioStop, __updateRadioButton = updateRadioButton; radioStop = () => {}; updateRadioButton = () => {};");
+  run("connectCurrent = { id: 'k', name: 'Kitchen', type: 'Speaker' };");
+  beginSession();
+  assert.equal(run("connectCurrent"), null);
+  run("radioStop = __radioStop; updateRadioButton = __updateRadioButton; currentPhase = 'idle';");
+  delete els.cancelBtn; delete els.usernameInput;
+
+  // 9. picking this browser only succeeds when this browser's player took the music (spotifyPlay must not fall through elsewhere)
+  global.spotifyPlay = sdkSpotifyPlay;
+  setupDesktop({ unsent: true }); run("playbackDeviceId = 'k'; playbackDeviceName = 'Kitchen'; playbackDeviceType = 'Speaker';");
+  global.fetch = async (url, opts) => {
+    fetches.push({ url, method: opts && opts.method, body: opts && opts.body });
+    const failed = /\/me\/player\/play\?device_id=me/.test(url);  // this browser's player does not take it
+    return { ok: !failed, status: failed ? 500 : 204, json: async () => ({ devices: [] }) };
+  };
+  assert.equal(await connectPick("me"), false);
+  assert.equal(run("playbackDeviceId"), "k");
+  assert.equal(fetches.filter(f => /\/me\/player\/play(\?|$)/.test(f.url) && !/device_id=me/.test(f.url)).length, 0);
+  assert.deepEqual(toasts.at(-1), ["Couldn't play on this browser. Play something on it from the Spotify app, then try again.", "error"]);
+  run("sdkReady = false; sdkDeviceId = null; playbackDeviceId = null; sdkInactive = false; sessionPaused = false; sessionQueue = new Set();");
 
   stopPolling();  // a successful pick starts the poll interval
   console.log("connect: ok");
