@@ -412,9 +412,14 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   // the note then carries the new songs, from this window
   await flush();
   assert.equal(puts.at(-1).claim, "keep"); assert.equal(puts.at(-1).note.songs.length, otherNote.songs.length + 6);
-  // no more than that per opening: track changes do not fill on a phone driver
+  // no more than that per opening: track changes do not fill on a phone driver whose page is hidden...
   fills = 0; run("radioMaybeRefill(matchedUris[2], 0)"); assert.equal(fills, 0);
+  document.visibilityState = "hidden";
   run("radioMaybeRefill(matchedUris[allTrackCount - 2], 0)"); await flush(); assert.equal(fills, 0);
+  // ...while a visible page tops up on track changes as any driver does (ruling 26)
+  document.visibilityState = "visible";
+  run("radioMaybeRefill(matchedUris[allTrackCount - 1], 0)"); await flush(); assert.equal(fills, 1); assert.equal(fillWants.at(-1), RADIO_REFILL);
+  run("radioPendingReissue = false");
   // never over another STM window's player
   playingDevice = { id: "other", name: STM_PLAYER_NAME, type: "Computer" }; puts = [];
   assert.equal(await handoffTakeOver({ ...otherNote, released: true }), false);
@@ -428,6 +433,11 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
   assert.equal(run("radioPaused"), true);
   await flush();
+  // an empty reading at the takeover: the last song counts as stopped (paused), and the top-up plays nothing
+  resetHandoff(); remote({ uri: otherNote.songs[1].uri, pos: 40000, playing: true }); readings = [null]; plays = [];
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), true); await flush();
+  assert.equal(run("radioPaused"), true); assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
+  readings = [];
   // a lost race (409): this window follows the radio the server holds, and adds nothing
   resetHandoff(); remote({ uri: oUri(1), pos: 0, playing: true }); fillWants = [];
   serverAnswer = { status: 409, json: { note: makeNote("s-won", "x", [oUri(1), oUri(2)]), now: 1 } };
@@ -461,6 +471,12 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   await handoffPhoneTopUp(); await flush();
   global.radioFill = quickFill;
   assert.equal(plays.at(-1).uris[0], run("matchedUris[allTrackCount - 11]")); assert.ok(plays.at(-1).pos >= 150000);
+  // the phone was locked, the songs ran out and Spotify reports nothing: an old "playing" reading restarts nothing
+  run("remoteNow = { uri: matchedUris[allTrackCount - 1], pos: 50000, dur: 200000, playing: true, at: Date.now() - 60000 }");
+  readings = [null, null]; plays = []; fillWants = []; run("radioPendingReissue = false");
+  await handoffPhoneTopUp(); await flush();
+  assert.equal(fillWants.at(-1), 10); assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
+  assert.equal(run("remoteNow.playing"), false);
   // outside music on the speaker: the top-up adds songs but plays nothing over it
   remote({ uri: "spotify:track:podcast", pos: 1000, playing: true }); run("radioCurrentUri = matchedUris[allTrackCount - 1]"); plays = []; fillWants = [];
   await handoffPhoneTopUp(); await flush();
@@ -490,6 +506,12 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   run("sessionPaused = true; radioContextLastUri = matchedUris[3]; radioCurrentUri = matchedUris[1]; _sdkCurrentUri = null"); plays = [];
   await run("radioResumeHere()");
   assert.deepEqual(plays.at(-1).uris, [1, 2, 3].map(oUri));
+  // ...and keeps the song after the current one: Next on the driver's last sent song plays the next one, not the same again
+  run("sessionPaused = true; radioContextLastUri = matchedUris[1]; radioCurrentUri = matchedUris[1]"); plays = [];
+  await run("radioResumeHere('next')");
+  assert.deepEqual(plays.at(-1).uris, [oUri(2)]); assert.equal(plays.at(-1).pos, 0);
+  run("sessionPaused = true"); await run("radioResumeHere()");
+  assert.deepEqual(plays.at(-1).uris, [1, 2].map(oUri));
   run("radioStop(); stopPolling()");
   // the phone strip: Open radio shows when the song it reports is in the session note, which it re-reads at most every 30 s
   resetHandoff(); run("radioActive = false; spotifyToken = 'tok'; connectLoaded = true");

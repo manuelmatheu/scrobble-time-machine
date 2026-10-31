@@ -259,7 +259,8 @@ async function handoffSongKnown(uri) {
 // A window becomes the driver of a radio whose driver left (released) or went silent for 3 minutes. A window without a browser
 // player (every phone) cannot top up from the background: whenever it takes over, starts a radio or comes back to the screen it
 // makes sure PHONE_TOPUP songs are queued after the current one, and sends them to Spotify at once, from the current song at its
-// position (the phone may be locked before the seam). It adds no more than that per opening.
+// position (the phone may be locked before the seam). While its page is hidden it adds nothing more (radioMaybeRefill); a visible
+// page tops up on track changes as any driver does.
 // =============================================================================
 let handoffTopUpBusy = false, handoffOpening = false;
 
@@ -270,11 +271,13 @@ function handoffTopUpWant(remaining) { return Math.max(0, PHONE_TOPUP - remainin
 
 // A /me/player reading young enough to send songs from (connectCurrentPosition trusts no older one)
 function handoffFresh() { return !!remoteNow && Date.now() - remoteNow.at < REMOTE_FRESH_MS; }
-// Read /me/player into remoteNow (and the bar), as a poll does
+// Read /me/player into remoteNow (and the bar), as a poll does. An empty reading (nothing plays, the device went idle) leaves no
+// old "playing" behind: the last song counts as stopped, so nothing restarts it.
 async function handoffRead(token) {
   const data = await getCurrentlyPlaying(token);
   if (data && data.device) setCurrentDevice(data.device);
   if (data && data.item) remoteNow = { uri: data.item.uri, pos: data.progress_ms || 0, dur: data.item.duration_ms || 0, playing: !!data.is_playing, at: Date.now() };
+  else if (remoteNow) remoteNow = Object.assign({}, remoteNow, { playing: false });
   return data;
 }
 // The radio's current song: the one Spotify reports when it is ours, else the last one seen, else (a radio that just started,
@@ -310,9 +313,9 @@ async function handoffPhoneTopUp() {
     if (!handoffFresh()) await handoffRead(token);  // the fill took a while: send from where the song is now
     if (sid !== radioSession) return;
     const cur = handoffCurrentUri();
-    // Only over this radio's own song while it plays. Paused (or outside music), nothing is unpaused: the songs join on resume
-    // or at the seam, as for any top-up made while paused.
-    if (remoteNow && remoteNow.playing && remoteNow.uri === cur
+    // Only over this radio's own song while a fresh reading says it plays. Paused, outside music or no fresh reading: nothing is
+    // started or unpaused; the songs join on resume or at the seam, as for any top-up made while paused.
+    if (handoffFresh() && remoteNow.playing && remoteNow.uri === cur
       && await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), connectCurrentPosition(cur))) {
       if (sid === radioSession) { radioPendingReissue = false; checkLikedTracks(); }
     } else if (sid === radioSession) radioPendingReissue = true;

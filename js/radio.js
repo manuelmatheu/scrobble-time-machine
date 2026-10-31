@@ -533,8 +533,8 @@ async function startRadio() {
 // This window follows another device's radio (hand-off): it never fills, seams or re-issues. handoff.js holds the state;
 // the radio test runs without it.
 function radioFollower() { return typeof handoffFollowing !== "undefined" && handoffFollowing; }
-// A window without a browser player (a phone) that drives a radio adds at most PHONE_TOPUP songs per opening (handoffPhoneTopUp),
-// never on a track change: it cannot top up from the background (spec 5.3)
+// A window without a browser player (a phone) that drives a radio cannot top up from the background (spec 5.3): it queues
+// PHONE_TOPUP songs whenever it opens (handoffPhoneTopUp), and a track change while its page is hidden adds nothing
 function radioPhoneDriver() { return typeof handoffPhoneDriver === "function" && handoffPhoneDriver(); }
 
 // Top up the queue, then re-issue playback from the current track so the new tracks join
@@ -682,7 +682,7 @@ function radioMaybeRefill(currentUri, positionMs) {
   radioCurrentUri = currentUri; radioLastPos = positionMs || 0;
   if (changed && typeof handoffChanged === "function") handoffChanged();  // the session note follows the playing song
   const remaining = radioRemaining(matchedUris, allTrackCount, currentUri);
-  if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1) && !radioPhoneDriver()) continueRadio();
+  if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1) && !(radioPhoneDriver() && !pollVisible())) continueRadio();
 }
 
 function radioStop() {

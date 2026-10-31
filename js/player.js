@@ -387,9 +387,10 @@ async function radioResumeHere(mode) {
     if (!token) return;
     const point = radioResumePoint(), last = point.last;
     let uris = radioUrisFrom(matchedUris, allTrackCount, last);
-    // a follower (hand-off) ends at the driver's last sent song, as a row tap does, so the driver's seam timing stays right
+    // a follower (hand-off) ends at the driver's last sent song, as a row tap does, so the driver's seam timing stays right; it
+    // keeps the song after the current one, so Next never replays the current song when that is the driver's last
     const end = radioFollower() ? uris.indexOf(radioContextLastUri) : -1;
-    if (end >= 0) uris = uris.slice(0, end + 1);
+    if (end >= 0) uris = uris.slice(0, Math.max(end + 1, 2));
     let pos = point.pos;
     if (mode === "next" && uris.length > 1) { uris = uris.slice(1); pos = 0; }
     if (mode === "restart") pos = 0;
