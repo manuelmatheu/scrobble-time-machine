@@ -41,7 +41,7 @@ async function pollNowPlayingOnce() {
       // Spotify drops a followed device that sat idle: /me/player then comes back empty for good. Let go of it, or the
       // controls keep talking to a device that is gone. With this browser's player the music comes back here (releaseDeadDevice
       // shows the last song paused here); otherwise the polls go on, under "Checking what's playing…"
-      const backHere = !!playbackDeviceId && sdkReady && sessionQueue.size > 0;
+      const backHere = !!playbackDeviceId && sdkReady && sessionQueue.size > 0 && !radioFollower();  // a follower never played here
       if (!backHere) { radioShowChecking(); setCurrentDevice(null); }
       if (playbackDeviceId) releaseDeadDevice(false);
     }
@@ -188,6 +188,9 @@ async function releaseDeadDevice(resume) {
   setPlaybackDevice(null);
   _emptyPolls = 0;
   remoteNow = null;
+  // A follower (hand-off) never played here and never re-issues: it lets the device go and keeps reading, under "Checking
+  // what's playing…", until the driver's music shows up again. No paused-here look, no toast, no play.
+  if (radioFollower()) { radioShowChecking(); setCurrentDevice(null); return; }
   if (!sdkReady || sessionQueue.size === 0) return;
   stopPolling();
   if (!resume) {

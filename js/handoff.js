@@ -208,6 +208,7 @@ function handoffFollow(note) {
 function handoffReapply(note) {
   const songs = () => Array.from({ length: allTrackCount }, (_, i) => matchedUris[i]).join(" ");
   const cur = matchedUris[nowPlayingIndex] || null, before = songs();
+  if (!pollTimer) startPolling();  // a follower always reads what Spotify plays (nothing here should stop it, but never stay dark)
   handoffApplyNote(note);
   handoffNote = note;
   highlightNowPlaying(cur && uriToIndices[cur] ? uriToIndices[cur][0] : -1);

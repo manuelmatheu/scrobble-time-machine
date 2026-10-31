@@ -50,13 +50,13 @@ function clearSession() {
     radioSeen = new Set(); radioCarry = []; radioMomentSeq = 0; radioContextLastUri = null; radioRefilling = true; radioExhausted = true;`);
 }
 
-let serverAnswer = null, sent = [], puts = [], gets = 0, others = [];
+let serverAnswer = null, sent = [], puts = [], gets = 0, others = [], webStatus = 204;
 const toasts = [];
 global.getSpotifyToken = async () => "tok";
 global.showStatus = (m, k) => toasts.push([m, k]);
 global.fetch = async (url, opts) => {
   opts = opts || {};
-  if (url !== "/api/session") { others.push({ url, opts }); return { ok: true, status: 204, json: async () => ({}) }; }  // Spotify's Web API
+  if (url !== "/api/session") { others.push({ url, opts }); return { ok: webStatus < 300, status: webStatus, json: async () => ({}) }; }  // Spotify's Web API
   sent.push({ url, opts });
   if ((opts.method || "GET") === "GET") gets++;
   if (opts.method === "PUT") puts.push(JSON.parse(opts.body));
@@ -346,6 +346,27 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   assert.ok(handoffParseNote(otherNote));
   // stopping the radio ends following
   run("radioStop()"); assert.equal(run("handoffFollowing"), false); assert.equal(run("handoffSessionId"), "");
+  // the driver's device drops (two empty readings): a follower lets it go and keeps reading, with no paused look, toast or play
+  const deskFollower = () => { resetHandoff(); followWith(otherNote); run("sdkReady = true; sdkDeviceId = 'mine'; setPlaybackDevice({ id: 'k', name: 'Kitchen', type: 'Speaker' }); _emptyPolls = 0"); };
+  deskFollower(); readings = [null, null];
+  await run("pollNowPlayingOnce()"); await run("pollNowPlayingOnce()"); await flush();
+  assert.equal(run("playbackDeviceId"), null); assert.notEqual(run("pollTimer"), null); assert.equal(run("sdkInactive"), false);
+  assert.equal(toasts.length, 0); assert.equal(plays.length, 0); assert.equal(els.radioTrack.textContent, "Checking what's playing…");
+  // ...and when the driver's music plays again, the next poll shows it and follows its device
+  readings = [{ item: { uri: oUri(3) }, device: dev("k", "Kitchen", "Speaker"), is_playing: true }];
+  await run("pollNowPlaying()");
+  assert.equal(readings.length, 0); assert.equal(run("playbackDeviceId"), "k"); assert.equal(run("nowPlayingIndex"), 3); assert.equal(run("sessionPaused"), false);
+  // a control that gets a 404 (the device is gone): the same, and the follower does not play the note itself
+  deskFollower(); webStatus = 404;
+  await run("playerNext()"); await flush();
+  webStatus = 204;
+  assert.equal(others.at(-1).url, "https://api.spotify.com/v1/me/player/next");
+  assert.equal(run("playbackDeviceId"), null); assert.notEqual(run("pollTimer"), null); assert.equal(run("sdkInactive"), false);
+  assert.equal(toasts.length, 0); assert.equal(plays.length, 0);
+  // a follower whose polling stopped anyway starts it again at the next re-read of the same radio
+  serverAnswer = { status: 200, json: { note: otherNote, now: 1 } };
+  run("stopPolling()"); await handoffFollowerTick(); assert.notEqual(run("pollTimer"), null);
+  run("stopPolling(); sdkReady = false; sdkDeviceId = null; setPlaybackDevice(null)");
   // a new follower highlights the song Spotify last reported, when the note has it
   resetHandoff(); fillSession(3, {}); handoffStarted(); await flush();
   run("remoteNow = { uri: 'spotify:track:old', pos: 0, dur: 1, playing: true, at: Date.now() }; radioCurrentUri = '" + oUri(2) + "'");
