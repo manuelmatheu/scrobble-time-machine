@@ -12,7 +12,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Session hand-off (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2): the window that drives a radio keeps a note on the server (`api/session.js`, Upstash Redis, one note per Spotify user); the phone strip's Open radio shows the whole radio there (Up next, moment panel, dates) while the music keeps playing on the desktop
 - [x] One driver at a time; other windows follow quietly. A radio started on the phone is followed by the desktop with no toast
 - [x] If the driver closes the page, or goes silent for 3 minutes, the phone takes the radio over and keeps 10 songs queued after the current one
-- [x] Without the store (no env vars, or it fails) the hand-off turns itself off, silently, and the app behaves as before
+- [x] Without the store (no env vars, or no answer to the page's first call) the hand-off turns itself off, silently, and the app behaves as before; a store that fails now and then is tried again (off after 3 failures in a row)
 
 ---
 
