@@ -65,7 +65,7 @@ Rewritten in commits `ca73300`/`4976e4f`/`4828bab` to match SpotiMix's device-tr
 When `sdkReady = true`:
 - Playback goes through the in-browser SDK device
 - `player_state_changed` events update `onSDKStateChange()` directly
-- `pollNowPlaying()` returns immediately while the SDK is the player (`sdkPlaying()`: `sdkReady` and the session was not moved to another device)
+- `pollNowPlaying()` returns immediately while the SDK is the player (`sdkPlaying()`: `sdkReady` and the session was not moved to another device), unless this window is a hand-off follower (`radioFollower()`): the guard is `(sdkPlaying() && !radioFollower()) || _pollBusy`, because a follower's music plays on the driver's device
 
 ### Polling Fallback
 
@@ -175,6 +175,26 @@ Start radio plays an endless stream, from one of three stations (Library, Discov
 - **Icons:** Phosphor web font from jsDelivr (regular and fill stylesheets in `index.html`).
 
 ---
+
+## Session hand-off (v2.12, part 2)
+
+A phone can pick up a radio the desktop runs, and the desktop keeps it going if the phone takes over. `js/handoff.js` is the client, `api/session.js` the store. Tests: `tests/handoff.test.js`, `tests/session-api.test.js`.
+
+**The store.** `api/session.js` keeps one session note per Spotify user in Upstash Redis (REST; env vars `KV_REST_API_URL` and `KV_REST_API_TOKEN`; the note expires after 12 hours). The user id comes from `/v1/me` with the caller's token (cached in memory for 5 minutes); tokens are never stored or logged. `GET` returns `{note, now}`. `PUT {claim, note}` writes it, or answers 409 with the stored note when another window drives. `POST ?release` (from the `pagehide` beacon) marks the note released. Without the env vars the function answers 503.
+
+**The note.** `handoffBuildNote()` writes the radio settings (user, station, how, year, range, balance, total, moment counter, `contextLastUri`), the songs from 3 before the current one on (`HANDOFF_BEFORE`) with their metadata, the moments they belong to (one object per id), the carry, and the last 300 `radioSeen` keys. `handoffParseNote()` ignores a note it cannot apply (unknown `v`, a song without a uri, lists that are not lists). `handoffApplyNote()` makes a window's session the note's.
+
+**Roles** (`handoffRole()`): `driver` (the note is ours), `follower` (another window's, alive) or `free` (released, or no heartbeat for 3 minutes, `HANDOFF_STALE_MS`).
+
+**Driver.** The window that starts a radio claims the note (`handoffStarted()`, claim `new`, with a fresh session id). It rewrites it when a fill adds songs, on every track change and every 60s as a heartbeat (`HANDOFF_BEAT_MS`). One write is in flight and one waits behind it, built when sent so it carries the latest state. A 409 turns the window into a follower, with no toast. A driver that sees the reported song belongs to another device's new radio follows it early (`handoffSongKnown()`), before its next write gets the 409. On `pagehide` it sends a release beacon (the cached access token goes in the body, since no refresh is possible then), so another device can take over at once.
+
+**Follower.** `radioFollower()` is true while a window follows (`handoffFollowing`). It shows the radio (hero, Up next, moment panel, dates) from the note and never fills, seams or re-issues; the driver does that. The music plays on the driver's device, which polling follows (see `pollNowPlaying()` above). Its controls are a remote through the Web API: a row tap or a resume sends the songs up to the driver's `contextLastUri` (a resume keeps at least the song after the current one). It re-reads the note every 30s while visible (`HANDOFF_FOLLOW_MS`), when it comes back to the screen, and when the reported song is not in its copy (once per song).
+
+**Takeover.** When the note is `free` (a follower's re-read, or **Open radio** on the phone strip, `handoffOpen()`), the window asks the store with claim `takeover`. Until the server agrees it follows. The server refuses (409) a takeover of a live driver, and the window follows the winner. The app never takes over while another STM window's browser player plays the music. After a takeover a desktop tops up as usual; a phone tops up as below.
+
+**Phone top-up.** A window with no browser player (every phone) cannot add songs from the background, so it keeps `PHONE_TOPUP` (10) songs queued after the current one. It skips the track-change top-up only while its page is hidden; a visible page tops up as any driver does. Each takeover, new radio or return to the screen as the phone driver (`handoffPhoneTopUp()`) fills up to 10 and, only when a fresh reading (under `REMOTE_FRESH_MS`) shows our song playing, sends the queue at once from the current position, in case the phone locks before the seam. With the speaker paused, an empty reading, a stale reading or someone else's music, it only fills and sets `radioPendingReissue`: the songs go out on resume or at the seam, and it never unpauses the speaker. Next moment on a phone driver may add `RADIO_REFILL` songs (`continueRadio`, a user action on a visible page).
+
+**Without the store.** A 503, a timeout (8s), a body that is not JSON, a 401 or any other status except 200 (and 409 on a write) sets `handoffOff` for the rest of the page load. Nothing is sent or shown, and the app runs as after part 1 (the phone tops up with `continueRadio` as before).
 
 ## Status messages (toasts)
 

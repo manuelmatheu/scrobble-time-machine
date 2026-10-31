@@ -9,7 +9,10 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Home "Plays on" row, and a phone strip with Pause/Next while something plays on another device
 - [x] Device list refreshes only while open and visible; a failed read keeps the rows; hidden pages do not poll (except a radio playing on another device)
 - [x] Tokens `--spotify-green-text` and `--scrim`
-- [ ] Next: session hand-off between devices (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2)
+- [x] Session hand-off (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2): the window that drives a radio keeps a note on the server (`api/session.js`, Upstash Redis, one note per Spotify user); the phone strip's Open radio shows the whole radio there (Up next, moment panel, dates) while the music keeps playing on the desktop
+- [x] One driver at a time; other windows follow quietly. A radio started on the phone is followed by the desktop with no toast
+- [x] If the driver closes the page, or goes silent for 3 minutes, the phone takes the radio over and keeps 10 songs queued after the current one
+- [x] Without the store (no env vars, or it fails) the hand-off turns itself off, silently, and the app behaves as before
 
 ---
 
