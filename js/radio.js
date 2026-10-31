@@ -614,13 +614,15 @@ function radioRemoteLeft(r, now) {
 }
 // The 250ms tick for another device (the SDK timer does not exist there): when the last track we sent is about to end and
 // we hold tracks Spotify was not sent, swap them in. Near the end it re-reads /me/player every second, since the position
-// is only as exact as the last reading.
+// is only as exact as the last reading. It never swaps from an old reading (a computer woken from sleep: the music may have
+// moved on, or another device may drive the radio now): it reads again first.
 function radioRemoteTick() {
   if (!radioActive || sdkPlaying() || radioSeaming || radioPaused || !remoteNow || !remoteNow.playing || radioFollower()) return;
   if (!radioContextLastUri || remoteNow.uri !== radioContextLastUri || !radioUnsentUris().length) return;
   const now = Date.now(), left = radioRemoteLeft(remoteNow, now);
   if (left === null || now - remoteSeamAt < 3000) return;
-  if (radioSeamDue(true, true, remoteNow.dur - left, remoteNow.dur, RADIO_REMOTE_SEAM_MS)) { remoteSeamAt = now; radioSeamReissue(); return; }
+  const fresh = now - remoteNow.at < REMOTE_FRESH_MS;
+  if (fresh && radioSeamDue(true, true, remoteNow.dur - left, remoteNow.dur, RADIO_REMOTE_SEAM_MS)) { remoteSeamAt = now; radioSeamReissue(); return; }
   if (left <= 12000 && now - remoteFastAt >= 1000 && typeof pollNowPlaying === "function") { remoteFastAt = now; pollNowPlaying(); }
 }
 // Spotify ran past the last track we sent (we missed the swap) and moved on to something else: put the tracks back now
@@ -677,9 +679,20 @@ function radioUpNextRows() {
   const h = box && box.clientHeight;
   return h > 0 ? Math.max(RADIO_UPNEXT_ROWS_WIDE, Math.floor((h + 1) / RADIO_ROW_PX_WIDE)) : RADIO_UPNEXT_ROWS_WIDE;
 }
+// Index of the first queued copy of uri (-1: not queued), the order radioUrisFrom sends them in
+function radioIndexOf(uri) {
+  for (let i = 0; i < allTrackCount; i++) if (matchedUris[i] === uri) return i;
+  return -1;
+}
 function radioMaybeRefill(currentUri, positionMs) {
   const changed = currentUri !== radioCurrentUri;
   radioCurrentUri = currentUri; radioLastPos = positionMs || 0;
+  // A song after the last one this window sent plays (a follower's row tap or resume sent the rest of its copy): Spotify holds
+  // the queue at least up to it, so the seam moves there and swaps in everything after it, instead of never firing
+  if (!radioFollower() && radioContextLastUri && currentUri !== radioContextLastUri) {
+    const at = radioIndexOf(currentUri), last = radioIndexOf(radioContextLastUri);
+    if (at >= 0 && last >= 0 && at > last) radioContextLastUri = currentUri;
+  }
   if (changed && typeof handoffChanged === "function") handoffChanged();  // the session note follows the playing song
   const remaining = radioRemaining(matchedUris, allTrackCount, currentUri);
   if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1) && !(radioPhoneDriver() && !pollVisible())) continueRadio();
@@ -1222,8 +1235,10 @@ function radioSyncMoment() {
   const m = meta && meta.moment;
   box.style.display = m ? "" : "none";
   if (!m) { radioMomentShown = null; return; }
-  // Next moment works before the next moment is queued (it is fetched then); only a finished library or a pending jump disables it
-  if ($("momentNextBtn")) $("momentNextBtn").disabled = radioJumpFrom !== null || (radioExhausted && radioNextMomentIndex(nowPlayingIndex) < 0);
+  // Next moment works before the next moment is queued (it is fetched then); only a finished library or a pending jump disables
+  // it, and on a follower (it adds no songs: the driver does) no next moment queued yet
+  const noNext = radioNextMomentIndex(nowPlayingIndex) < 0;
+  if ($("momentNextBtn")) $("momentNextBtn").disabled = radioJumpFrom !== null || ((radioExhausted || radioFollower()) && noNext);
   if (m.id === radioMomentShown) return;
   radioMomentShown = m.id;
   $("radioMomentLabel").textContent = m.label;

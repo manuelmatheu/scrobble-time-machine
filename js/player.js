@@ -56,10 +56,11 @@ async function pollNowPlayingOnce() {
 
   // Session check: is Spotify playing one of our queued tracks?
   if (sessionQueue.size > 0 && !sessionQueue.has(playingUri)) {
-    if (radioRecoverRunOff(prevUri)) return;  // it ran past the last track we sent: the swap was missed, put our tracks back
-    // The session note may know it (a follower's copy is behind, or a new radio started elsewhere): re-read once, then decide
+    // The session note may know it (a follower's copy is behind, or another device drives the radio now): re-read once, then
+    // decide. First, or this window would put its own songs back over another device's new radio.
     if (typeof handoffSongKnown === "function" && await handoffSongKnown(playingUri)) followPlaybackDevice(data);
     else {
+      if (radioRecoverRunOff(prevUri)) return;  // it ran past the last track we sent: the swap was missed, put our tracks back
       if (!sessionPaused) {
         sessionPaused = true;
         highlightNowPlaying(-1);
@@ -72,6 +73,9 @@ async function pollNowPlayingOnce() {
     sessionPaused = false;
     showStatus("", "success");
   }
+  // This radio's song plays again (a row tap, the Spotify app): without a browser player nothing else says so, and Play must
+  // pause it, not resume the radio from its last song (a takeover with nothing playing set that, handoffPausedHere)
+  if (sdkInactive && !sdkReady) sdkInactive = false;
 
   // Update now-playing highlight using reverse map
   if (uriToIndices[playingUri]) {
@@ -385,6 +389,12 @@ async function radioResumeHere(mode) {
   try {
     const token = await getSpotifyToken();
     if (!token) return;
+    // a follower never plays on another STM window's browser player (that window drives), as a row tap
+    if (radioFollower()) {
+      const data = await getCurrentlyPlaying(token), d = data && data.device;
+      if (d && d.name === STM_PLAYER_NAME && d.id !== sdkDeviceId) return;
+      followPlaybackDevice(data);
+    }
     const point = radioResumePoint(), last = point.last;
     let uris = radioUrisFrom(matchedUris, allTrackCount, last);
     // a follower (hand-off) ends at the driver's last sent song, as a row tap does, so the driver's seam timing stays right; it

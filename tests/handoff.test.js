@@ -61,14 +61,14 @@ global.fetch = async (url, opts) => {
   sent.push({ url, opts });
   if ((opts.method || "GET") === "GET") gets++;
   if (opts.method === "PUT") puts.push(JSON.parse(opts.body));
-  const a = serverAnswer;
+  const a = typeof serverAnswer === "function" ? serverAnswer(opts) : serverAnswer;  // (a function answers per request)
   if (a.hang) return new Promise((_, rej) => opts.signal.addEventListener("abort", () => rej(new Error("aborted"))));
   if (a.throws) throw new Error("net");
   if (a.gate) await a.gate;
   return { ok: a.status >= 200 && a.status < 300, status: a.status, json: async () => { if (a.text !== undefined) throw new Error("bad json"); return a.json !== undefined ? a.json : a.body; } };
 };
 function resetHandoff() {
-  run("handoffOff = false; handoffFollowing = false; radioActive = true; playbackDeviceId = null; sdkReady = false; sdkInactive = false; sessionPaused = false; remoteNow = null");
+  run("handoffOff = false; handoffAnswered = true; handoffFails = 0; handoffFollowing = false; radioActive = true; playbackDeviceId = null; sdkReady = false; sdkInactive = false; sessionPaused = false; remoteNow = null");
   sent = []; puts = []; gets = 0; others = []; toasts.length = 0; beacons = []; plays = [];
   reported = null; playingDevice = dev("k", "Kitchen", "Speaker");
 }
@@ -163,18 +163,9 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   serverAnswer = { status: 409, body: { note: { sessionId: "z" }, now: 7 } };
   const conflict = await handoffPut("new");
   assert.equal(conflict.status, 409); assert.equal(conflict.note.sessionId, "z"); assert.equal(run("handoffOff"), false);
-  // a store that answers garbage, 5xx, 503, 401, a network error or never turns the hand-off off, silently
-  const realSetTimeout = global.setTimeout;
-  global.setTimeout = (fn, ms) => realSetTimeout(fn, ms >= 8000 ? 5 : ms);
-  for (const bad of [{ status: 200, text: "<html>" }, { status: 500 }, { status: 503 }, { status: 401 }, { status: 413 }, { throws: true }, { hang: true }]) {
-    resetHandoff(); serverAnswer = bad;
-    assert.equal(await handoffGet(), null); assert.equal(run("handoffOff"), true); assert.equal(toasts.length, 0);
-    resetHandoff(); serverAnswer = bad;
-    assert.equal(await handoffPut("keep"), null); assert.equal(run("handoffOff"), true);
-  }
-  global.setTimeout = realSetTimeout;
   // nothing is sent while off
-  sent = []; assert.equal(await handoffGet(), null); assert.equal(await handoffPut("keep"), null); assert.equal(sent.length, 0);
+  run("handoffOff = true"); sent = [];
+  assert.equal(await handoffGet(), null); assert.equal(await handoffPut("keep"), null); assert.equal(sent.length, 0);
   // no token: null, not off
   resetHandoff(); global.getSpotifyToken = async () => null;
   assert.equal(await handoffGet(), null); assert.equal(run("handoffOff"), false); assert.equal(sent.length, 0);
@@ -548,5 +539,177 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   await run("startRadio()"); await flush();
   assert.deepEqual(fillWants, [RADIO_START_TRACKS, RADIO_REFILL]); assert.equal(run("handoffOff"), true);
   run("radioStop(); stopPolling(); handoffOff = false");
+
+  // ===== Final review fixes (part 2) =====
+  const ok200 = { status: 200, json: { note: null, now: 1 } };
+  const fresh = (sid, driver, uris, o) => { const n = makeNote(sid, driver, uris, o); n.beatAt = Date.now(); return n; };
+  const speaker = () => dev("k", "Kitchen", "Speaker");
+  const restart = n => { run("radioStop(); stopPolling()"); resetHandoff(); serverAnswer = ok200; if (n) { fillSession(n, {}); handoffStarted(); } };
+
+  // 1. the old driver on a speaker, its last reading on its last sent song with songs unsent, and the phone starts a new radio
+  // on that speaker: the desktop follows the new radio and does not put its own songs back (no run-off recovery)
+  restart(6); await flush();
+  run("radioContextLastUri = matchedUris[3]; setPlaybackDevice({ id: 'k', name: 'Kitchen', type: 'Speaker' }); remoteNow = { uri: matchedUris[3], pos: 100000, dur: 200000, playing: true, at: Date.now() }");
+  serverAnswer = { status: 200, json: { note: fresh("s-new", "phone", [oUri(7), oUri(8)]), now: Date.now() } };
+  plays = []; gets = 0;
+  readings = [{ item: { uri: oUri(7), name: "O7", artists: [] }, device: speaker(), is_playing: true }];
+  await run("pollNowPlayingOnce()"); await flush();
+  assert.equal(plays.length, 0); assert.equal(gets, 1); assert.equal(run("handoffFollowing"), true); assert.equal(run("handoffSessionId"), "s-new");
+  assert.equal(toasts.length, 0);
+  // ...while a real run-off (Spotify's autoplay after our last sent song, in no radio) still puts the unsent songs back
+  restart(6); await flush();
+  run("radioContextLastUri = matchedUris[3]; remoteNow = { uri: matchedUris[3], pos: 199000, dur: 200000, playing: true, at: Date.now() }");
+  plays = [];
+  readings = [{ item: { uri: "spotify:track:autoplay" }, device: speaker(), is_playing: true }];
+  await run("pollNowPlayingOnce()"); await flush();
+  assert.deepEqual((plays.at(-1) || {}).uris, [4, 5].map(uriOf)); assert.equal(toasts.length, 0);
+
+  // 2. a takeover of the same radio (the session id stays): the old driver follows the new driver's songs, with no toast
+  restart(3); await flush();
+  const sid2 = run("handoffSessionId");
+  serverAnswer = { status: 200, json: { note: fresh(sid2, "phone", [uriOf(1), uriOf(2), oUri(9)]), now: Date.now() } };
+  run("remoteNow = { uri: matchedUris[1], pos: 0, dur: 200000, playing: true, at: Date.now() }");
+  readings = [{ item: { uri: oUri(9), name: "O9", artists: [] }, device: speaker(), is_playing: true }];
+  await run("pollNowPlayingOnce()"); await flush();
+  assert.equal(toasts.length, 0); assert.equal(run("handoffFollowing"), true); assert.equal(run("sessionPaused"), false);
+  assert.equal(run("matchedUris[nowPlayingIndex]"), oUri(9));
+
+  // 3. a phone driver back on the screen after a desktop took its radio over learns it lost the role before it adds or sends songs
+  restart(6); await flush();
+  const sid3 = run("handoffSessionId");
+  serverAnswer = { status: 409, json: { note: fresh(sid3, "desk", [1, 2, 3, 4, 5].map(uriOf)), now: Date.now() } };
+  remote({ uri: uriOf(2), pos: 30000, playing: true }); plays = []; puts = []; fills = 0;
+  docListeners.visibilitychange(); await flush();
+  assert.equal(plays.length, 0); assert.equal(fills, 0); assert.equal(run("handoffFollowing"), true); assert.equal((puts[0] || {}).claim, "keep");
+  // ...and a desktop driver on a speaker does not swap songs in from an old reading (a computer woken from sleep): it reads again
+  restart(6); await flush();
+  run("radioContextLastUri = matchedUris[3]; remoteFastAt = 0; remoteSeamAt = 0; radioPaused = false; _emptyPolls = 0");
+  run("remoteNow = { uri: matchedUris[3], pos: 150000, dur: 200000, playing: true, at: Date.now() - 60000 }");
+  plays = []; readings = [null];
+  run("radioRemoteTick()"); await flush();
+  assert.equal(plays.length, 0); assert.equal(readings.length, 0);
+  // a fresh reading near the end still swaps
+  run("remoteSeamAt = 0; remoteNow = { uri: matchedUris[3], pos: 199500, dur: 200000, playing: true, at: Date.now() }; radioRemoteTick()"); await flush();
+  assert.deepEqual((plays.at(-1) || {}).uris, [4, 5].map(uriOf));
+
+  // 4. the store: off only when it is absent
+  const realSetTimeout2 = global.setTimeout;
+  global.setTimeout = (fn, ms) => realSetTimeout2(fn, ms >= 8000 ? 5 : ms);
+  for (const bad of [{ status: 200, text: "<html>" }, { status: 500 }, { status: 502 }, { status: 404 }, { status: 413 }, { throws: true }, { hang: true }]) {
+    // the page's first call fails (a local server, a preview without the store): off for this page load, silently
+    resetHandoff(); run("handoffAnswered = false"); serverAnswer = bad;
+    assert.equal(await handoffGet(), null); assert.equal(run("handoffOff"), true); assert.equal(toasts.length, 0);
+    resetHandoff(); run("handoffAnswered = false"); serverAnswer = bad;
+    assert.equal(await handoffPut("keep"), null); assert.equal(run("handoffOff"), true);
+    // after the store has answered once, a failure skips that call and the next one tries again; three in a row turn it off
+    resetHandoff(); serverAnswer = bad;
+    assert.equal(await handoffGet(), null); assert.equal(await handoffPut("keep"), null); assert.equal(run("handoffOff"), false);
+    serverAnswer = ok200; assert.ok(await handoffGet());  // an answer clears the count
+    serverAnswer = bad; await handoffGet(); await handoffGet(); assert.equal(run("handoffOff"), false);
+    await handoffGet(); assert.equal(run("handoffOff"), true); assert.equal(toasts.length, 0);
+  }
+  // a 503 is the server saying it has no store: off at once, whenever it comes
+  resetHandoff(); serverAnswer = { status: 503, json: { error: "no store" } };
+  assert.equal(await handoffGet(), null); assert.equal(run("handoffOff"), true);
+  // a 401 (a bad token) skips the call and never turns it off, nor counts as the store's answer
+  resetHandoff(); run("handoffAnswered = false"); serverAnswer = { status: 401, json: {} };
+  for (let i = 0; i < 4; i++) assert.equal(await handoffGet(), null);
+  assert.equal(run("handoffOff"), false);
+  serverAnswer = { status: 500 }; assert.equal(await handoffGet(), null); assert.equal(run("handoffOff"), true);
+  global.setTimeout = realSetTimeout2;
+  // ...a driver that hits one failed write keeps writing (its heartbeat), so nobody takes its radio over
+  restart(3); await flush();
+  run("radioExhausted = true");
+  serverAnswer = { status: 500 }; run("radioMaybeRefill(matchedUris[1], 0)"); await flush();
+  serverAnswer = ok200; puts = []; beat.fn(); await flush();
+  assert.equal(run("handoffOff"), false); assert.equal(puts.length, 1);
+  run("radioExhausted = false");
+  // ...a follower that hits one failed re-read takes a released radio over at the next one
+  restart(); followWith(otherNote); remote({ uri: oUri(1), pos: 1000, playing: true });
+  serverAnswer = { status: 500 }; await handoffFollowerTick(); assert.equal(run("handoffFollowing"), true); assert.equal(run("handoffOff"), false);
+  serverAnswer = { status: 200, json: { note: { ...otherNote, released: true }, now: 1 } }; puts = [];
+  await handoffFollowerTick(); await flush(); assert.equal((puts[0] || {}).claim, "takeover"); assert.equal(run("handoffFollowing"), false);
+  // ...and a takeover whose write fails is not taken: the window goes on following, and tries again at the next re-read
+  restart(); followWith(otherNote); remote({ uri: oUri(1), pos: 1000, playing: true }); fillWants = []; plays = [];
+  serverAnswer = opts => (opts.method === "PUT" ? { status: 500 } : { status: 200, json: { note: { ...otherNote, released: true }, now: 1 } });
+  await handoffFollowerTick(); await flush();
+  assert.equal(run("handoffFollowing"), true); assert.equal(run("handoffOff"), false); assert.equal(fillWants.length, 0); assert.equal(plays.length, 0);
+  // ...a new radio whose claim got no answer claims the note again with its next write, not with a "keep" the old radio's
+  // driver would refuse
+  restart(); serverAnswer = { status: 500 }; fillSession(3, {}); handoffStarted(); await flush();
+  serverAnswer = ok200; puts = []; beat.fn(); await flush();
+  assert.deepEqual(puts.map(p => p.claim), ["new"]);
+  puts = []; beat.fn(); await flush(); assert.deepEqual(puts.map(p => p.claim), ["keep"]);
+  // ...and the phone strip keeps the last note it read when a re-read fails (Open radio stays)
+  restart(); serverAnswer = { status: 200, json: { note: otherNote, now: 1 } }; await handoffRefreshNote();
+  serverAnswer = { status: 500 }; await handoffRefreshNote();
+  assert.equal(handoffNoteHas(oUri(2)), true); assert.equal(run("handoffOff"), false);
+  serverAnswer = ok200;
+
+  // 5. a follower's row tap sent songs past the driver's last sent one: the driver's seam moves to the song that plays
+  restart(8); await flush();
+  run("radioExhausted = true; radioContextLastUri = matchedUris[3]; radioPaused = false; remoteSeamAt = 0");
+  run("radioMaybeRefill(matchedUris[2], 0)"); assert.equal(run("radioContextLastUri"), uriOf(3));  // a song before it: unchanged
+  run("radioMaybeRefill(matchedUris[5], 0)"); assert.equal(run("radioContextLastUri"), uriOf(5));
+  plays = []; run("remoteNow = { uri: matchedUris[5], pos: 199500, dur: 200000, playing: true, at: Date.now() }; radioRemoteTick()"); await flush();
+  assert.deepEqual((plays.at(-1) || {}).uris, [6, 7].map(uriOf));
+  run("radioExhausted = false");
+
+  // 6. taking over with nothing playing (the desktop's tab closed and the music stopped): Play resumes the radio through
+  // spotifyPlay (the phone's Spotify app, or a request to open Spotify), with no toast
+  restart(); remote({ uri: oUri(1), pos: 40000, playing: true }); readings = [null]; plays = [];
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), true); await flush();
+  assert.equal(plays.length, 0); assert.equal(toasts.length, 0); assert.equal(run("sdkInactive"), true);
+  readings = [];
+  await run("playerPlayPause()"); await flush();
+  assert.equal(((plays.at(-1) || {}).uris || [])[0], oUri(1)); assert.equal((plays.at(-1) || {}).pos, 40000);
+  assert.equal(run("sdkInactive"), false);
+  // ...and when the radio's song plays again some other way (a row tap, the Spotify app), Play is the usual pause again
+  run("radioPausedElsewhere(false)");
+  readings = [{ item: { uri: oUri(2) }, device: speaker(), is_playing: true }];
+  await run("pollNowPlayingOnce()"); assert.equal(run("sdkInactive"), false);
+
+  // 7. a phone opened with songs queued but not sent (its top-up was made while paused) sends them, though it adds none
+  restart(); remote({ uri: oUri(1), pos: 0, playing: false }); plays = [];
+  await handoffTakeOver({ ...otherNote, released: true }); await flush();
+  assert.equal(run("radioPendingReissue"), true); assert.equal(plays.length, 0);
+  remote({ uri: oUri(1), pos: 10000, playing: true }); fillWants = []; plays = [];  // resumed from the speaker while the phone was locked
+  docListeners.visibilitychange(); await flush();
+  assert.equal(fillWants.length, 0); assert.equal((plays.at(-1) || {}).pos >= 10000, true);
+  assert.deepEqual((plays.at(-1) || {}).uris, run("radioUrisFrom(matchedUris, allTrackCount, '" + oUri(1) + "')"));
+  assert.equal(run("radioPendingReissue"), false);
+  // ...still paused: they stay pending
+  run("radioPendingReissue = true; radioContextLastUri = matchedUris[3]"); remote({ uri: oUri(1), pos: 10000, playing: false }); plays = [];
+  docListeners.visibilitychange(); await flush();
+  assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
+
+  // 8. a follower's Play is off while the music plays on another STM window's player, as a row tap is
+  restart(); followWith(otherNote);
+  playingDevice = { id: "other", name: STM_PLAYER_NAME, type: "Computer" }; reported = null;
+  run("sessionPaused = true; radioCurrentUri = matchedUris[1]"); plays = [];
+  await run("radioResumeHere()"); assert.equal(plays.length, 0);
+  playingDevice = speaker();
+
+  // 9. the browser player reconnecting after an auth error does not pull a follower's music here, nor stop its polling
+  const sdkL = {};
+  global.Spotify = { Player: function () { this.addListener = (ev, fn) => { sdkL[ev] = fn; }; this.connect = async () => true; this.disconnect = () => {}; } };
+  run("spotifyToken = 'tok'"); delete window._stmPlayer;
+  const realST3 = global.setTimeout; global.setTimeout = (fn, ms) => (ms === 12000 ? 0 : realST3(fn, ms));
+  run("initSDKPlayer()"); global.setTimeout = realST3;
+  restart(); followWith(otherNote); run("sdkNeedsRetransfer = true; playbackDeviceId = null");
+  others = []; sdkL.ready({ device_id: "mine" }); await flush();
+  assert.equal(others.filter(o => o.url === "https://api.spotify.com/v1/me/player" && o.opts.method === "PUT").length, 0);
+  assert.notEqual(run("pollTimer"), null);
+  delete window._stmPlayer; delete global.Spotify; run("sdkReady = false; sdkDeviceId = null; sdkNeedsRetransfer = false; stopPolling()");
+
+  // 10. a follower's Next moment is off when no next moment is queued (a follower adds no songs: it cannot fetch one)
+  restart(); followWith(makeNote("s-m", "other", [0, 1, 2, 3].map(oUri), { moment: true }));
+  run("highlightNowPlaying(1); radioSyncMoment()");
+  assert.equal(els.momentNextBtn.disabled, true);
+  const two = makeNote("s-m2", "other", [0, 1, 2, 3].map(oUri), { moment: true });
+  two.moments.push({ id: 2, label: "Moment two", chip: "M2", start: 3, end: 4, size: 2 }); two.songs[2].momentId = 2; two.songs[3].momentId = 2;
+  followWith(two); run("highlightNowPlaying(1); radioSyncMoment()");
+  assert.equal(els.momentNextBtn.disabled, false);
+  run("radioStop(); stopPolling()");
   console.log("handoff: ok");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -9,7 +9,9 @@ const HANDOFF_FETCH_TIMEOUT = 8000;  // ms before a request to the store counts 
 
 let handoffMe = rndStr(16);          // this page load's id
 let handoffSessionId = "";           // the radio the note describes
-let handoffOff = false;              // the store does not answer: nothing is sent for the rest of this page load
+let handoffOff = false;              // the store is absent: nothing is sent for the rest of this page load
+let handoffAnswered = false;         // the store has answered once on this page load
+let handoffFails = 0;                // failed calls in a row since its last answer
 let handoffNote = null;              // the last note seen
 let handoffFollowing = false;        // this window follows another device's radio
 
@@ -85,22 +87,29 @@ function handoffRole(note, me, now) {
   return "follower";
 }
 
-// One request to the store. Anything but 200 (and 409 for a PUT) turns the hand-off off for this page load, without a toast.
+// One request to the store: its answer (200, or 409 for a PUT), or null. The hand-off turns off for this page load, without a
+// toast, only when the store is absent: a 503 (the server has none), or the page's first call fails (a local server, a preview
+// without it). After the store has answered once, a failed call (a 5xx, a timeout, no network, a body that is not JSON) is
+// skipped and the next one tries again; HANDOFF_FAILS_MAX in a row turn it off. A 401 (a bad token) is skipped and counts for nothing.
 async function handoffCall(method, body) {
   if (handoffOff) return null;
   const token = await getSpotifyToken();
   if (!token) return null;
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), HANDOFF_FETCH_TIMEOUT);
+  let status = 0;
   try {
     const opts = { method, signal: ctl.signal, headers: { Authorization: "Bearer " + token } };
     if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
     const res = await fetch("/api/session", opts);
-    if (res.status !== 200 && !(method === "PUT" && res.status === 409)) throw new Error("status " + res.status);
+    status = res.status;
+    if (status === 401) return null;
+    if (status !== 200 && !(method === "PUT" && status === 409)) throw new Error("status " + status);
     const data = await res.json();
     if (!data || typeof data !== "object") throw new Error("not json");
-    return { status: res.status, note: data.note || null, now: data.now };
+    handoffAnswered = true; handoffFails = 0;
+    return { status, note: data.note || null, now: data.now };
   } catch (e) {
-    handoffOff = true;
+    if (status === 503 || !handoffAnswered || ++handoffFails >= HANDOFF_FAILS_MAX) handoffOff = true;
     return null;
   } finally {
     clearTimeout(timer);
@@ -127,6 +136,7 @@ let handoffQueued = null;    // the claim of the one write waiting behind it ("n
 let handoffAskedUri = null;  // the reported song the note was last re-read for (once per song)
 let handoffTickBusy = false;
 let handoffTaking = false;   // a takeover is waiting for the server's answer: nothing else writes or re-reads meanwhile
+let handoffUnclaimed = false;  // this window's new radio got no answer from the store: its next write claims it again ("new")
 
 // This window drives a radio it can write the note for
 function handoffDriving() { return radioActive && !handoffFollowing && !handoffOff && !handoffTaking && !!handoffSessionId; }
@@ -139,7 +149,7 @@ function handoffStarted() {
 }
 // The radio stopped here (radioStop): nothing to write or follow until the next start
 function handoffStopped() {
-  handoffSessionId = ""; handoffFollowing = false; handoffAskedUri = null;
+  handoffSessionId = ""; handoffFollowing = false; handoffAskedUri = null; handoffUnclaimed = false;
 }
 
 // Songs were added, or the track changed. The driver writes the note; a follower re-reads it (the reported song changed),
@@ -155,15 +165,17 @@ function handoffChanged() {
 }
 function handoffBeat() { if (handoffDriving()) handoffWrite("keep"); }
 
-// One write in flight and one queued. The queued one is built when it is sent, so it carries the latest state.
+// One write in flight and one queued. The queued one is built when it is sent, so it carries the latest state. A new radio whose
+// claim got no answer claims the note again with the next write (a plain "keep" would get the 409 of the radio it replaced).
 function handoffWrite(claim) {
   if (handoffWriting) { if (handoffQueued !== "new") handoffQueued = claim; return handoffWriting; }
   handoffWriting = (async () => {
     try {
       for (let next = claim; next && handoffDriving(); ) {
         handoffQueued = null;
-        const sid = handoffSessionId;
-        const r = await handoffPut(next);
+        const sid = handoffSessionId, send = next === "keep" && handoffUnclaimed ? "new" : next;
+        const r = await handoffPut(send);
+        if (send === "new") handoffUnclaimed = !r;
         next = handoffQueued;
         if (r && r.status === 409) {
           // Another window drives now: follow its radio, with no toast. A refusal of a radio this window has replaced since
@@ -198,7 +210,7 @@ function handoffFollow(note) {
 function handoffShow(note) {
   const reported = [remoteNow && remoteNow.uri, radioCurrentUri];  // the last songs Spotify reported here
   handoffApplyNote(note);
-  handoffNote = note; handoffFollowing = true;
+  handoffNote = note; handoffFollowing = true; handoffUnclaimed = false;
   radioActive = true; radioPendingReissue = false; radioSkipWanted = false; radioJumpFrom = null; radioStartedAt = 0;
   sdkInactive = false;
   if (sessionPaused) { sessionPaused = false; hideStatus(); }  // the music that played elsewhere is this radio
@@ -238,8 +250,9 @@ async function handoffFollowerTick() {
 }
 
 // The reported song is not in this window's copy: is it the radio's after all? A follower's copy may be behind (the driver
-// added songs) or the radio was replaced elsewhere, so it re-reads the note once for that song. A driver checks whether
-// another device started a new radio that plays it (the 409 on its next write would say so, after a warning it must not show).
+// added songs) or the radio was replaced elsewhere, so it re-reads the note once for that song. A driver checks whether another
+// device drives now, with a radio that plays it: a new one, or this one taken over (the same session id). The 409 on its next
+// write would say so, after a warning it must not show.
 async function handoffSongKnown(uri) {
   if (!uri) return false;
   if (sessionQueue.has(uri)) return true;
@@ -249,8 +262,7 @@ async function handoffSongKnown(uri) {
   const note = r && handoffParseNote(r.note);
   if (!note) return false;
   if (handoffFollowing) handoffFollow(note);
-  else if (handoffDriving() && note.sessionId !== handoffSessionId && handoffRole(note, handoffMe, r.now) === "follower"
-    && note.songs.some(s => s.uri === uri)) handoffFollow(note);
+  else if (handoffDriving() && handoffRole(note, handoffMe, r.now) === "follower" && note.songs.some(s => s.uri === uri)) handoffFollow(note);
   return sessionQueue.has(uri);
 }
 
@@ -259,8 +271,8 @@ async function handoffSongKnown(uri) {
 // A window becomes the driver of a radio whose driver left (released) or went silent for 3 minutes. A window without a browser
 // player (every phone) cannot top up from the background: whenever it takes over, starts a radio or comes back to the screen it
 // makes sure PHONE_TOPUP songs are queued after the current one, and sends them to Spotify at once, from the current song at its
-// position (the phone may be locked before the seam). While its page is hidden it adds nothing more (radioMaybeRefill); a visible
-// page tops up on track changes as any driver does.
+// position (the phone may be locked before the seam), together with any songs queued earlier and not sent yet. While its page is
+// hidden it adds nothing more (radioMaybeRefill); a visible page tops up on track changes as any driver does.
 // =============================================================================
 let handoffTopUpBusy = false, handoffOpening = false;
 
@@ -280,6 +292,15 @@ async function handoffRead(token) {
   else if (remoteNow) remoteNow = Object.assign({}, remoteNow, { playing: false });
   return data;
 }
+// Nothing plays and Spotify reports no device (the driver's tab closed and the music stopped): Pause / Play has no device to talk
+// to. The radio waits paused on its current song, and Play brings it back through radioResumeHere (spotifyPlay plays it on this
+// browser, on the phone's Spotify app, or asks the user to open Spotify). No toast.
+function handoffPausedHere() {
+  if (!radioActive || handoffFollowing || sdkInactive) return;
+  const cur = handoffCurrentUri();
+  if (cur) { _sdkCurrentUri = cur; _sdkPositionMs = remoteNow && remoteNow.uri === cur ? remoteNow.pos || 0 : 0; }
+  radioPausedElsewhere(false);
+}
 // The radio's current song: the one Spotify reports when it is ours, else the last one seen, else (a radio that just started,
 // nothing read yet) the first
 function handoffCurrentUri() {
@@ -289,8 +310,13 @@ function handoffCurrentUri() {
   return radioUrisFrom(matchedUris, allTrackCount, null)[0] || null;
 }
 
-async function handoffPhoneTopUp() {
-  if (handoffWriting) await handoffWriting;  // a radio that just started: the store's first answer says whether it is there
+// confirmed: the store has just agreed this window drives (a takeover)
+async function handoffPhoneTopUp(confirmed) {
+  // Does this window still drive? A page back from the pocket may have lost the radio meanwhile (another device took it over):
+  // it asks the store first, and a 409 makes it a follower before it adds or sends a song. A radio that just started waits for
+  // its first write (which also says whether the store is there).
+  if (handoffWriting) await handoffWriting;
+  else if (!confirmed && handoffDriving()) await handoffWrite("keep");
   if (!handoffPhoneDriver()) {
     if (handoffOff && radioActive && !handoffFollowing) continueRadio();  // no store: the phone tops up as it always did
     return;
@@ -298,19 +324,23 @@ async function handoffPhoneTopUp() {
   if (handoffTopUpBusy || radioRefilling) return;
   handoffTopUpBusy = true;
   const sid = radioSession;
-  let added = 0;
+  let added = 0, none = false;  // none: the last reading here reported no device
   try {
     const token = await getSpotifyToken();
     if (!token || sid !== radioSession) return;
-    if (!handoffFresh()) await handoffRead(token);
+    const read = async () => { const data = await handoffRead(token); none = !(data && data.device); };
+    if (!handoffFresh()) await read();
     if (sid !== radioSession || !handoffPhoneDriver()) return;
     const want = handoffTopUpWant(radioRemaining(matchedUris, allTrackCount, handoffCurrentUri()));
-    if (!want) return;
-    radioRefilling = true; radioRenderQueue();
-    try { added = await radioFill(want); }
-    finally { if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); } }
-    if (!added || sid !== radioSession) return;
-    if (!handoffFresh()) await handoffRead(token);  // the fill took a while: send from where the song is now
+    if (want) {
+      radioRefilling = true; radioRenderQueue();
+      try { added = await radioFill(want); }
+      finally { if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); } }
+      if (sid !== radioSession) return;
+    }
+    // Nothing added and nothing queued that Spotify was not sent (a top-up made while paused, a refill waiting for its seam)
+    if (!added && !radioUnsentUris().length) return;
+    if (!handoffFresh()) await read();  // the fill took a while: send from where the song is now
     if (sid !== radioSession) return;
     const cur = handoffCurrentUri();
     // Only over this radio's own song while a fresh reading says it plays. Paused, outside music or no fresh reading: nothing is
@@ -318,7 +348,7 @@ async function handoffPhoneTopUp() {
     if (handoffFresh() && remoteNow.playing && remoteNow.uri === cur
       && await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), connectCurrentPosition(cur))) {
       if (sid === radioSession) { radioPendingReissue = false; checkLikedTracks(); }
-    } else if (sid === radioSession) radioPendingReissue = true;
+    } else if (sid === radioSession) { radioPendingReissue = true; if (none) handoffPausedHere(); }
   } finally {
     handoffTopUpBusy = false;
     if (added > 0 && sid === radioSession) handoffChanged();  // the note gets the new songs
@@ -347,13 +377,16 @@ async function handoffTryTakeOver(note) {
     radioPaused = !!(remoteNow && remoteNow.uri === cur && !remoteNow.playing);
     const r = await handoffPut("takeover");
     if (r && r.status === 409) { handoffTaking = false; handoffFollow(r.note); return "lost"; }
-    // (no answer: the store is gone, handoffOff is set, and this window carries the radio on alone, as without the hand-off)
+    // No answer from a store that answered before: this window goes on following, and the next re-read tries again. With the
+    // store gone (handoffOff is set) this window carries the radio on alone, as without the hand-off.
+    if (!r && !handoffOff) return "refused";
     handoffFollowing = false; handoffSessionId = note.sessionId;
     if (r) handoffNote = r.note;
     taken = true;
+    if (!(data && data.device)) handoffPausedHere();
   } finally { handoffTaking = false; }
   if (taken) {
-    if (handoffPhoneDriver()) await handoffPhoneTopUp();
+    if (handoffPhoneDriver()) await handoffPhoneTopUp(true);
     else radioMaybeRefill(radioCurrentUri, radioLastPos);  // a desktop tops up as it always does
   }
   return "taken";
@@ -376,7 +409,7 @@ async function handoffOpen() {
 // The phone strip (connect.js) re-reads the note to know whether the song it shows is a radio's
 async function handoffRefreshNote() {
   const r = await handoffGet();
-  handoffNote = r ? handoffParseNote(r.note) : null;
+  if (r) handoffNote = handoffParseNote(r.note);  // a failed read keeps the last note (the next one tries again)
 }
 function handoffNoteHas(uri) { return !handoffOff && !!uri && !!handoffNote && handoffNote.songs.some(s => s.uri === uri); }
 

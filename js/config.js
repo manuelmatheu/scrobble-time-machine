@@ -13,6 +13,7 @@ const HANDOFF_FOLLOW_MS = 30000;  // a follower re-reads the note this often
 const HANDOFF_STALE_MS = 180000;  // a driver silent this long is gone
 const HANDOFF_SEEN_MAX = 300;     // radioSeen keys kept in the note
 const HANDOFF_BEFORE = 3;         // songs before the current one kept in the note
+const HANDOFF_FAILS_MAX = 3;      // failed calls in a row (after the store answered once) that turn the hand-off off
 
 // ═════════════════════════════════════════════════════════════════════════════
 // STATE

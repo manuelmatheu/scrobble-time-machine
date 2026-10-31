@@ -332,10 +332,11 @@ function initSDKPlayer() {
     const reconnecting = sdkNeedsRetransfer;
     sdkDeviceId = device_id;
     sdkReady = true;
-    if (!playbackDeviceId) stopPolling();  // another Connect device picked: polling keeps following it
+    // another Connect device picked: polling keeps following it; a follower (hand-off) polls anyway, the music is the driver's
+    if (!playbackDeviceId && !radioFollower()) stopPolling();
     if (typeof radioSyncVolume === "function") radioSyncVolume();
-    // Re-transfer playback to SDK device after auth error recovery
-    if (reconnecting && sessionQueue.size > 0 && !sessionPaused && !playbackDeviceId) {
+    // Re-transfer playback to SDK device after auth error recovery (never on a follower: the music stays on the driver's device)
+    if (reconnecting && sessionQueue.size > 0 && !sessionPaused && !playbackDeviceId && !radioFollower()) {
       sdkNeedsRetransfer = false;
       getSpotifyToken().then(t => { if (t) transferPlayback(t, sdkDeviceId).catch(() => {}); });
     }

@@ -5,16 +5,19 @@ const handler = require("../api/session.js");
 let clock = 1000000;
 Date.now = () => clock;
 let meCalls = 0;
-let lastSet = null;
+let lastSet = null, kvDown = false;
 const store = {};
+const meStatus = { good: 200, busy: 429, down: 500 };  // tokens: signed in, Spotify rate-limited, Spotify down (else 401)
 global.fetch = async (url, opts) => {
   const u = String(url);
   if (u.indexOf("api.spotify.com/v1/me") >= 0) {
     meCalls++;
-    const ok = opts && opts.headers && opts.headers.Authorization === "Bearer good";
-    return { status: ok ? 200 : 401, ok, json: async () => (ok ? { id: "u1" } : {}) };
+    const tok = String((opts && opts.headers && opts.headers.Authorization) || "").replace("Bearer ", "");
+    const status = meStatus[tok] || 401, ok = status === 200;
+    return { status, ok, json: async () => (ok ? { id: "u1" } : {}) };
   }
   if (u.indexOf("https://kv.test") === 0) {
+    if (kvDown) return { status: 500, ok: false, json: async () => ({}) };
     const cmd = JSON.parse(opts.body);
     if (cmd[0] === "GET") return { status: 200, ok: true, json: async () => ({ result: store[cmd[1]] === undefined ? null : store[cmd[1]] }) };
     if (cmd[0] === "SET") { lastSet = cmd; store[cmd[1]] = cmd[2]; return { status: 200, ok: true, json: async () => ({ result: "OK" }) }; }
@@ -61,6 +64,14 @@ async function call(method, body, token, query) {
   assert.equal(storeNote().released, true);
   assert.equal((await call("PUT", { claim: "keep", note: { ...n, pad: "x".repeat(70000) } }, "good")).status, 413);
   meCalls = 0; await call("GET", {}, "good"); await call("GET", {}, "good"); assert.equal(meCalls, 0); // cached id
+  // a /me answer other than 401 (Spotify rate-limited or down) is not "signed out": 502, and the app tries again later
+  assert.equal((await call("GET", {}, "busy")).status, 502);
+  assert.equal((await call("PUT", { claim: "keep", note: n }, "down")).status, 502);
+  // a store error: 502 too (503 says only that no store is set up)
+  kvDown = true;
+  assert.equal((await call("GET", {}, "good")).status, 502);
+  assert.equal((await call("PUT", { claim: "keep", note: n }, "good")).status, 502);
+  kvDown = false;
 
   // canWrite rules
   const c = handler.canWrite;

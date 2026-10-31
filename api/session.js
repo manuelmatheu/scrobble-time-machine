@@ -1,6 +1,8 @@
 // Vercel serverless store for the hand-off "session note": the window that drives a radio keeps
 // a small note here (keyed by Spotify user id) so another device can pick the radio up.
 // GET -> { note, now }; PUT { claim, note } -> { note, now } or 409; POST ?release -> 204.
+// 401: the token is not signed in. 503: no store is set up (the app turns the hand-off off). 502: Spotify or the store
+// failed this time (the app tries again on its next call).
 // Tokens are only used to ask Spotify who the user is; they are never stored or logged.
 const ID_TTL = 300000;       // token -> user id cache, in memory only
 const NOTE_TTL = 43200;      // seconds the store keeps a note
@@ -14,13 +16,16 @@ function canWrite(stored, note, claim, now) {
   return claim === "takeover" && !!(stored.released || now - stored.beatAt > STALE_DRIVER);
 }
 
+// The Spotify user id of the token; null when Spotify says it is not signed in (401). Any other failure (a 429, a 5xx, no id)
+// throws: it says nothing about the token.
 async function userIdFor(token) {
   const hit = idCache.get(token);
   if (hit && Date.now() - hit.at < ID_TTL) return hit.id;
   const r = await fetch("https://api.spotify.com/v1/me", { headers: { Authorization: "Bearer " + token } });
-  if (r.status !== 200) return null;
+  if (r.status === 401) return null;
+  if (r.status !== 200) throw new Error("me " + r.status);
   const me = await r.json();
-  if (!me || !me.id) return null;
+  if (!me || !me.id) throw new Error("me without id");
   idCache.set(token, { id: me.id, at: Date.now() });
   return me.id;
 }
@@ -84,7 +89,7 @@ async function handler(req, res) {
     await kv(["SET", key, JSON.stringify(out), "EX", NOTE_TTL]);
     return res.status(200).json({ note: out, now });
   } catch (e) {
-    return res.status(503).json({ error: "no store" });
+    return res.status(502).json({ error: "try again" });
   }
 }
 
