@@ -23,8 +23,9 @@ function setCurrentDevice(d) { if (typeof connectSetCurrent === "function") conn
 // A hidden page does not poll, unless it drives a radio (it tops up and seams the music on another device)
 function pollVisible() { return typeof document === "undefined" || document.visibilityState !== "hidden"; }
 async function pollNowPlaying() {
-  if (sdkPlaying() || _pollBusy) return;
-  if (!pollVisible() && !radioActive) return;
+  // A follower (hand-off) polls even with this browser's player ready: the music plays on the driver's device
+  if ((sdkPlaying() && !radioFollower()) || _pollBusy) return;
+  if (!pollVisible() && (!radioActive || radioFollower())) return;
   _pollBusy = true;
   try { await pollNowPlayingOnce(); } finally { _pollBusy = false; }
 }
@@ -56,12 +57,16 @@ async function pollNowPlayingOnce() {
   // Session check: is Spotify playing one of our queued tracks?
   if (sessionQueue.size > 0 && !sessionQueue.has(playingUri)) {
     if (radioRecoverRunOff(prevUri)) return;  // it ran past the last track we sent: the swap was missed, put our tracks back
-    if (!sessionPaused) {
-      sessionPaused = true;
-      highlightNowPlaying(-1);
-      showStatus("Playback moved to another session - click a track to reclaim", "warn");
+    // The session note may know it (a follower's copy is behind, or a new radio started elsewhere): re-read once, then decide
+    if (typeof handoffSongKnown === "function" && await handoffSongKnown(playingUri)) followPlaybackDevice(data);
+    else {
+      if (!sessionPaused) {
+        sessionPaused = true;
+        highlightNowPlaying(-1);
+        showStatus("Playback moved to another session - click a track to reclaim", "warn");
+      }
+      return;
     }
-    return;
   }
   if (sessionPaused) {
     sessionPaused = false;
@@ -201,18 +206,18 @@ async function releaseDeadDevice(resume) {
 }
 async function playerPlayPause() {
   if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere(); return; }
-  if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.togglePlay(); return; }
+  if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.togglePlay(); return; }  // a follower is a remote
   playerRest("toggle");
 }
 async function playerPrev() {
   if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere("restart"); return; }
-  if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.previousTrack(); return; }
+  if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.previousTrack(); return; }
   playerRest("prev");
 }
 async function playerNext() {
   if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere("next"); return; }
   if (radioSkipHandled()) return;
-  if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.nextTrack(); return; }
+  if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
 // Volume slider (desktop only): the SDK player's own volume, so only while the SDK device is the active player
@@ -339,7 +344,8 @@ async function sdkLostPlayback() {
   const token = await getSpotifyToken();
   const data = token ? await getCurrentlyPlaying(token) : null;
   if (data && data.device && data.device.id === sdkDeviceId) return;  // still ours: a passing null state
-  if (data && data.item && sessionQueue.has(data.item.uri)) {
+  // the session note may know the song (this window follows another device's radio, or one was started elsewhere): no paused look
+  if (data && data.item && (sessionQueue.has(data.item.uri) || (typeof handoffSongKnown === "function" && await handoffSongKnown(data.item.uri)))) {
     if (data.device) setCurrentDevice(data.device);  // the bar says where it went at once, not at the first poll
     followPlaybackDevice(data);
     if (!sdkPlaying()) { clearInterval(_sdkProgressTimer); startPolling(); }

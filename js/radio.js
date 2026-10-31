@@ -516,6 +516,7 @@ async function startRadio() {
     startPolling();
     checkLikedTracks();
     endSessionUI();
+    if (typeof handoffStarted === "function") handoffStarted();  // this window drives the new radio: it claims the session note
     continueRadio();  // fills the queue behind the first song; the new tracks join at the end of the last one we sent (the seam)
   } catch (err) {
     if (sid !== radioSession) return;
@@ -523,14 +524,19 @@ async function startRadio() {
   }
 }
 
+// This window follows another device's radio (hand-off): it never fills, seams or re-issues. handoff.js holds the state;
+// the radio test runs without it.
+function radioFollower() { return typeof handoffFollowing !== "undefined" && handoffFollowing; }
+
 // Top up the queue, then re-issue playback from the current track so the new tracks join
 // the Spotify context (avoids the persistent user queue)
 async function continueRadio() {
-  if (!radioActive || radioRefilling || radioExhausted) return;
+  if (!radioActive || radioRefilling || radioExhausted || radioFollower()) return;
   const sid = radioSession;
+  let added = 0;
   radioRefilling = true; radioRenderQueue();
   try {
-    const added = await radioFill(RADIO_REFILL);
+    added = await radioFill(RADIO_REFILL);
     if (sid !== radioSession) return;
     if (!added) {
       // Only a healthy Last.fm + Spotify round that found nothing new means the library is exhausted;
@@ -548,12 +554,16 @@ async function continueRadio() {
     await radioReissue();
   } finally {
     radioSkipWanted = false;
-    if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); }
+    if (sid === radioSession) {
+      radioRefilling = false; radioRenderQueue();
+      if (added > 0 && typeof handoffChanged === "function") handoffChanged();  // the session note gets the new songs
+    }
   }
 }
 
 // Re-issue playback from the current track so the queued tracks include the new ones
 async function radioReissue() {
+  if (radioFollower()) return;
   const sid = radioSession;
   const currentUri = sdkPlaying() ? _sdkCurrentUri : radioCurrentUri;
   if (!currentUri) return;
@@ -568,7 +578,7 @@ async function radioReissue() {
 // Track the play/pause state; a top-up that finished while paused re-issues on resume
 function radioSetPaused(paused) {
   radioPaused = paused;
-  if (!paused && radioPendingReissue && !radioCanSeam()) { radioPendingReissue = false; radioReissue(); }
+  if (!paused && radioPendingReissue && !radioCanSeam() && !radioFollower()) { radioPendingReissue = false; radioReissue(); }
 }
 
 // SDK only. A re-issue restarts the stream (device transfer + play), which stutters if it lands a few
@@ -597,7 +607,7 @@ function radioRemoteLeft(r, now) {
 // we hold tracks Spotify was not sent, swap them in. Near the end it re-reads /me/player every second, since the position
 // is only as exact as the last reading.
 function radioRemoteTick() {
-  if (!radioActive || sdkPlaying() || radioSeaming || radioPaused || !remoteNow || !remoteNow.playing) return;
+  if (!radioActive || sdkPlaying() || radioSeaming || radioPaused || !remoteNow || !remoteNow.playing || radioFollower()) return;
   if (!radioContextLastUri || remoteNow.uri !== radioContextLastUri || !radioUnsentUris().length) return;
   const now = Date.now(), left = radioRemoteLeft(remoteNow, now);
   if (left === null || now - remoteSeamAt < 3000) return;
@@ -606,12 +616,12 @@ function radioRemoteTick() {
 }
 // Spotify ran past the last track we sent (we missed the swap) and moved on to something else: put the tracks back now
 function radioRecoverRunOff(prevUri) {
-  if (!radioActive || radioSeaming || !radioContextLastUri || prevUri !== radioContextLastUri || !radioUnsentUris().length) return false;
+  if (!radioActive || radioSeaming || radioFollower() || !radioContextLastUri || prevUri !== radioContextLastUri || !radioUnsentUris().length) return false;
   radioSeamReissue();
   return true;
 }
 function radioMaybeSeam() {
-  if (!radioActive || !sdkPlaying() || radioSeaming) return;
+  if (!radioActive || !sdkPlaying() || radioSeaming || radioFollower()) return;
   const atLast = !!radioContextLastUri && _sdkCurrentUri === radioContextLastUri;
   if (!radioSeamDue(radioPendingReissue || (atLast && radioUnsentUris().length > 0), atLast, _sdkPositionMs, _sdkDurationMs, RADIO_SEAM_MS)) return;
   radioSeamReissue();
@@ -621,7 +631,7 @@ function radioMaybeSeam() {
 // alone until the rest is swapped in). Swap the tracks it does not have in right now instead; true when the skip was handled here.
 let radioSkipWanted = false;  // Next was pressed on the last sent track while the queue was still filling: swap as soon as it has tracks
 function radioSkipHandled() {
-  if (!radioActive || !radioContextLastUri) return false;
+  if (!radioActive || !radioContextLastUri || radioFollower()) return false;
   const cur = sdkPlaying() ? _sdkCurrentUri : remoteNow && remoteNow.uri;
   if (cur !== radioContextLastUri) return false;
   if (radioSeaming) return true;
@@ -631,6 +641,7 @@ function radioSkipHandled() {
 }
 
 async function radioSeamReissue() {
+  if (radioFollower()) return;  // the driver swaps the songs in
   radioSeaming = true;  // first, so the next 250ms tick does not fire it again
   radioPendingReissue = false;
   try {
@@ -658,13 +669,16 @@ function radioUpNextRows() {
   return h > 0 ? Math.max(RADIO_UPNEXT_ROWS_WIDE, Math.floor((h + 1) / RADIO_ROW_PX_WIDE)) : RADIO_UPNEXT_ROWS_WIDE;
 }
 function radioMaybeRefill(currentUri, positionMs) {
+  const changed = currentUri !== radioCurrentUri;
   radioCurrentUri = currentUri; radioLastPos = positionMs || 0;
+  if (changed && typeof handoffChanged === "function") handoffChanged();  // the session note follows the playing song
   const remaining = radioRemaining(matchedUris, allTrackCount, currentUri);
   if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1)) continueRadio();
 }
 
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false; radioJumpFrom = null;
+  if (typeof handoffStopped === "function") handoffStopped();
   radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0;
   hideRadioView();
 }
@@ -1155,11 +1169,21 @@ function radioRenderQueue() {
 let radioQueueShown = [];  // track indices listed in Up next at the last render
 
 // Play the radio from a queued track onward (the Up next rows call this)
+// A follower plays the note's songs from that row through the driver's last sent song, so the driver's seam stays right, on the
+// device the music is on; never on another STM window's browser player.
 async function radioPlayFrom(idx) {
   if (!radioActive || !matchedUris[idx]) return;
   const token = await getSpotifyToken();
   if (!token) return;
-  const ok = await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, matchedUris[idx]));
+  let uris = radioUrisFrom(matchedUris, allTrackCount, matchedUris[idx]);
+  if (radioFollower()) {
+    const data = await getCurrentlyPlaying(token), d = data && data.device;
+    if (d && d.name === STM_PLAYER_NAME && d.id !== sdkDeviceId) return;
+    followPlaybackDevice(data);
+    const end = uris.indexOf(radioContextLastUri);
+    if (end >= 0) uris = uris.slice(0, end + 1);
+  }
+  const ok = await spotifyPlay(token, uris);
   if (!ok) showStatus("Playback failed. Is Spotify active?", "error");
   else radioPendingReissue = false;  // the new context already holds every queued track
 }
@@ -1211,7 +1235,7 @@ function radioNextMoment() {
   const idx = radioNextMomentIndex(nowPlayingIndex);
   if (idx >= 0) { radioPlayFrom(idx); return; }
   const cur = trackMeta[nowPlayingIndex], id = cur && cur.moment ? cur.moment.id : null;
-  if (!radioActive || id === null || radioExhausted) return;
+  if (!radioActive || id === null || radioExhausted || radioFollower()) return;  // a follower adds no songs: the driver does
   radioCarry = radioCarry.filter(p => !(p.moment && p.moment.id === id));
   radioJumpFrom = id;
   if ($("momentNextBtn")) $("momentNextBtn").disabled = true;
