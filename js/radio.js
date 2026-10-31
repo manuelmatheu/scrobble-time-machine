@@ -464,6 +464,13 @@ function endSessionUI() {
   $("cancelBtn").style.display = "none"; $("usernameInput").disabled = false; updateRadioButton();
 }
 
+// Discover and Mix candidates (the seeds, buffers and caches are not in the session note: a new driver rebuilds them)
+function radioResetPools() {
+  radioBuf = { past: [], new: [] }; radioMixCursor = 0;
+  discoverPool = []; discoverSeeds = null; discoverSeedRound = 0; discoverSimilarCache = {}; discoverTopCache = {}; discoverUsedArtists = new Set();
+  discoverNeedsReconnect = false; discoverWarnedEmpty = false;
+}
+
 async function startRadio() {
   const user = $("usernameInput").value.trim();
   if (!user || !spotifyToken) return;
@@ -473,9 +480,7 @@ async function startRadio() {
   radioActiveHow = library ? radioHow : "songs"; radioActiveYear = library ? radioYear : 0;
   radioRange = radioYearRange(radioActiveYear); radioMomentSeq = 0;
   const discover = radioActiveStation === "discover", fresh = radioActiveStation !== "library";
-  radioBuf = { past: [], new: [] }; radioMixCursor = 0;
-  discoverPool = []; discoverSeeds = null; discoverSeedRound = 0; discoverSimilarCache = {}; discoverTopCache = {}; discoverUsedArtists = new Set();
-  discoverNeedsReconnect = false; discoverWarnedEmpty = false;
+  radioResetPools();
   matchedUris = {}; allTrackCount = 0; uriToIndices = {}; totalMatched = 0;
   trackMeta = {}; radioSeen = new Set(); radioFailures = 0; radioRefilling = false; radioExhausted = false;
   radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioUser = user; radioActive = true;
@@ -517,7 +522,8 @@ async function startRadio() {
     checkLikedTracks();
     endSessionUI();
     if (typeof handoffStarted === "function") handoffStarted();  // this window drives the new radio: it claims the session note
-    continueRadio();  // fills the queue behind the first song; the new tracks join at the end of the last one we sent (the seam)
+    // fills the queue behind the first song; the new tracks join at the end of the last one we sent (the seam). A phone adds its 10.
+    if (radioPhoneDriver()) handoffPhoneTopUp(); else continueRadio();
   } catch (err) {
     if (sid !== radioSession) return;
     radioStop(); currentPhase = "error"; showStatus(err.message, "error"); endSessionUI();
@@ -527,6 +533,9 @@ async function startRadio() {
 // This window follows another device's radio (hand-off): it never fills, seams or re-issues. handoff.js holds the state;
 // the radio test runs without it.
 function radioFollower() { return typeof handoffFollowing !== "undefined" && handoffFollowing; }
+// A window without a browser player (a phone) that drives a radio adds at most PHONE_TOPUP songs per opening (handoffPhoneTopUp),
+// never on a track change: it cannot top up from the background (spec 5.3)
+function radioPhoneDriver() { return typeof handoffPhoneDriver === "function" && handoffPhoneDriver(); }
 
 // Top up the queue, then re-issue playback from the current track so the new tracks join
 // the Spotify context (avoids the persistent user queue)
@@ -673,7 +682,7 @@ function radioMaybeRefill(currentUri, positionMs) {
   radioCurrentUri = currentUri; radioLastPos = positionMs || 0;
   if (changed && typeof handoffChanged === "function") handoffChanged();  // the session note follows the playing song
   const remaining = radioRemaining(matchedUris, allTrackCount, currentUri);
-  if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1)) continueRadio();
+  if (radioShouldRefill({ active: radioActive, refilling: radioRefilling, exhausted: radioExhausted, remaining }, radioUpNextRows() - 1) && !radioPhoneDriver()) continueRadio();
 }
 
 function radioStop() {

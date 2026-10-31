@@ -433,8 +433,25 @@ async function connectHomeTick() {
     const token = await getSpotifyToken();
     if (!token) return;
     if (!connectLoaded) connectRefresh(true);  // one device list read, for the Home row's default
-    connectStripShow(await getCurrentlyPlaying(token));
+    const data = await getCurrentlyPlaying(token);
+    if (connectStripShows(data)) await connectStripNote(data);
+    connectStripShow(data);
   } finally { _connectHomeBusy = false; }
+}
+// Hand-off (part 2): Open radio shows when the song the strip shows is in the session note. The note is re-read at most every
+// HANDOFF_FOLLOW_MS while the strip shows, and at once when the reported song changes. (handoff.js loads after this file.)
+let connectNoteAt = 0, connectNoteUri = null;
+async function connectStripNote(data) {
+  if (typeof handoffRefreshNote !== "function") return;
+  const uri = data.item.uri;
+  if (uri === connectNoteUri && Date.now() - connectNoteAt < HANDOFF_FOLLOW_MS) return;
+  connectNoteUri = uri; connectNoteAt = Date.now();
+  await handoffRefreshNote();
+}
+// The strip shows music that plays on another device (not this browser's player)
+function connectStripShows(data) {
+  const d = data && data.device;
+  return !!(d && data.item && !(sdkDeviceId && d.id === sdkDeviceId));
 }
 function connectHomeSoon(ms) {
   clearTimeout(_connectHomeSoon);
@@ -444,10 +461,12 @@ function connectStripShow(data) {
   const strip = $("connectNowOn");
   if (!strip) return;
   const d = data && data.device, item = data && data.item;
-  const show = !!(d && item && !(sdkDeviceId && d.id === sdkDeviceId));
+  const show = connectStripShows(data);
   connectStripReading = show ? data : null;
   strip.hidden = !show;
   if (!show) return;
+  const open = $("connectNowOpen");
+  if (open) open.hidden = !(typeof handoffNoteHas === "function" && handoffNoteHas(item.uri));
   connectSetText("connectNowDevice", d.name || "another device");
   const artists = (item.artists || []).map(a => a && a.name).filter(Boolean).join(", ");
   connectSetText("connectNowTrack", (item.name || "") + (artists ? " · " + artists : ""));

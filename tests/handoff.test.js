@@ -14,13 +14,14 @@ global.document = { getElementById: id => els[id] || (els[id] = fakeEl()), visib
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..", "js", f), "utf8"), { filename: f });
 ["config.js", "radio.js", "spotify.js", "ui.js", "player.js", "connect.js"].forEach(load);
 // handoff.js registers its pagehide listener and its timers at load: record them instead of running them
-const listeners = {}, intervals = [];
+const listeners = {}, docListeners = {}, intervals = [];
 window.addEventListener = (ev, fn) => { listeners[ev] = fn; };
+document.addEventListener = (ev, fn) => { docListeners[ev] = fn; };
 const realSetInterval = global.setInterval;
 global.setInterval = (fn, ms) => { intervals.push({ fn, ms }); return intervals.length; };
 load("handoff.js");
 global.setInterval = realSetInterval;
-delete window.addEventListener;
+delete window.addEventListener; delete document.addEventListener;
 
 const run = code => vm.runInThisContext(code);
 const uriOf = i => "spotify:track:t" + i;
@@ -69,6 +70,7 @@ global.fetch = async (url, opts) => {
 function resetHandoff() {
   run("handoffOff = false; handoffFollowing = false; radioActive = true; playbackDeviceId = null; sdkReady = false; sdkInactive = false; sessionPaused = false; remoteNow = null");
   sent = []; puts = []; gets = 0; others = []; toasts.length = 0; beacons = []; plays = [];
+  reported = null; playingDevice = dev("k", "Kitchen", "Speaker");
 }
 
 // driver and follower
@@ -80,8 +82,17 @@ global.radioFill = async () => { fills++; return 0; };
 global.checkLikedTracks = () => {};
 global.radioSyncInfo = () => {}; global.radioSyncArtistPhoto = () => {};  // the info panel's Last.fm and Spotify lookups
 global.pollSoon = () => {};
-// /me/player: the next queued reading, else the note's first song on playingDevice
-global.getCurrentlyPlaying = async () => readings.length ? readings.shift() : { item: { uri: run("matchedUris[0]") }, device: playingDevice, is_playing: true };
+// /me/player: the next queued reading, else what remote() set, else the note's first song on playingDevice
+let reported = null;
+global.getCurrentlyPlaying = async () => readings.length ? readings.shift()
+  : reported ? { item: { uri: reported.uri, duration_ms: 200000 }, device: playingDevice, is_playing: reported.playing, progress_ms: reported.pos }
+  : { item: { uri: run("matchedUris[0]") }, device: playingDevice, is_playing: true };
+// what Spotify reports now: remoteNow (a fresh reading) and the stubbed /me/player, on device (Kitchen by default)
+function remote(r, device) {
+  reported = r; playingDevice = device || dev("k", "Kitchen", "Speaker");
+  global.__r = { uri: r.uri, pos: r.pos, dur: 200000, playing: r.playing, at: Date.now() };
+  run("remoteNow = __r");
+}
 Object.defineProperty(globalThis, "navigator", { value: { userAgent: "node", sendBeacon: (url, body) => { beacons.push({ url, body }); return true; } }, configurable: true, writable: true });
 const store = { spotify_access_token: "tok" };
 Object.defineProperty(globalThis, "localStorage", { value: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } }, configurable: true, writable: true });
@@ -374,5 +385,146 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   handoffChanged(); await flush();
   assert.equal(run("handoffFollowing"), true); assert.equal(run("nowPlayingIndex"), 2);
   run("radioStop(); stopPolling()");
+  // ===== Taking over, and the phone's 10-song top-up (spec 5.2, 5.3) =====
+  const remainingAfter = i => otherNote.songs.length - 1 - i;
+  let fillWants = []; global.__fillN = 0;
+  // the stubbed fill adds as many songs as it is asked for
+  global.radioFill = async want => {
+    fills++; fillWants.push(want);
+    run(`for (let k = 0; k < ${want}; k++) { const u = "spotify:track:f" + (__fillN++), idx = allTrackCount++;
+      matchedUris[idx] = u; registerUri(u, idx); sessionQueue.add(u); totalMatched++; trackMeta[idx] = { name: u, artist: "F" }; }`);
+    return want;
+  };
+  serverAnswer = { status: 200, json: { note: null, now: 1 } };
+  assert.equal(handoffTopUpWant(0), 10); assert.equal(handoffTopUpWant(4), 6); assert.equal(handoffTopUpWant(12), 0);
+  assert.equal(handoffTopUpWant(Infinity), 0);
+  // a free note on a phone: take over, fill to 10 after the current song, send them at the current position
+  resetHandoff(); run("sdkReady = false;"); remote({ uri: otherNote.songs[1].uri, pos: 30000, playing: true });
+  run("discoverPool = [{ artist: 'x' }]; discoverSeeds = ['s']; radioBuf = { past: [1], new: [2] }; radioMixCursor = 3; discoverUsedArtists = new Set(['x'])");
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), true);
+  // (the brief's puts.at(-1): the takeover is the first write; the top-up's "keep" with the new songs follows it, checked below)
+  assert.equal(puts[0].claim, "takeover"); assert.equal(puts[0].note.driverId, run("handoffMe")); assert.equal(puts[0].note.sessionId, "s-other");
+  assert.equal(fillWants.at(-1), 10 - remainingAfter(1));
+  assert.equal(plays.at(-1).uris[0], otherNote.songs[1].uri); assert.ok(plays.at(-1).pos >= 30000);
+  assert.equal(plays.at(-1).uris.length, 10 + 1);
+  assert.equal(run("handoffFollowing"), false); assert.equal(run("handoffSessionId"), "s-other"); assert.equal(run("radioActive"), true);
+  assert.equal(run("playbackDeviceId"), "k"); assert.equal(run("radioPendingReissue"), false); assert.equal(run("nowPlayingIndex"), 1);
+  // the note then carries the new songs, from this window
+  await flush();
+  assert.equal(puts.at(-1).claim, "keep"); assert.equal(puts.at(-1).note.songs.length, otherNote.songs.length + 6);
+  // no more than that per opening: track changes do not fill on a phone driver
+  fills = 0; run("radioMaybeRefill(matchedUris[2], 0)"); assert.equal(fills, 0);
+  run("radioMaybeRefill(matchedUris[allTrackCount - 2], 0)"); await flush(); assert.equal(fills, 0);
+  // never over another STM window's player
+  playingDevice = { id: "other", name: STM_PLAYER_NAME, type: "Computer" }; puts = [];
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), false);
+  assert.equal(puts.length, 0);
+  // Discover and Mix rebuild their pools on the new driver
+  assert.deepEqual(run("discoverPool"), []); assert.equal(run("discoverSeeds"), null);
+  assert.deepEqual(run("radioBuf"), { past: [], new: [] }); assert.equal(run("radioMixCursor"), 0); assert.equal(run("discoverUsedArtists.size"), 0);
+  // Review Focus: a paused speaker is not unpaused by the top-up
+  resetHandoff(); remote({ uri: otherNote.songs[1].uri, pos: 0, playing: false }); plays = [];
+  await handoffTakeOver({ ...otherNote, released: true });
+  assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
+  assert.equal(run("radioPaused"), true);
+  await flush();
+  // a lost race (409): this window follows the radio the server holds, and adds nothing
+  resetHandoff(); remote({ uri: oUri(1), pos: 0, playing: true }); fillWants = [];
+  serverAnswer = { status: 409, json: { note: makeNote("s-won", "x", [oUri(1), oUri(2)]), now: 1 } };
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), false); await flush();
+  assert.equal(run("handoffFollowing"), true); assert.equal(run("handoffSessionId"), "s-won"); assert.equal(fillWants.length, 0); assert.equal(plays.length, 0);
+  serverAnswer = { status: 200, json: { note: null, now: 1 } };
+  // a desktop (a browser player) takes over with its usual top-up: refill at the low water, the new songs wait for the seam
+  resetHandoff(); run("sdkReady = true; sdkDeviceId = 'mine'"); remote({ uri: oUri(4), pos: 1000, playing: true }); fillWants = [];
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), true); await flush();
+  assert.equal(fillWants.at(-1), RADIO_REFILL); assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
+  assert.equal(run("playbackDeviceId"), "k"); assert.equal(run("handoffFollowing"), false);
+  run("sdkReady = false; sdkDeviceId = null; setPlaybackDevice(null)");
+  // a phone driver coming back to the screen tops up to 10 again, and only then
+  resetHandoff(); remote({ uri: oUri(1), pos: 0, playing: true });
+  await handoffTakeOver({ ...otherNote, released: true }); await flush();
+  const nearEnd = run("matchedUris[allTrackCount - 3]");
+  remote({ uri: nearEnd, pos: 5000, playing: true }); fillWants = []; plays = [];
+  document.visibilityState = "hidden"; docListeners.visibilitychange(); await flush(); assert.equal(fillWants.length, 0);
+  document.visibilityState = "visible"; docListeners.visibilitychange(); await flush();
+  assert.equal(fillWants.at(-1), 8); assert.equal(plays.at(-1).uris[0], nearEnd); assert.ok(plays.at(-1).pos >= 5000);
+  fillWants = []; docListeners.visibilitychange(); await flush(); assert.equal(fillWants.length, 0);  // 10 are queued: nothing to add
+  // a stale reading is read again before the songs are sent: the song plays on from where it is, not from its start
+  remote({ uri: run("matchedUris[allTrackCount - 1]"), pos: 90000, playing: true });
+  run("remoteNow = { uri: 'spotify:track:o0', pos: 0, dur: 200000, playing: true, at: Date.now() - 60000 }"); plays = [];
+  await handoffPhoneTopUp(); await flush();
+  assert.equal(fillWants.at(-1), 10); assert.ok(plays.at(-1).pos >= 90000);
+  // ...and again after a fill that took a while (the song went on meanwhile)
+  const quickFill = global.radioFill;
+  global.radioFill = async want => { const n = await quickFill(want); reported.pos = 150000; run("remoteNow.at = Date.now() - 60000"); return n; };
+  remote({ uri: run("matchedUris[allTrackCount - 1]"), pos: 100000, playing: true }); plays = [];
+  await handoffPhoneTopUp(); await flush();
+  global.radioFill = quickFill;
+  assert.equal(plays.at(-1).uris[0], run("matchedUris[allTrackCount - 11]")); assert.ok(plays.at(-1).pos >= 150000);
+  // outside music on the speaker: the top-up adds songs but plays nothing over it
+  remote({ uri: "spotify:track:podcast", pos: 1000, playing: true }); run("radioCurrentUri = matchedUris[allTrackCount - 1]"); plays = []; fillWants = [];
+  await handoffPhoneTopUp(); await flush();
+  assert.equal(fillWants.at(-1), 10); assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
+  // without the store a phone keeps today's top-up on track changes
+  run("handoffOff = true; radioPendingReissue = false"); fills = 0; remote({ uri: run("matchedUris[allTrackCount - 2]"), pos: 0, playing: true });
+  run("radioMaybeRefill(matchedUris[allTrackCount - 2], 0)"); await flush(); assert.equal(fills, 1);
+  assert.equal(await handoffTakeOver({ ...otherNote, released: true }), false);
+  run("handoffOff = false");
+  // a follower coming back to the screen takes a released radio over
+  resetHandoff(); followWith(otherNote); remote({ uri: oUri(1), pos: 1000, playing: true });
+  serverAnswer = { status: 200, json: { note: { ...otherNote, released: true }, now: 1 } }; puts = [];
+  docListeners.visibilitychange(); await flush();
+  assert.equal(puts[0].claim, "takeover"); assert.equal(run("handoffFollowing"), false);
+  // ...and one silent for 3 minutes; a live driver's radio is only followed
+  resetHandoff(); followWith(otherNote); remote({ uri: oUri(1), pos: 1000, playing: true });
+  serverAnswer = { status: 200, json: { note: otherNote, now: 2 } };
+  await handoffFollowerTick(); await flush(); assert.equal(puts.length, 0); assert.equal(run("handoffFollowing"), true);
+  serverAnswer = { status: 200, json: { note: otherNote, now: 1 + HANDOFF_STALE_MS + 1 } };
+  await handoffFollowerTick(); await flush(); assert.equal(puts[0].claim, "takeover"); assert.equal(run("handoffFollowing"), false);
+  // ...but not when another STM window's player plays it: it goes on following
+  resetHandoff(); followWith(otherNote); remote({ uri: oUri(1), pos: 1000, playing: true }, { id: "other", name: STM_PLAYER_NAME, type: "Computer" });
+  serverAnswer = { status: 200, json: { note: { ...otherNote, released: true }, now: 1 } };
+  await handoffFollowerTick(); await flush(); assert.equal(puts.length, 0); assert.equal(run("handoffFollowing"), true);
+  // a follower's Play on outside music plays the note's songs only through the driver's last sent one (ruling 24)
+  resetHandoff(); followWith(otherNote);
+  run("sessionPaused = true; radioContextLastUri = matchedUris[3]; radioCurrentUri = matchedUris[1]; _sdkCurrentUri = null"); plays = [];
+  await run("radioResumeHere()");
+  assert.deepEqual(plays.at(-1).uris, [1, 2, 3].map(oUri));
+  run("radioStop(); stopPolling()");
+  // the phone strip: Open radio shows when the song it reports is in the session note, which it re-reads at most every 30 s
+  resetHandoff(); run("radioActive = false; spotifyToken = 'tok'; connectLoaded = true");
+  window.matchMedia = () => ({ matches: true, addEventListener() {} }); document.getElementById("homeCard").style.display = ""; document.getElementById("homeView").style.display = "";
+  serverAnswer = { status: 200, json: { note: otherNote, now: 1 } };
+  remote({ uri: oUri(2), pos: 0, playing: true }); gets = 0;
+  await connectHomeTick();
+  assert.equal(els.connectNowOn.hidden, false); assert.equal(els.connectNowOpen.hidden, false); assert.equal(gets, 1);
+  await connectHomeTick(); assert.equal(gets, 1);
+  run("connectNoteAt = Date.now() - HANDOFF_FOLLOW_MS - 1"); await connectHomeTick(); assert.equal(gets, 2);
+  remote({ uri: "spotify:track:else", pos: 0, playing: true });  // the reported song changed: at once
+  await connectHomeTick(); assert.equal(gets, 3); assert.equal(els.connectNowOpen.hidden, true);
+  // Open radio: a driven radio is followed...
+  remote({ uri: oUri(2), pos: 0, playing: true }); puts = [];
+  await handoffOpen(); await flush();
+  assert.equal(run("radioActive"), true); assert.equal(run("handoffFollowing"), true); assert.equal(puts.length, 0);
+  // ...a free one is taken over
+  run("radioStop(); stopPolling()"); resetHandoff(); run("radioActive = false"); remote({ uri: oUri(2), pos: 0, playing: true });
+  serverAnswer = { status: 200, json: { note: { ...otherNote, released: true }, now: 1 } };
+  await handoffOpen(); await flush();
+  assert.equal(run("radioActive"), true); assert.equal(run("handoffFollowing"), false); assert.equal(puts[0].claim, "takeover");
+  assert.equal(fillWants.at(-1), 10 - remainingAfter(2));
+  delete window.matchMedia;
+  // a radio started on a phone fills its first song, then tops up to 10 after it (not the usual refill)
+  run("radioStop(); stopPolling()"); resetHandoff(); fillWants = [];
+  run("radioActive = false; radioStation = 'library'; radioHow = 'songs'; radioYear = 0; homeTotalCache = { user: 'amy', total: 500, at: Date.now() }");
+  document.getElementById("usernameInput").value = "amy"; global.spotifyPrewarm = () => {};
+  serverAnswer = { status: 200, json: { note: null, now: 1 } };
+  await run("startRadio()"); await flush();
+  assert.deepEqual(fillWants, [RADIO_START_TRACKS, 10]); assert.equal(puts[0].claim, "new");
+  // without the store, the usual refill
+  run("radioStop(); stopPolling()"); resetHandoff(); fillWants = [];
+  serverAnswer = { status: 503, json: {} };
+  await run("startRadio()"); await flush();
+  assert.deepEqual(fillWants, [RADIO_START_TRACKS, RADIO_REFILL]); assert.equal(run("handoffOff"), true);
+  run("radioStop(); stopPolling(); handoffOff = false");
   console.log("handoff: ok");
 })().catch(e => { console.error(e); process.exit(1); });

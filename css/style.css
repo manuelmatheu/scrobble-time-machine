@@ -306,7 +306,7 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .connect-home-text strong { color:var(--text-primary); }
 .connect-list { position:absolute; top:calc(100% + 6px); right:0; z-index:20; width:360px; max-width:calc(100vw - 32px); max-height:70vh; overflow-y:auto; box-sizing:border-box; padding:8px; border-radius:12px; background:var(--bg-elevated); border:1px solid var(--border); box-shadow:var(--shadow-float); display:flex; flex-direction:column; gap:2px; text-align:left; transform-origin:top right; animation:pop-in var(--dur-base) var(--ease-out-quart); }
 .connect-list > * { flex-shrink:0; }
-.connect-list[hidden], .connect-scrim[hidden], .connect-now[hidden] { display:none; }
+.connect-list[hidden], .connect-scrim[hidden], .connect-now[hidden], .connect-now-open[hidden] { display:none; }
 .connect-grab { display:none; }
 .connect-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 0 6px 12px; }
 .connect-title { font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-tertiary); }
@@ -342,6 +342,7 @@ body.connect-locked { overflow:hidden; }
 .connect-now-track { font-size:13px; color:var(--text-tertiary); }
 .connect-now-btn { flex-shrink:0; font-size:20px; }
 .connect-now-btn:hover { background:var(--bg-elevated); }
+.connect-now-open { padding:0 14px; }  /* the hand-off: this phone opens the radio that plays (no caret: it is not a menu) */
 @media (min-width:721px) { .connect-now { display:none !important; } }  /* phones only: a desktop has its own player */
 @media (max-width:720px) {
   .connect-list.sheet { position:fixed; top:auto; left:0; right:0; bottom:0; z-index:1060; width:auto; max-width:none; max-height:85vh; padding:8px 12px calc(24px + env(safe-area-inset-bottom, 0px)); border:none; border-top:1px solid var(--border); border-radius:20px 20px 0 0; transform-origin:bottom center; animation:sheet-in var(--dur-slow) var(--ease-out-expo); }

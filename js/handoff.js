@@ -126,9 +126,10 @@ let handoffWriting = null;   // the note write in flight (a promise), or null
 let handoffQueued = null;    // the claim of the one write waiting behind it ("new" wins over "keep")
 let handoffAskedUri = null;  // the reported song the note was last re-read for (once per song)
 let handoffTickBusy = false;
+let handoffTaking = false;   // a takeover is waiting for the server's answer: nothing else writes or re-reads meanwhile
 
 // This window drives a radio it can write the note for
-function handoffDriving() { return radioActive && !handoffFollowing && !handoffOff && !!handoffSessionId; }
+function handoffDriving() { return radioActive && !handoffFollowing && !handoffOff && !handoffTaking && !!handoffSessionId; }
 
 // A radio started here (the end of a successful startRadio): a new id, and this window claims the note
 function handoffStarted() {
@@ -144,6 +145,7 @@ function handoffStopped() {
 // Songs were added, or the track changed. The driver writes the note; a follower re-reads it (the reported song changed),
 // unless it just did for that song
 function handoffChanged() {
+  if (handoffTaking) return;
   if (handoffFollowing) {
     if (radioCurrentUri === handoffAskedUri) return;
     handoffAskedUri = radioCurrentUri;
@@ -189,6 +191,11 @@ function handoffFollow(note) {
   note = handoffParseNote(note);
   if (!note) return false;
   if (radioActive && handoffFollowing && note.sessionId === handoffSessionId) { handoffReapply(note); return true; }
+  handoffShow(note);
+  return true;
+}
+// Make the note's radio this window's, as a follower: the radio view, the song Spotify last reported highlighted
+function handoffShow(note) {
   const reported = [remoteNow && remoteNow.uri, radioCurrentUri];  // the last songs Spotify reported here
   handoffApplyNote(note);
   handoffNote = note; handoffFollowing = true;
@@ -201,7 +208,6 @@ function handoffFollow(note) {
   showRadioView();
   checkLikedTracks();
   pollSoon(0);  // the hero shows the song Spotify reports at once, not at the next poll
-  return true;
 }
 // The same radio, read again: the driver's latest songs, keeping the song highlighted now (indices move as old songs drop
 // out of the note) and the moment panel as it is (a saved moment stays saved: radioSyncMoment keeps an unchanged moment)
@@ -217,15 +223,17 @@ function handoffReapply(note) {
 }
 
 // A follower re-reads the note every HANDOFF_FOLLOW_MS while visible and when the reported song changes: the driver's new
-// songs, or the new radio when one was started elsewhere (sessionId changed). Taking over a released or silent driver's
-// radio comes next (the note's role is "free" then).
+// songs, or the new radio when one was started elsewhere (sessionId changed). A released or silent driver's radio is taken over
+// (the note's role is "free" then).
 async function handoffFollowerTick() {
-  if (!handoffFollowing || handoffTickBusy) return;
+  if (!handoffFollowing || handoffTickBusy || handoffTaking) return;
   handoffTickBusy = true;
   try {
     const r = await handoffGet();
     const note = r && handoffParseNote(r.note);
-    if (handoffFollowing && note) handoffFollow(note);
+    if (!handoffFollowing || !note) return;
+    if (handoffRole(note, handoffMe, r.now) === "free" && await handoffTryTakeOver(note) !== "refused") return;
+    if (handoffFollowing) handoffFollow(note);
   } finally { handoffTickBusy = false; }
 }
 
@@ -246,12 +254,144 @@ async function handoffSongKnown(uri) {
   return sessionQueue.has(uri);
 }
 
+// =============================================================================
+// TAKING OVER, AND A PHONE DRIVING (spec 5.2, 5.3)
+// A window becomes the driver of a radio whose driver left (released) or went silent for 3 minutes. A window without a browser
+// player (every phone) cannot top up from the background: whenever it takes over, starts a radio or comes back to the screen it
+// makes sure PHONE_TOPUP songs are queued after the current one, and sends them to Spotify at once, from the current song at its
+// position (the phone may be locked before the seam). It adds no more than that per opening.
+// =============================================================================
+let handoffTopUpBusy = false, handoffOpening = false;
+
+// This window drives a radio and has no browser player of its own
+function handoffPhoneDriver() { return !handoffOff && !handoffFollowing && radioActive && !sdkReady; }
+// Songs to add so that PHONE_TOPUP are queued after the current one
+function handoffTopUpWant(remaining) { return Math.max(0, PHONE_TOPUP - remaining); }
+
+// A /me/player reading young enough to send songs from (connectCurrentPosition trusts no older one)
+function handoffFresh() { return !!remoteNow && Date.now() - remoteNow.at < REMOTE_FRESH_MS; }
+// Read /me/player into remoteNow (and the bar), as a poll does
+async function handoffRead(token) {
+  const data = await getCurrentlyPlaying(token);
+  if (data && data.device) setCurrentDevice(data.device);
+  if (data && data.item) remoteNow = { uri: data.item.uri, pos: data.progress_ms || 0, dur: data.item.duration_ms || 0, playing: !!data.is_playing, at: Date.now() };
+  return data;
+}
+// The radio's current song: the one Spotify reports when it is ours, else the last one seen, else (a radio that just started,
+// nothing read yet) the first
+function handoffCurrentUri() {
+  const r = remoteNow && remoteNow.uri;
+  if (r && sessionQueue.has(r)) return r;
+  if (radioCurrentUri && sessionQueue.has(radioCurrentUri)) return radioCurrentUri;
+  return radioUrisFrom(matchedUris, allTrackCount, null)[0] || null;
+}
+
+async function handoffPhoneTopUp() {
+  if (handoffWriting) await handoffWriting;  // a radio that just started: the store's first answer says whether it is there
+  if (!handoffPhoneDriver()) {
+    if (handoffOff && radioActive && !handoffFollowing) continueRadio();  // no store: the phone tops up as it always did
+    return;
+  }
+  if (handoffTopUpBusy || radioRefilling) return;
+  handoffTopUpBusy = true;
+  const sid = radioSession;
+  let added = 0;
+  try {
+    const token = await getSpotifyToken();
+    if (!token || sid !== radioSession) return;
+    if (!handoffFresh()) await handoffRead(token);
+    if (sid !== radioSession || !handoffPhoneDriver()) return;
+    const want = handoffTopUpWant(radioRemaining(matchedUris, allTrackCount, handoffCurrentUri()));
+    if (!want) return;
+    radioRefilling = true; radioRenderQueue();
+    try { added = await radioFill(want); }
+    finally { if (sid === radioSession) { radioRefilling = false; radioRenderQueue(); } }
+    if (!added || sid !== radioSession) return;
+    if (!handoffFresh()) await handoffRead(token);  // the fill took a while: send from where the song is now
+    if (sid !== radioSession) return;
+    const cur = handoffCurrentUri();
+    // Only over this radio's own song while it plays. Paused (or outside music), nothing is unpaused: the songs join on resume
+    // or at the seam, as for any top-up made while paused.
+    if (remoteNow && remoteNow.playing && remoteNow.uri === cur
+      && await spotifyPlay(token, radioUrisFrom(matchedUris, allTrackCount, cur), connectCurrentPosition(cur))) {
+      if (sid === radioSession) { radioPendingReissue = false; checkLikedTracks(); }
+    } else if (sid === radioSession) radioPendingReissue = true;
+  } finally {
+    handoffTopUpBusy = false;
+    if (added > 0 && sid === radioSession) handoffChanged();  // the note gets the new songs
+  }
+}
+
+// Take the note's radio over: "taken", "refused" (nothing changed here) or "lost" (another window won: it is followed now)
+async function handoffTryTakeOver(note) {
+  note = handoffParseNote(note);
+  if (!note || handoffOff || handoffTaking) return "refused";
+  handoffTaking = true;
+  let taken = false;
+  try {
+    const token = await getSpotifyToken();
+    if (!token) return "refused";
+    const data = await handoffRead(token), d = data && data.device;
+    // Another STM window's browser player plays it: that window is alive and driving, and the app never plays there
+    if (d && d.name === STM_PLAYER_NAME && d.id !== sdkDeviceId) return "refused";
+    // Until the server agrees this window follows: it shows the radio, and fills, seams and re-issues nothing
+    handoffShow(note);
+    radioResetPools();
+    radioFailures = 0; lastSearchError = null;
+    followPlaybackDevice(data);
+    const cur = handoffCurrentUri();
+    radioCurrentUri = cur; radioLastPos = remoteNow && remoteNow.uri === cur ? remoteNow.pos : 0;
+    radioPaused = !!(remoteNow && remoteNow.uri === cur && !remoteNow.playing);
+    const r = await handoffPut("takeover");
+    if (r && r.status === 409) { handoffTaking = false; handoffFollow(r.note); return "lost"; }
+    // (no answer: the store is gone, handoffOff is set, and this window carries the radio on alone, as without the hand-off)
+    handoffFollowing = false; handoffSessionId = note.sessionId;
+    if (r) handoffNote = r.note;
+    taken = true;
+  } finally { handoffTaking = false; }
+  if (taken) {
+    if (handoffPhoneDriver()) await handoffPhoneTopUp();
+    else radioMaybeRefill(radioCurrentUri, radioLastPos);  // a desktop tops up as it always does
+  }
+  return "taken";
+}
+async function handoffTakeOver(note) { return await handoffTryTakeOver(note) === "taken"; }
+
+// The phone strip's Open radio: the radio of the song that plays. A radio whose driver left is taken over, a driven one followed.
+async function handoffOpen() {
+  if (handoffOpening) return;
+  handoffOpening = true;
+  try {
+    const r = await handoffGet();
+    const note = r && handoffParseNote(r.note);
+    if (!note) return;
+    if (handoffRole(note, handoffMe, r.now) !== "follower" && await handoffTryTakeOver(note) !== "refused") return;
+    handoffFollow(note);
+  } finally { handoffOpening = false; }
+}
+
+// The phone strip (connect.js) re-reads the note to know whether the song it shows is a radio's
+async function handoffRefreshNote() {
+  const r = await handoffGet();
+  handoffNote = r ? handoffParseNote(r.note) : null;
+}
+function handoffNoteHas(uri) { return !handoffOff && !!uri && !!handoffNote && handoffNote.songs.some(s => s.uri === uri); }
+
+// Back on the screen: a phone driver tops up, a follower re-reads the note (and takes a radio over whose driver left)
+function handoffVisible() {
+  if (!pollVisible()) return;
+  if (handoffFollowing) handoffFollowerTick();
+  else if (handoffPhoneDriver()) handoffPhoneTopUp();
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { handoffBuildNote, handoffParseNote, handoffApplyNote, handoffRole, handoffGet, handoffPut,
-    handoffStarted, handoffChanged, handoffFollow, handoffFollowerTick, handoffSongKnown };
+    handoffStarted, handoffChanged, handoffFollow, handoffFollowerTick, handoffSongKnown,
+    handoffPhoneDriver, handoffTopUpWant, handoffPhoneTopUp, handoffTakeOver, handoffOpen, handoffNoteHas };
 }
 
 if (typeof window !== "undefined" && window.addEventListener) {
+  if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", handoffVisible);
   window.addEventListener("pagehide", handoffRelease);
   setInterval(handoffBeat, HANDOFF_BEAT_MS);
   setInterval(() => { if (handoffFollowing && pollVisible()) handoffFollowerTick(); }, HANDOFF_FOLLOW_MS);

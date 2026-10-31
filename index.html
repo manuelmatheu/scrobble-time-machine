@@ -172,6 +172,7 @@
         <span class="connect-now-text"><span class="connect-now-line">Playing on <strong id="connectNowDevice"></strong></span><span class="connect-now-track" id="connectNowTrack"></span></span>
         <button type="button" class="radio-btn connect-now-btn" id="connectNowToggle" onclick="connectNowControl('toggle')" aria-label="Pause"><i class="ph-fill ph-pause" aria-hidden="true"></i></button>
         <button type="button" class="radio-btn connect-now-btn" onclick="connectNowControl('next')" aria-label="Next"><i class="ph-fill ph-skip-forward" aria-hidden="true"></i></button>
+        <button type="button" class="connect-change connect-now-open" id="connectNowOpen" onclick="handoffOpen()" hidden>Open radio</button>
       </div>
       <div class="controls">
         <input type="text" class="input-username" id="usernameInput" placeholder="Last.fm username" autocomplete="off" spellcheck="false" aria-label="Last.fm username">
