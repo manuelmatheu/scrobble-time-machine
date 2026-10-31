@@ -1,9 +1,9 @@
 // Service worker: makes the app installable and keeps the app shell for a flaky connection.
 // Network first, so a deploy is never hidden behind a stale cache; the cache is only the fallback.
 // Spotify, Last.fm, the font and icon CDNs and /api/ are never cached (they are cross-origin or live data).
-const CACHE = "stm-shell-v2";
+const CACHE = "stm-shell-v3";
 const SHELL = ["./", "index.html", "css/style.css", "favicon.ico", "changelog.html",
-  "js/config.js", "js/spotify.js", "js/lastfm.js", "js/ui.js", "js/player.js", "js/connect.js", "js/radio.js", "js/app.js",
+  "js/config.js", "js/spotify.js", "js/lastfm.js", "js/ui.js", "js/player.js", "js/connect.js", "js/handoff.js", "js/radio.js", "js/app.js",
   "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {

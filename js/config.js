@@ -7,6 +7,12 @@ const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname;
 const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read user-top-read";
 const SEARCH_DELAY = 500; // ms between search calls
 const POLL_INTERVAL = 5000; // ms between now-playing polls
+const PHONE_TOPUP = 10;           // songs a phone adds when the radio runs low (hand-off)
+const HANDOFF_BEAT_MS = 60000;    // the driver rewrites the session note this often
+const HANDOFF_FOLLOW_MS = 30000;  // a follower re-reads the note this often
+const HANDOFF_STALE_MS = 180000;  // a driver silent this long is gone
+const HANDOFF_SEEN_MAX = 300;     // radioSeen keys kept in the note
+const HANDOFF_BEFORE = 3;         // songs before the current one kept in the note
 
 // ═════════════════════════════════════════════════════════════════════════════
 // STATE
