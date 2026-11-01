@@ -66,6 +66,10 @@ let remoteNow = null;           // { uri, pos, dur, playing, at } or null
 let remoteFastAt = 0, remoteSeamAt = 0;  // throttles: the 1s re-sync polls near the end, and retries of a failed swap
 const RADIO_REMOTE_SEAM_MS = 2500;  // on another device the swap lands this close to the end (the position is only as exact as the last poll)
 const REMOTE_FRESH_MS = 20000;      // a reading older than this is not trusted for a seam
+// The radio's music just moved to (or started on) another device: songs it was not sent go at once, from where the song is,
+// instead of at its end, so the speaker holds the queue even if this window closes or sleeps. Once per move, within this time.
+let radioMovedAt = 0;
+const RADIO_MOVE_FLUSH_MS = 60000;
 // Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays
 let radioStation = "library", radioActiveStation = "library";  // "library" | "discover" | "mix"
 let radioBalance = "balanced", radioActiveBalance = "balanced";  // Mix: "mostly-past" | "balanced" | "mostly-new"

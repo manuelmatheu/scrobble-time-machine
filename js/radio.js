@@ -518,6 +518,7 @@ async function startRadio() {
     showStatus("", "success");
     if (fresh && discoverNeedsReconnect) showStatus("Reconnect Spotify to get picks based on what you play lately.", "warn");
     radioStartedAt = Date.now();
+    if (!sdkPlaying() && !radioPhoneDriver()) radioMovedAt = radioStartedAt;  // started on a speaker: it gets the rest of the queue once it is in
     startPolling();
     checkLikedTracks();
     endSessionUI();
@@ -623,7 +624,25 @@ function radioRemoteTick() {
   if (left === null || now - remoteSeamAt < 3000) return;
   const fresh = now - remoteNow.at < REMOTE_FRESH_MS;
   if (fresh && radioSeamDue(true, true, remoteNow.dur - left, remoteNow.dur, RADIO_REMOTE_SEAM_MS)) { remoteSeamAt = now; radioSeamReissue(); return; }
+  // Just moved here: the speaker gets the rest now (the move restarted the stream anyway), from where the song is
+  if (fresh && radioMovedAt && now - radioMovedAt < RADIO_MOVE_FLUSH_MS && left > 12000) { remoteSeamAt = now; radioMovedAt = 0; radioMoveFlush(remoteNow.dur - left); return; }
   if (left <= 12000 && now - remoteFastAt >= 1000 && typeof pollNowPlaying === "function") { remoteFastAt = now; pollNowPlaying(); }
+}
+// The flush after a move: the song that plays and every song after it, from its position (one quick play, like a seam)
+async function radioMoveFlush(posMs) {
+  if (radioFollower()) return;
+  radioSeaming = true;
+  radioPendingReissue = false;
+  try {
+    const sid = radioSession;
+    const uris = radioUrisFrom(matchedUris, allTrackCount, radioContextLastUri);
+    if (uris.length < 2) return;
+    const token = await getSpotifyToken();
+    if (!token || sid !== radioSession) return;
+    let ok = false;
+    try { ok = await spotifyPlay(token, uris, Math.max(0, Math.round(posMs)), { quick: true }); } catch {}
+    if (ok) checkLikedTracks();
+  } finally { radioSeaming = false; }
 }
 // Spotify ran past the last track we sent (we missed the swap) and moved on to something else: put the tracks back now
 function radioRecoverRunOff(prevUri) {
@@ -701,7 +720,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false; radioJumpFrom = null;
   if (typeof handoffStopped === "function") handoffStopped();
-  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0; radioMovedAt = 0;
   hideRadioView();
 }
 

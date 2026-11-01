@@ -325,7 +325,9 @@ const UNLISTED_PREFIX = "unlisted:";
 function isUnlistedDeviceId(id) { return typeof id === "string" && id.indexOf(UNLISTED_PREFIX) === 0; }
 
 function setPlaybackDevice(dev) {
-  playbackDeviceId = dev ? dev.id : null;
+  const id = dev ? dev.id : null;
+  if (id !== playbackDeviceId) radioMovedAt = id && radioActive ? Date.now() : 0;  // a radio moved to a speaker: send it the rest (radioRemoteTick)
+  playbackDeviceId = id;
   playbackDeviceName = dev ? dev.name || "" : "";
   playbackDeviceType = dev ? dev.type || "" : "";
   if (typeof radioSyncVolume === "function") radioSyncVolume();
