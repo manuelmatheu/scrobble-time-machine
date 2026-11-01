@@ -164,8 +164,8 @@ A dialog titled **Play on** with a Refresh button in its head. On wide screens a
 ### Home "Plays on" row (`.connect-home`)
 On the connected home card: a device icon, "Plays on **This browser**" (or the picked or followed device) and the same **Change** button, opening the same list.
 
-### Phone strip (`.connect-now`)
-Phones only, on Home while something plays on another device (a speaker, the phone's own Spotify app): speaker icon, "Playing on **Device**" with the track under it, and Pause/Play and Next buttons that act on what the strip shows.
+### Playing on strip (`.connect-now`)
+On Home while something plays on another device (a speaker, the phone's own Spotify app). Phones show it for any music; a desktop only for an STM radio it can open (Open radio), since it has its own player. A speaker icon, "Playing on **Device**" with the track under it, and Pause/Play and Next buttons that act on what the strip shows.
 
 ### Spotify badge
 Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify connected" with a small dot and an x to disconnect (20px visible, 44px hit area), in the header.
@@ -178,7 +178,7 @@ Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify
 - **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and two numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Connect Spotify** (disabled until there is a username; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
 - **Connected, idle:** headline, `username · N scrobbles`, station tabs and panel (Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
-- **Plays on row:** under the options, "Plays on <device>" with Change. On phones a strip inside the card, above the username field and buttons (`.controls`), shows what plays on another device (Pause/Next).
+- **Plays on row:** under the options, "Plays on <device>" with Change. A strip inside the card (phones; a desktop only for an STM radio), above the username field and buttons (`.controls`), shows what plays on another device (Pause/Next).
 - **Wide desktop (>=1100px):** the same card, centered at 680px.
 
 ### Radio view (`#radioView`, Library / Discover / Mix)

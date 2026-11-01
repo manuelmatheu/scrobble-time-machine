@@ -426,7 +426,7 @@ function connectHomeShows() {
 async function connectHomeTick() {
   connectRenderHome();
   if (!$("connectNowOn")) return;
-  if (radioActive || !spotifyToken || !connectOnPhone()) { connectStripShow(null); return; }
+  if (radioActive || !spotifyToken) { connectStripShow(null); return; }
   if (!connectHomeShows() || !pollVisible() || _connectHomeBusy) return;
   _connectHomeBusy = true;
   try {
@@ -461,12 +461,14 @@ function connectStripShow(data) {
   const strip = $("connectNowOn");
   if (!strip) return;
   const d = data && data.device, item = data && data.item;
-  const show = connectStripShows(data);
+  const inNote = !!(item && typeof handoffNoteHas === "function" && handoffNoteHas(item.uri));
+  // A phone shows anything that plays elsewhere; a desktop only a radio it can open (Open radio), not other music
+  const show = connectStripShows(data) && (inNote || connectOnPhone());
   connectStripReading = show ? data : null;
   strip.hidden = !show;
   if (!show) return;
   const open = $("connectNowOpen");
-  if (open) open.hidden = !(typeof handoffNoteHas === "function" && handoffNoteHas(item.uri));
+  if (open) open.hidden = !inNote;
   connectSetText("connectNowDevice", d.name || "another device");
   const artists = (item.artists || []).map(a => a && a.name).filter(Boolean).join(", ");
   connectSetText("connectNowTrack", (item.name || "") + (artists ? " · " + artists : ""));

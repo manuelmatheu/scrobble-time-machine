@@ -343,7 +343,6 @@ body.connect-locked { overflow:hidden; }
 .connect-now-btn { flex-shrink:0; font-size:20px; }
 .connect-now-btn:hover { background:var(--bg-elevated); }
 .connect-now-open { padding:0 14px; }  /* the hand-off: this phone opens the radio that plays (no caret: it is not a menu) */
-@media (min-width:721px) { .connect-now { display:none !important; } }  /* phones only: a desktop has its own player */
 @media (max-width:720px) {
   .connect-list.sheet { position:fixed; top:auto; left:0; right:0; bottom:0; z-index:1060; width:auto; max-width:none; max-height:85vh; padding:8px 12px calc(24px + env(safe-area-inset-bottom, 0px)); border:none; border-top:1px solid var(--border); border-radius:20px 20px 0 0; transform-origin:bottom center; animation:sheet-in var(--dur-slow) var(--ease-out-expo); }
   .connect-list.sheet .connect-grab { display:block; align-self:center; width:36px; height:4px; margin:2px 0 10px; border-radius:2px; background:var(--text-muted); }

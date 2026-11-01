@@ -526,6 +526,14 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   assert.equal(run("radioActive"), true); assert.equal(run("handoffFollowing"), false); assert.equal(puts[0].claim, "takeover");
   assert.equal(fillWants.at(-1), 10 - remainingAfter(2));
   delete window.matchMedia;
+  // a desktop shows the strip too, but only for a radio in the note (Open radio): other music elsewhere stays hidden there
+  run("radioStop(); stopPolling()"); resetHandoff(); run("radioActive = false; connectNoteUri = null");
+  serverAnswer = { status: 200, json: { note: otherNote, now: 1 } };
+  remote({ uri: oUri(2), pos: 0, playing: true });
+  await connectHomeTick();
+  assert.equal(els.connectNowOn.hidden, false); assert.equal(els.connectNowOpen.hidden, false);
+  remote({ uri: "spotify:track:else", pos: 0, playing: true });
+  await connectHomeTick(); assert.equal(els.connectNowOn.hidden, true);
   // a radio started on a phone fills its first song, then tops up to 10 after it (not the usual refill)
   run("radioStop(); stopPolling()"); resetHandoff(); fillWants = [];
   run("radioActive = false; radioStation = 'library'; radioHow = 'songs'; radioYear = 0; homeTotalCache = { user: 'amy', total: 500, at: Date.now() }");
