@@ -624,8 +624,9 @@ function radioRemoteTick() {
   if (left === null || now - remoteSeamAt < 3000) return;
   const fresh = now - remoteNow.at < REMOTE_FRESH_MS;
   if (fresh && radioSeamDue(true, true, remoteNow.dur - left, remoteNow.dur, RADIO_REMOTE_SEAM_MS)) { remoteSeamAt = now; radioSeamReissue(); return; }
-  // Just moved here: the speaker gets the rest now (the move restarted the stream anyway), from where the song is
-  if (fresh && radioMovedAt && now - radioMovedAt < RADIO_MOVE_FLUSH_MS && left > 12000) { remoteSeamAt = now; radioMovedAt = 0; radioMoveFlush(remoteNow.dur - left); return; }
+  // Just moved here: the speaker gets the rest now (the move restarted the stream anyway), from where the song is. A fill still
+  // running is waited for, so the whole queue goes in one play
+  if (fresh && radioMovedAt && !radioRefilling && now - radioMovedAt < RADIO_MOVE_FLUSH_MS && left > 12000) { remoteSeamAt = now; radioMovedAt = 0; radioMoveFlush(remoteNow.dur - left); return; }
   if (left <= 12000 && now - remoteFastAt >= 1000 && typeof pollNowPlaying === "function") { remoteFastAt = now; pollNowPlaying(); }
 }
 // The flush after a move: the song that plays and every song after it, from its position (one quick play, like a seam)

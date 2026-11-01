@@ -328,7 +328,9 @@ async function handoffPhoneTopUp(confirmed) {
   try {
     const token = await getSpotifyToken();
     if (!token || sid !== radioSession) return;
-    const read = async () => { const data = await handoffRead(token); none = !(data && data.device); };
+    // Each reading also follows the device it reports: the music may have moved to a speaker (from the Spotify app) while this
+    // page was away, and the songs must go there, not back to the device this window last knew
+    const read = async () => { const data = await handoffRead(token); none = !(data && data.device); followPlaybackDevice(data); };
     if (!handoffFresh()) await read();
     if (sid !== radioSession || !handoffPhoneDriver()) return;
     const want = handoffTopUpWant(radioRemaining(matchedUris, allTrackCount, handoffCurrentUri()));
@@ -340,7 +342,9 @@ async function handoffPhoneTopUp(confirmed) {
     }
     // Nothing added and nothing queued that Spotify was not sent (a top-up made while paused, a refill waiting for its seam)
     if (!added && !radioUnsentUris().length) return;
-    if (!handoffFresh()) await read();  // the fill took a while: send from where the song is now
+    // Always read again: the fill took a while (the song went on), and a reading from before it can predate the radio's first
+    // play (another song, or not playing yet) while still young enough to pass for fresh
+    await read();
     if (sid !== radioSession) return;
     const cur = handoffCurrentUri();
     // Only over this radio's own song while a fresh reading says it plays. Paused, outside music or no fresh reading: nothing is
@@ -413,9 +417,30 @@ async function handoffRefreshNote() {
 }
 function handoffNoteHas(uri) { return !handoffOff && !!uri && !!handoffNote && handoffNote.songs.some(s => s.uri === uri); }
 
+// A phone driver leaving the page (to the Spotify app to pick a speaker, or locked): a hidden phone page may not run again before
+// the music runs out, so while Spotify holds fewer than PHONE_TOPUP songs after the one playing, every song queued here goes now,
+// from where the song is (one quick play), even with a top-up still filling. Only over this radio's song, from a fresh reading.
+function handoffHiddenFlush() {
+  if (!handoffPhoneDriver() || radioSeaming || !handoffFresh() || !remoteNow.playing) return;
+  const cur = remoteNow.uri;
+  if (!sessionQueue.has(cur) || !radioUnsentUris().length) return;
+  const at = radioIndexOf(cur), last = radioIndexOf(radioContextLastUri);
+  if (at < 0 || last < at || last - at >= PHONE_TOPUP) return;
+  const uris = radioUrisFrom(matchedUris, allTrackCount, cur), pos = connectCurrentPosition(cur), sid = radioSession;
+  radioSeaming = true; radioPendingReissue = false;
+  (async () => {
+    try {
+      const token = await getSpotifyToken();
+      if (!token || sid !== radioSession) return;
+      if (await spotifyPlay(token, uris, pos, { quick: true })) checkLikedTracks();
+      else if (sid === radioSession) radioPendingReissue = true;
+    } catch (e) {} finally { radioSeaming = false; }
+  })();
+}
+
 // Back on the screen: a phone driver tops up, a follower re-reads the note (and takes a radio over whose driver left)
 function handoffVisible() {
-  if (!pollVisible()) return;
+  if (!pollVisible()) { handoffHiddenFlush(); return; }
   if (handoffFollowing) handoffFollowerTick();
   else if (handoffPhoneDriver()) handoffPhoneTopUp();
 }

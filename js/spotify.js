@@ -283,7 +283,8 @@ async function spotifyPlayDirect(token, body, deviceId) {
   try {
     const r = await fetch("https://api.spotify.com/v1/me/player/play" + (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : ""), {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      keepalive: true  // a phone page that is being hidden (handoffHiddenFlush) may be frozen before the answer comes back
     });
     return r.ok || r.status === 204;
   } catch { return false; }

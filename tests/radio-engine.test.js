@@ -224,6 +224,11 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.ok(flushPos >= 12000 && flushPos < 14000);            // where it is, not from the start
   assert.deepEqual(playOpts, { quick: true });
   assert.equal(run("radioMovedAt"), 0);                        // only once: later songs join at the seam as usual
+  // a fill still running is waited for (the whole queue goes in one play, not part of it now and the rest later)
+  run("radioContextLastUri = 'spotify:track:Existing'; radioSeaming = false; remoteSeamAt = 0; radioMovedAt = Date.now(); radioRefilling = true;"); played = [];
+  run("radioRemoteTick();"); await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0); assert.ok(run("radioMovedAt") > 0);
+  run("radioRefilling = false;");
   // a move long ago does not count
   run("radioContextLastUri = 'spotify:track:Existing'; radioSeaming = false; remoteSeamAt = 0; radioMovedAt = Date.now() - RADIO_MOVE_FLUSH_MS - 1;"); played = [];
   run("radioRemoteTick();"); await new Promise(r => setImmediate(r));

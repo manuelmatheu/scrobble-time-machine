@@ -425,7 +425,7 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   assert.equal(run("radioPaused"), true);
   await flush();
   // an empty reading at the takeover: the last song counts as stopped (paused), and the top-up plays nothing
-  resetHandoff(); remote({ uri: otherNote.songs[1].uri, pos: 40000, playing: true }); readings = [null]; plays = [];
+  resetHandoff(); remote({ uri: otherNote.songs[1].uri, pos: 40000, playing: true }); readings = [null, null]; plays = [];  // Spotify reports nothing, at the takeover and after the fill
   assert.equal(await handoffTakeOver({ ...otherNote, released: true }), true); await flush();
   assert.equal(run("radioPaused"), true); assert.equal(plays.length, 0); assert.equal(run("radioPendingReissue"), true);
   readings = [];
@@ -462,6 +462,40 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
   await handoffPhoneTopUp(); await flush();
   global.radioFill = quickFill;
   assert.equal(plays.at(-1).uris[0], run("matchedUris[allTrackCount - 11]")); assert.ok(plays.at(-1).pos >= 150000);
+  // a radio that just started: the reading before the fill can predate its first play (another song, not playing yet), and is
+  // young enough to pass for fresh. The songs go from a reading taken after the fill, not never.
+  const startSong = run("matchedUris[allTrackCount - 1]");
+  global.radioFill = async want => { const n = await quickFill(want); reported = { uri: startSong, pos: 4000, playing: true }; return n; };
+  remote({ uri: "spotify:track:before", pos: 60000, playing: false }); run("radioCurrentUri = '" + startSong + "'"); plays = [];
+  await handoffPhoneTopUp(); await flush();
+  global.radioFill = quickFill;
+  assert.equal((plays.at(-1) || {}).uris && plays.at(-1).uris[0], startSong); assert.ok(plays.at(-1).pos >= 4000);
+  // the music was moved to a speaker from the Spotify app while the page was away: the songs go there (the reading's device),
+  // not back to the phone's own app
+  run("setPlaybackDevice({ id: 'p', name: 'Pixel', type: 'Smartphone' })");
+  const onSpeaker = run("matchedUris[allTrackCount - 1]");
+  remote({ uri: onSpeaker, pos: 20000, playing: true }); run("remoteNow.at = Date.now() - 60000"); plays = [];
+  let playedOn = null; const realPlay = global.spotifyPlay;
+  global.spotifyPlay = async (token, uris, pos, opts) => { playedOn = run("playbackDeviceId"); return realPlay(token, uris, pos, opts); };
+  await handoffPhoneTopUp(); await flush();
+  global.spotifyPlay = realPlay;
+  assert.equal(plays.at(-1).uris[0], onSpeaker); assert.equal(playedOn, "k");
+  // leaving the page (to the Spotify app, or locked) while Spotify holds fewer than 10 songs after the one playing: what is
+  // queued goes now, from where the song is (a hidden phone page may not run again before the music runs out)
+  run("radioContextLastUri = matchedUris[allTrackCount - 5]; radioRefilling = true; radioSeaming = false");
+  const playingNow = run("matchedUris[allTrackCount - 5]");
+  remote({ uri: playingNow, pos: 30000, playing: true }); plays = [];
+  document.visibilityState = "hidden"; docListeners.visibilitychange(); await flush();
+  assert.equal((plays.at(-1) || {}).uris && plays.at(-1).uris[0], playingNow); assert.equal(plays.at(-1).uris.length, 5);
+  assert.ok(plays.at(-1).pos >= 30000); assert.equal(plays.at(-1).opts.quick, true);
+  // ...and nothing when Spotify already holds 10 after it, or the reading is old, or another song plays
+  run("radioContextLastUri = matchedUris[allTrackCount - 1]"); remote({ uri: run("matchedUris[allTrackCount - 12]"), pos: 1000, playing: true }); plays = [];
+  docListeners.visibilitychange(); await flush(); assert.equal(plays.length, 0);
+  run("radioContextLastUri = matchedUris[allTrackCount - 5]"); remote({ uri: playingNow, pos: 1000, playing: true }); run("remoteNow.at = Date.now() - 60000");
+  docListeners.visibilitychange(); await flush(); assert.equal(plays.length, 0);
+  remote({ uri: "spotify:track:else", pos: 1000, playing: true });
+  docListeners.visibilitychange(); await flush(); assert.equal(plays.length, 0);
+  document.visibilityState = "visible"; run("radioRefilling = false; radioContextLastUri = matchedUris[allTrackCount - 1]");
   // the phone was locked, the songs ran out and Spotify reports nothing: an old "playing" reading restarts nothing
   run("remoteNow = { uri: matchedUris[allTrackCount - 1], pos: 50000, dur: 200000, playing: true, at: Date.now() - 60000 }");
   readings = [null, null]; plays = []; fillWants = []; run("radioPendingReissue = false");
@@ -665,7 +699,7 @@ function followWith(note) { gets = 0; run("handoffFollow(" + JSON.stringify(note
 
   // 6. taking over with nothing playing (the desktop's tab closed and the music stopped): Play resumes the radio through
   // spotifyPlay (the phone's Spotify app, or a request to open Spotify), with no toast
-  restart(); remote({ uri: oUri(1), pos: 40000, playing: true }); readings = [null]; plays = [];
+  restart(); remote({ uri: oUri(1), pos: 40000, playing: true }); readings = [null, null]; plays = [];
   assert.equal(await handoffTakeOver({ ...otherNote, released: true }), true); await flush();
   assert.equal(plays.length, 0); assert.equal(toasts.length, 0); assert.equal(run("sdkInactive"), true);
   readings = [];
