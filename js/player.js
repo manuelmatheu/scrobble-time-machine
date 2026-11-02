@@ -33,7 +33,7 @@ async function pollNowPlayingOnce() {
   const token = await getSpotifyToken();
   if (!token) return;
   const data = await getCurrentlyPlaying(token);
-  if (data && data.device) setCurrentDevice(data.device);  // the bar shows what Spotify reports, even for outside music
+  if (data && data.device) { setCurrentDevice(data.device); radioSetRemoteVolume(data.device); }  // the bar and the volume show what Spotify reports
   if (!data || !data.item) {
     // Two empty readings in a row while a radio runs: show nothing we cannot vouch for, not the old song. (Without a radio
     // there is nothing to show, and a speaker picked on Home reads empty until the radio starts on it: it is kept.)
@@ -227,12 +227,35 @@ async function playerNext() {
   if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
-// Volume slider (desktop only): the SDK player's own volume, so only while the SDK device is the active player
+// Volume slider (desktop only): the SDK player's own volume while it plays; on another device (a speaker) that device's volume,
+// through the Web API, when Spotify says it takes one (radioRemoteVolume, from the last reading)
 async function setVolume(el) {
   const v = Math.min(Math.max(parseInt(el.value, 10) || 0, 0), 100);
   el.style.setProperty("--vol", v + "%");
   if (typeof radioSetVolumeIcon === "function") radioSetVolumeIcon(v);
-  if (window._stmPlayer && sdkPlaying()) window._stmPlayer.setVolume(v / 100);
+  if (radioVolumeOnSdk()) { if (window._stmPlayer) window._stmPlayer.setVolume(v / 100); return; }
+  if (radioRemoteVolume && radioRemoteVolume.supported) radioSendVolume(v);
+}
+// The slider is the browser player's (a follower's music plays on the driver's device, even with this browser's player ready)
+function radioVolumeOnSdk() { return sdkPlaying() && !radioFollower(); }
+// A drag fires many changes: the first goes at once, then at most one every RADIO_VOLUME_SEND_MS, and the last always lands
+let _volumeWant = null, _volumeTimer = null;
+function radioSendVolume(v) {
+  _volumeWant = v;
+  if (_volumeTimer) return;
+  const wait = RADIO_VOLUME_SEND_MS - (Date.now() - radioVolumeSentAt);
+  if (wait <= 0) { radioVolumeFlush(); return; }
+  _volumeTimer = setTimeout(() => { _volumeTimer = null; radioVolumeFlush(); }, wait);
+}
+async function radioVolumeFlush() {
+  const v = _volumeWant, rv = radioRemoteVolume;
+  _volumeWant = null;
+  if (v === null || !rv || !rv.supported) return;
+  radioVolumeSentAt = Date.now(); rv.percent = v;
+  const token = await getSpotifyToken();
+  if (!token) return;
+  const q = "volume_percent=" + v + (rv.id && !isUnlistedDeviceId(rv.id) ? "&device_id=" + encodeURIComponent(rv.id) : "");
+  try { await fetch("https://api.spotify.com/v1/me/player/volume?" + q, { method: "PUT", headers: { Authorization: "Bearer " + token } }); } catch (e) {}
 }
 function seekTo(e) {
   const bar = e.currentTarget;

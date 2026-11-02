@@ -135,7 +135,7 @@ Only visible when Mix is picked. Label "How much is new" above a 3-option segmen
 A small pill that says why a track is playing. Red tint with a sparkle icon for new music ("Last.fm pick", "Similar to X"); neutral with a clock icon for tracks from your past ("From 2014" for Library songs and the past half of a Mix; the moment's date, "Mar 11, 2014", in Moments). Max width 170px in the hero, 160px in rows; text truncates with an ellipsis. It appears in the now-playing eyebrow row (right-aligned) and at the end of Up next rows (Library, Discover and Mix).
 
 ### Now-playing card (`.radio-now`)
-- **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume only while the Web Playback SDK plays here).
+- **Desktop / tablet:** a 224px-tall card. Cover 192px on the left; on the right the eyebrow row (NOW PLAYING + chip), title, artist/album, progress bar with elapsed and total time, and a controls row (heart, previous, play/pause, next, then the device button and volume; volume while the Web Playback SDK plays here, or while the radio plays on a speaker, greyed out (`.radio-volume.locked`, the reason in its title) where Spotify does not let us set it).
 - **Phones (<=520px):** stacks. Full-width square cover, then the text block, progress, and centered controls (previous / play / next). The like heart moves beside the title, centered on its first line (the eyebrow row keeps a 24px minimum height so it sits at the same place with or without a chip); the controls row hides its own heart. The eyebrow row extends over the heart's reserved space so the chip's right edge lines up with the cover's right edge.
 - **Play button:** 56px circle, `--text-primary` fill with `--bg-primary` glyph.
 - **Progress:** 6px pill, red fill; clickable to seek.
@@ -194,7 +194,7 @@ Full-screen overlay (title and close button in its own header) with an iframe of
 | Width | Behavior |
 |---|---|
 | **<= 520px** | Radio card padding 20px; now-playing card stacks (see above); buttons full width in `.controls` and in the moment panel; header brand 16px |
-| **<= 720px** | Volume slider hidden (phones cannot use the SDK anyway) |
+| **<= 720px** | Volume slider hidden (a phone's own volume buttons already set a speaker's volume through Spotify) |
 | **521-1099px** | One column, 680px container, now-playing card horizontal at 224px |
 | **>= 1100px** | 1120px container. Home: the card centered at 680px. Radio two columns: player, moment panel and artist panel (640px) on the left, Up next as a panel of equal height on the right (min 476px). Up next shows 8 rows (6 below 1100px) that share the panel height equally (`--upnext-rows`, 50px each at the 468px minimum). Artist photo shown |
 

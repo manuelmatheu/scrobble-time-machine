@@ -70,6 +70,11 @@ const REMOTE_FRESH_MS = 20000;      // a reading older than this is not trusted 
 // instead of at its end, so the speaker holds the queue even if this window closes or sleeps. Once per move, within this time.
 let radioMovedAt = 0;
 const RADIO_MOVE_FLUSH_MS = 60000;
+// The volume slider on another device (desktop): the volume Spotify reports for the device that plays, from the last reading
+let radioRemoteVolume = null;          // { id, percent, supported } or null (no reading yet, or no radio)
+let radioVolumeSentAt = 0;             // when the slider last sent a change to Spotify
+const RADIO_VOLUME_SEND_MS = 250;      // while dragging, at most one change sent this often (the last value always goes)
+const RADIO_VOLUME_HOLD_MS = 3000;     // readings this soon after a change may not have it yet: they do not move the slider
 // Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays
 let radioStation = "library", radioActiveStation = "library";  // "library" | "discover" | "mix"
 let radioBalance = "balanced", radioActiveBalance = "balanced";  // Mix: "mostly-past" | "balanced" | "mostly-new"

@@ -7,6 +7,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Play on: pick a speaker from the app, before starting or mid-session (a running radio moves with its queue); the list shows this browser first, other devices after, Sonos greyed out
 - [x] Playing on bar under the player; every window shows the device Spotify reports, and follows when the music moves (Spotify app, another window) within a few seconds
 - [x] Home "Plays on" row, and a phone strip with Pause/Next while something plays on another device
+- [x] Speaker volume (desktop): the slider follows the radio to a speaker and sets its volume (`PUT /me/player/volume`), greyed out with the reason where Spotify refuses (Sonos, `supports_volume` false)
 - [x] Device list refreshes only while open and visible; a failed read keeps the rows; hidden pages do not poll (except a radio playing on another device)
 - [x] Tokens `--spotify-green-text` and `--scrim`
 - [x] Session hand-off (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2): the window that drives a radio keeps a note on the server (`api/session.js`, Upstash Redis, one note per Spotify user); the phone strip's Open radio shows the whole radio there (Up next, moment panel, dates) while the music keeps playing on the desktop

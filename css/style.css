@@ -181,6 +181,8 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .radio-volume { display:none; align-items:center; gap:8px; margin-left:auto; color:var(--text-secondary); }
 .radio-volume.sdk { display:flex; }
 .radio-volume i { font-size:20px; }
+.radio-volume.locked { color:var(--text-tertiary); cursor:not-allowed; }  /* a speaker Spotify does not let us set (Sonos): the reason is the title */
+.radio-volume.locked .volume-range { opacity:0.4; pointer-events:none; }  /* the hover reaches the wrap, so its title shows */
 .volume-range { -webkit-appearance:none; appearance:none; width:140px; height:44px; background:transparent; cursor:pointer; --vol:80%; }
 .volume-range::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:linear-gradient(to right, var(--text-secondary) var(--vol), var(--border) var(--vol)); }
 .volume-range::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; margin-top:-5px; border:none; border-radius:50%; background:var(--text-primary); }

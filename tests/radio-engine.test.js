@@ -732,6 +732,45 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
     assert.equal(vols.length, 2, "no SDK, no volume call");
     run("radioRenderNow({ name: 'Airbag', artists: [], album: { images: [] } }, false)");
     assert.ok(!els.radioVolumeWrap.cl.has("sdk"), "the slider hides again when the SDK drops");
+    // on a speaker: the slider shows the volume Spotify reports for it, and sets it there
+    const volCalls = [], fetchBefore = global.fetch;
+    global.fetch = async (url, o) => { volCalls.push((o && o.method || "GET") + " " + String(url).replace("https://api.spotify.com/v1", "")); return { ok: true, status: 204 }; };
+    run("radioVolumeSentAt = 0; radioSetRemoteVolume({ id: 'spk', name: 'Kitchen', type: 'Speaker', volume_percent: 42, supports_volume: true })");
+    assert.ok(els.radioVolumeWrap.cl.has("sdk"), "the slider shows for a speaker");
+    assert.ok(!els.radioVolumeWrap.cl.has("locked")); assert.equal(els.radioVolume.disabled, false);
+    assert.equal(Number(els.radioVolume.value), 42, "the slider starts from the speaker's volume");
+    await run("setVolume({ value: '55', style: { setProperty() {} } })"); await new Promise(r => setImmediate(r));
+    assert.deepEqual(volCalls, ["PUT /me/player/volume?volume_percent=55&device_id=spk"]);
+    // dragging: at most one request every RADIO_VOLUME_SEND_MS, and the last value always lands
+    for (const v of ["56", "57", "58"]) { els.radioVolume.value = v; await run("setVolume(document.getElementById('radioVolume'))"); }  // the slider itself, as a drag does
+    assert.equal(volCalls.length, 1);
+    await new Promise(r => setTimeout(r, run("RADIO_VOLUME_SEND_MS") + 50));
+    assert.deepEqual(volCalls.slice(1), ["PUT /me/player/volume?volume_percent=58&device_id=spk"]);
+    // a reading taken just after a change (Spotify may not have it yet) does not pull the slider back...
+    run("radioSetRemoteVolume({ id: 'spk', name: 'Kitchen', type: 'Speaker', volume_percent: 42, supports_volume: true })");
+    assert.equal(Number(els.radioVolume.value), 58);
+    // ...a later one does (the volume was changed on the speaker or in the Spotify app)
+    run("radioVolumeSentAt = 0; radioSetRemoteVolume({ id: 'spk', name: 'Kitchen', type: 'Speaker', volume_percent: 30, supports_volume: true })");
+    assert.equal(Number(els.radioVolume.value), 30);
+    // a device Spotify does not list (many Sonos) is sent no device_id
+    volCalls.length = 0; run("radioVolumeSentAt = 0; radioSetRemoteVolume({ id: 'unlisted:Den', name: 'Den', type: 'Speaker', volume_percent: 20, supports_volume: true })");
+    await run("setVolume({ value: '25', style: { setProperty() {} } })"); await new Promise(r => setImmediate(r));
+    assert.deepEqual(volCalls, ["PUT /me/player/volume?volume_percent=25"]);
+    // a speaker that refuses volume (supports_volume false, or restricted like Sonos): greyed out with the reason, nothing sent
+    for (const d of [{ id: 'son', name: 'Sonos', type: 'Speaker', volume_percent: null, supports_volume: false }, { id: 'son', name: 'Sonos', type: 'Speaker', volume_percent: 40, supports_volume: true, is_restricted: true }]) {
+      volCalls.length = 0; run("radioVolumeSentAt = 0; radioSetRemoteVolume(" + JSON.stringify(d) + ")");
+      assert.ok(els.radioVolumeWrap.cl.has("sdk") && els.radioVolumeWrap.cl.has("locked")); assert.equal(els.radioVolume.disabled, true);
+      assert.match(els.radioVolumeWrap.title, /Spotify app/);
+      await run("setVolume({ value: '70', style: { setProperty() {} } })"); await new Promise(r => setImmediate(r));
+      assert.equal(volCalls.length, 0);
+    }
+    // back on a speaker that takes it: enabled again, and the reason goes
+    run("radioSetRemoteVolume({ id: 'spk', name: 'Kitchen', type: 'Speaker', volume_percent: 30, supports_volume: true })");
+    assert.ok(!els.radioVolumeWrap.cl.has("locked")); assert.equal(els.radioVolume.disabled, false); assert.equal(els.radioVolumeWrap.title, "");
+    // the radio stops: no speaker volume left to show
+    run("radioRemoteVolume = null; radioSyncVolume()");
+    assert.ok(!els.radioVolumeWrap.cl.has("sdk"));
+    global.fetch = fetchBefore;
     run("window._stmPlayer = undefined;");
     run("radioReopen()");
     assert.equal(els.radioView.style.display, "");
