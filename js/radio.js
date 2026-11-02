@@ -721,7 +721,7 @@ function radioMaybeRefill(currentUri, positionMs) {
 function radioStop() {
   radioActive = false; radioSession++; radioRefilling = false; radioJumpFrom = null;
   if (typeof handoffStopped === "function") handoffStopped();
-  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0; radioMovedAt = 0;
+  radioCurrentUri = null; radioLastPos = 0; radioPaused = false; radioPendingReissue = false; radioContextLastUri = null; remoteNow = null; radioCarry = []; radioStartedAt = 0; radioMovedAt = 0; radioRemoteVolume = null;
   hideRadioView();
 }
 
@@ -758,11 +758,34 @@ function radioSetVolumeIcon(v) {
   RADIO_VOLUME_ICONS.forEach(c => ic.classList.remove(c));
   ic.classList.add(next);
 }
+// The device a reading reports: its volume, and whether Spotify lets us set it (not on restricted devices such as Sonos)
+const RADIO_VOLUME_LOCKED = "This speaker's volume can only be changed from the Spotify app";
+function radioSetRemoteVolume(d) {
+  if (!d) return;
+  const percent = typeof d.volume_percent === "number" ? d.volume_percent : null;
+  radioRemoteVolume = { id: d.id || (d.name ? UNLISTED_PREFIX + d.name : null), percent, supported: !!d.supports_volume && !d.is_restricted && percent !== null };
+  radioSyncVolume();
+}
+// Shown (on wide screens, via CSS) while the browser player plays, or while a reading reports the device the music is on.
+// That device's volume is greyed out, with the reason, when Spotify does not let us set it.
 function radioSyncVolume() {
   const wrap = $("radioVolumeWrap");
   if (!wrap) return;
-  wrap.classList.toggle("sdk", sdkPlaying());
-  if (!sdkPlaying() || radioVolumeSynced || !window._stmPlayer || !window._stmPlayer.getVolume) return;
+  const sdk = radioVolumeOnSdk(), rv = sdk ? null : radioRemoteVolume;
+  wrap.classList.toggle("sdk", sdk || !!rv);
+  const locked = !!rv && !rv.supported, el = $("radioVolume");
+  wrap.classList.toggle("locked", locked);
+  wrap.title = locked ? RADIO_VOLUME_LOCKED : "";
+  if (el) {
+    el.disabled = locked;
+    el.setAttribute("aria-label", locked ? "Volume. " + RADIO_VOLUME_LOCKED : "Volume");
+    // the speaker's volume, unless the slider just changed it (Spotify may not report the change yet)
+    if (rv && rv.supported && Date.now() - radioVolumeSentAt >= RADIO_VOLUME_HOLD_MS) {
+      el.value = rv.percent; el.style.setProperty("--vol", rv.percent + "%"); radioSetVolumeIcon(rv.percent);
+    }
+  }
+  if (!sdk) { radioVolumeSynced = false; return; }  // back on the browser player: read its volume again
+  if (radioVolumeSynced || !window._stmPlayer || !window._stmPlayer.getVolume) return;
   radioVolumeSynced = true;
   Promise.resolve(window._stmPlayer.getVolume()).then(v => {
     const el = $("radioVolume");
