@@ -217,6 +217,8 @@ async function spotifyPlay(token, uris, positionMs, opts) {
     if (r.ok || r.status === 204) { radioContextLastUri = lastUri; return true; }
     // SDK play failed — fall through to remote
   }
+  // opts.sdkOnly: only this browser's player will do (a pick of This browser): no other device, so a success means it plays here
+  if (opts && opts.sdkOnly) return false;
 
   // The swap at the seam on another device: no device list, transfer or resets (the session's first play did them); straight to the
   // picked device, or wherever Spotify is already playing. If that fails the full logic below runs.
@@ -281,7 +283,8 @@ async function spotifyPlayDirect(token, body, deviceId) {
   try {
     const r = await fetch("https://api.spotify.com/v1/me/player/play" + (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : ""), {
       method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      keepalive: true  // a phone page that is being hidden (handoffHiddenFlush) may be frozen before the answer comes back
     });
     return r.ok || r.status === 204;
   } catch { return false; }
@@ -330,10 +333,11 @@ function initSDKPlayer() {
     const reconnecting = sdkNeedsRetransfer;
     sdkDeviceId = device_id;
     sdkReady = true;
-    if (!playbackDeviceId) stopPolling();  // another Connect device picked: polling keeps following it
+    // another Connect device picked: polling keeps following it; a follower (hand-off) polls anyway, the music is the driver's
+    if (!playbackDeviceId && !radioFollower()) stopPolling();
     if (typeof radioSyncVolume === "function") radioSyncVolume();
-    // Re-transfer playback to SDK device after auth error recovery
-    if (reconnecting && sessionQueue.size > 0 && !sessionPaused && !playbackDeviceId) {
+    // Re-transfer playback to SDK device after auth error recovery (never on a follower: the music stays on the driver's device)
+    if (reconnecting && sessionQueue.size > 0 && !sessionPaused && !playbackDeviceId && !radioFollower()) {
       sdkNeedsRetransfer = false;
       getSpotifyToken().then(t => { if (t) transferPlayback(t, sdkDeviceId).catch(() => {}); });
     }

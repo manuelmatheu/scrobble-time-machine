@@ -7,6 +7,13 @@ const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname;
 const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read user-top-read";
 const SEARCH_DELAY = 500; // ms between search calls
 const POLL_INTERVAL = 5000; // ms between now-playing polls
+const PHONE_TOPUP = 10;           // songs a phone adds when the radio runs low (hand-off)
+const HANDOFF_BEAT_MS = 60000;    // the driver rewrites the session note this often
+const HANDOFF_FOLLOW_MS = 30000;  // a follower re-reads the note this often
+const HANDOFF_STALE_MS = 180000;  // a driver silent this long is gone
+const HANDOFF_SEEN_MAX = 300;     // radioSeen keys kept in the note
+const HANDOFF_BEFORE = 3;         // songs before the current one kept in the note
+const HANDOFF_FAILS_MAX = 3;      // failed calls in a row (after the store answered once) that turn the hand-off off
 
 // ═════════════════════════════════════════════════════════════════════════════
 // STATE
@@ -59,6 +66,10 @@ let remoteNow = null;           // { uri, pos, dur, playing, at } or null
 let remoteFastAt = 0, remoteSeamAt = 0;  // throttles: the 1s re-sync polls near the end, and retries of a failed swap
 const RADIO_REMOTE_SEAM_MS = 2500;  // on another device the swap lands this close to the end (the position is only as exact as the last poll)
 const REMOTE_FRESH_MS = 20000;      // a reading older than this is not trusted for a seam
+// The radio's music just moved to (or started on) another device: songs it was not sent go at once, from where the song is,
+// instead of at its end, so the speaker holds the queue even if this window closes or sleeps. Once per move, within this time.
+let radioMovedAt = 0;
+const RADIO_MOVE_FLUSH_MS = 60000;
 // Stations: radioStation is the one picked on the home card; radioActiveStation is the one the running session plays
 let radioStation = "library", radioActiveStation = "library";  // "library" | "discover" | "mix"
 let radioBalance = "balanced", radioActiveBalance = "balanced";  // Mix: "mostly-past" | "balanced" | "mostly-new"

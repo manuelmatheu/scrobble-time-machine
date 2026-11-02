@@ -10,9 +10,22 @@ function stopPolling() {
   nowPlayingIndex = -1;
 }
 
+// One extra read after ms (a pick has just moved the music), replacing any pending one
+let _pollSoonTimer = null;
+function pollSoon(ms) {
+  if (_pollSoonTimer) clearTimeout(_pollSoonTimer);
+  _pollSoonTimer = setTimeout(() => { _pollSoonTimer = null; pollNowPlaying(); }, ms);
+}
+
 let _pollBusy = false, _emptyPolls = 0;
+// connect.js loads after this file (and the radio test without it): reach the bar through a guard
+function setCurrentDevice(d) { if (typeof connectSetCurrent === "function") connectSetCurrent(d); }
+// A hidden page does not poll, unless it drives a radio (it tops up and seams the music on another device)
+function pollVisible() { return typeof document === "undefined" || document.visibilityState !== "hidden"; }
 async function pollNowPlaying() {
-  if (sdkPlaying() || _pollBusy) return;
+  // A follower (hand-off) polls even with this browser's player ready: the music plays on the driver's device
+  if ((sdkPlaying() && !radioFollower()) || _pollBusy) return;
+  if (!pollVisible() && (!radioActive || radioFollower())) return;
   _pollBusy = true;
   try { await pollNowPlayingOnce(); } finally { _pollBusy = false; }
 }
@@ -20,10 +33,18 @@ async function pollNowPlayingOnce() {
   const token = await getSpotifyToken();
   if (!token) return;
   const data = await getCurrentlyPlaying(token);
+  if (data && data.device) setCurrentDevice(data.device);  // the bar shows what Spotify reports, even for outside music
   if (!data || !data.item) {
-    // Spotify drops a followed device that sat idle: /me/player then comes back empty for good. Let go of it, or the controls
-    // keep talking to a device that is gone
-    if (playbackDeviceId && ++_emptyPolls >= 2) releaseDeadDevice(false);
+    // Two empty readings in a row while a radio runs: show nothing we cannot vouch for, not the old song. (Without a radio
+    // there is nothing to show, and a speaker picked on Home reads empty until the radio starts on it: it is kept.)
+    if (++_emptyPolls >= 2 && radioActive) {
+      // Spotify drops a followed device that sat idle: /me/player then comes back empty for good. Let go of it, or the
+      // controls keep talking to a device that is gone. With this browser's player the music comes back here (releaseDeadDevice
+      // shows the last song paused here); otherwise the polls go on, under "Checking what's playing…"
+      const backHere = !!playbackDeviceId && sdkReady && sessionQueue.size > 0 && !radioFollower();  // a follower never played here
+      if (!backHere) { radioShowChecking(); setCurrentDevice(null); }
+      if (playbackDeviceId) releaseDeadDevice(false);
+    }
     return;
   }
   _emptyPolls = 0;
@@ -35,18 +56,26 @@ async function pollNowPlayingOnce() {
 
   // Session check: is Spotify playing one of our queued tracks?
   if (sessionQueue.size > 0 && !sessionQueue.has(playingUri)) {
-    if (radioRecoverRunOff(prevUri)) return;  // it ran past the last track we sent: the swap was missed, put our tracks back
-    if (!sessionPaused) {
-      sessionPaused = true;
-      highlightNowPlaying(-1);
-      showStatus("Playback moved to another session - click a track to reclaim", "warn");
+    // The session note may know it (a follower's copy is behind, or another device drives the radio now): re-read once, then
+    // decide. First, or this window would put its own songs back over another device's new radio.
+    if (typeof handoffSongKnown === "function" && await handoffSongKnown(playingUri)) followPlaybackDevice(data);
+    else {
+      if (radioRecoverRunOff(prevUri)) return;  // it ran past the last track we sent: the swap was missed, put our tracks back
+      if (!sessionPaused) {
+        sessionPaused = true;
+        highlightNowPlaying(-1);
+        showStatus("Playback moved to another session - click a track to reclaim", "warn");
+      }
+      return;
     }
-    return;
   }
   if (sessionPaused) {
     sessionPaused = false;
     showStatus("", "success");
   }
+  // This radio's song plays again (a row tap, the Spotify app): without a browser player nothing else says so, and Play must
+  // pause it, not resume the radio from its last song (a takeover with nothing playing set that, handoffPausedHere)
+  if (sdkInactive && !sdkReady) sdkInactive = false;
 
   // Update now-playing highlight using reverse map
   if (uriToIndices[playingUri]) {
@@ -95,6 +124,7 @@ function onSDKStateChange(state) {
     if (foreign || state.paused) return;  // keep this window's own song and position for Play
     sdkInactive = false; if (sessionPaused) { sessionPaused = false; hideStatus(); }  // this window has the music again
   }
+  setCurrentDevice({ id: sdkDeviceId, name: "This browser", type: "Computer" });
   _sdkDurationMs = state.duration;
   _sdkPositionMs = state.position;
   _sdkPlaying = !state.paused;
@@ -158,13 +188,24 @@ async function playerRest(action) {
 // The followed device is gone (switched off, or idle too long). Back to this browser; with resume, carry on from the last
 // track seen so the control that was pressed does something.
 async function releaseDeadDevice(resume) {
-  const name = playbackDeviceName, last = remoteNow && remoteNow.uri;
+  const name = playbackDeviceName, last = remoteNow && remoteNow.uri, lastPos = remoteNow ? remoteNow.pos || 0 : 0;
   setPlaybackDevice(null);
   _emptyPolls = 0;
   remoteNow = null;
+  // A follower (hand-off) never played here and never re-issues: it lets the device go and keeps reading, under "Checking
+  // what's playing…", until the driver's music shows up again. No paused-here look, no toast, no play.
+  if (radioFollower()) { radioShowChecking(); setCurrentDevice(null); return; }
   if (!sdkReady || sessionQueue.size === 0) return;
   stopPolling();
-  if (!resume) { showStatus((name || "The other device") + " is not available. Playing here again.", "warn"); return; }
+  if (!resume) {
+    // Nothing reads here any more (the SDK sends no state until it plays): the last song paused, on this browser, where Play resumes
+    // it from its last reading (radioResumeHere), not "Checking what's playing…" with nothing checking
+    if (last && sessionQueue.has(last)) { _sdkCurrentUri = last; _sdkPositionMs = lastPos; }
+    radioPausedElsewhere(false);
+    setCurrentDevice({ id: sdkDeviceId, name: "This browser", type: "Computer" });
+    showStatus((name || "The other device") + " is not available. Playing here again.", "warn");
+    return;
+  }
   const uris = radioUrisFrom(matchedUris, allTrackCount, last && sessionQueue.has(last) ? last : null);
   const token = uris.length ? await getSpotifyToken() : null;
   if (token && await spotifyPlay(token, uris)) { sessionPaused = false; startPolling(); }
@@ -172,18 +213,18 @@ async function releaseDeadDevice(resume) {
 }
 async function playerPlayPause() {
   if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere(); return; }
-  if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.togglePlay(); return; }
+  if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.togglePlay(); return; }  // a follower is a remote
   playerRest("toggle");
 }
 async function playerPrev() {
   if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere("restart"); return; }
-  if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.previousTrack(); return; }
+  if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.previousTrack(); return; }
   playerRest("prev");
 }
 async function playerNext() {
   if ((sdkInactive || sessionPaused) && sessionQueue.size > 0) { radioResumeHere("next"); return; }
   if (radioSkipHandled()) return;
-  if (window._stmPlayer && sdkPlaying()) { window._stmPlayer.nextTrack(); return; }
+  if (window._stmPlayer && sdkPlaying() && !radioFollower()) { window._stmPlayer.nextTrack(); return; }
   playerRest("next");
 }
 // Volume slider (desktop only): the SDK player's own volume, so only while the SDK device is the active player
@@ -284,7 +325,9 @@ const UNLISTED_PREFIX = "unlisted:";
 function isUnlistedDeviceId(id) { return typeof id === "string" && id.indexOf(UNLISTED_PREFIX) === 0; }
 
 function setPlaybackDevice(dev) {
-  playbackDeviceId = dev ? dev.id : null;
+  const id = dev ? dev.id : null;
+  if (id !== playbackDeviceId) radioMovedAt = id && radioActive ? Date.now() : 0;  // a radio moved to a speaker: send it the rest (radioRemoteTick)
+  playbackDeviceId = id;
   playbackDeviceName = dev ? dev.name || "" : "";
   playbackDeviceType = dev ? dev.type || "" : "";
   if (typeof radioSyncVolume === "function") radioSyncVolume();
@@ -310,13 +353,18 @@ async function sdkLostPlayback() {
   const token = await getSpotifyToken();
   const data = token ? await getCurrentlyPlaying(token) : null;
   if (data && data.device && data.device.id === sdkDeviceId) return;  // still ours: a passing null state
-  if (data && data.item && sessionQueue.has(data.item.uri)) {
+  // the session note may know the song (this window follows another device's radio, or one was started elsewhere): no paused look
+  if (data && data.item && (sessionQueue.has(data.item.uri) || (typeof handoffSongKnown === "function" && await handoffSongKnown(data.item.uri)))) {
+    if (data.device) setCurrentDevice(data.device);  // the bar says where it went at once, not at the first poll
     followPlaybackDevice(data);
     if (!sdkPlaying()) { clearInterval(_sdkProgressTimer); startPolling(); }
     return;
   }
   // Nothing of this session plays anywhere: another window (a second tab, another STM) or another app took the music, or it
   // stopped. Do not mirror what plays there; show this window paused, and let Play bring its own queue back here.
+  // The bar shows the device Spotify reports (this window does not poll while it is inactive, so it must not keep saying
+  // "This browser"); with none reported, this browser, where Play brings the music back (as releaseDeadDevice)
+  setCurrentDevice(data && data.device ? data.device : { id: sdkDeviceId, name: "This browser", type: "Computer" });
   radioPausedElsewhere(!!(data && data.item));
 }
 // This window's player is no longer the active one. Paused look, no seam re-issues (radioPaused), and Play resumes here.
@@ -331,6 +379,11 @@ function radioPausedElsewhere(somethingElsePlays) {
 }
 // Play (or Next / Previous) while this window is not the active player: carry on with this window's own queue on this browser,
 // from where it stopped. mode: "next" starts the following song, "restart" the current one from its start.
+// This window's own song and where it stopped (radioResumeHere, and a device pick while the window is not the player)
+function radioResumePoint() {
+  const last = [_sdkCurrentUri, radioCurrentUri].find(u => u && sessionQueue.has(u)) || null;
+  return { last, pos: last && last === _sdkCurrentUri ? _sdkPositionMs : 0 };
+}
 let _resumeBusy = false;
 async function radioResumeHere(mode) {
   if (_resumeBusy) return;
@@ -338,9 +391,19 @@ async function radioResumeHere(mode) {
   try {
     const token = await getSpotifyToken();
     if (!token) return;
-    const last = [_sdkCurrentUri, radioCurrentUri].find(u => u && sessionQueue.has(u)) || null;
+    // a follower never plays on another STM window's browser player (that window drives), as a row tap
+    if (radioFollower()) {
+      const data = await getCurrentlyPlaying(token), d = data && data.device;
+      if (d && d.name === STM_PLAYER_NAME && d.id !== sdkDeviceId) return;
+      followPlaybackDevice(data);
+    }
+    const point = radioResumePoint(), last = point.last;
     let uris = radioUrisFrom(matchedUris, allTrackCount, last);
-    let pos = last && last === _sdkCurrentUri ? _sdkPositionMs : 0;
+    // a follower (hand-off) ends at the driver's last sent song, as a row tap does, so the driver's seam timing stays right; it
+    // keeps the song after the current one, so Next never replays the current song when that is the driver's last
+    const end = radioFollower() ? uris.indexOf(radioContextLastUri) : -1;
+    if (end >= 0) uris = uris.slice(0, Math.max(end + 1, 2));
+    let pos = point.pos;
     if (mode === "next" && uris.length > 1) { uris = uris.slice(1); pos = 0; }
     if (mode === "restart") pos = 0;
     if (!uris.length) { showStatus("Nothing left to resume. Start a new radio.", "warn"); return; }

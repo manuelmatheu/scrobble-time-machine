@@ -2,7 +2,21 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.11 (current) ✅
+## v2.12 (current) ✅
+
+- [x] Play on: pick a speaker from the app, before starting or mid-session (a running radio moves with its queue); the list shows this browser first, other devices after, Sonos greyed out
+- [x] Playing on bar under the player; every window shows the device Spotify reports, and follows when the music moves (Spotify app, another window) within a few seconds
+- [x] Home "Plays on" row, and a phone strip with Pause/Next while something plays on another device
+- [x] Device list refreshes only while open and visible; a failed read keeps the rows; hidden pages do not poll (except a radio playing on another device)
+- [x] Tokens `--spotify-green-text` and `--scrim`
+- [x] Session hand-off (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2): the window that drives a radio keeps a note on the server (`api/session.js`, Upstash Redis, one note per Spotify user); the phone strip's Open radio shows the whole radio there (Up next, moment panel, dates) while the music keeps playing on the desktop
+- [x] One driver at a time; other windows follow quietly. A radio started on the phone is followed by the desktop with no toast
+- [x] If the driver closes the page, or goes silent for 3 minutes, the phone takes the radio over and keeps 10 songs queued after the current one
+- [x] Without the store (no env vars, or no answer to the page's first call) the hand-off turns itself off, silently, and the app behaves as before; a store that fails now and then is tried again (off after 3 failures in a row)
+
+---
+
+## v2.11 ✅
 
 - [x] Time Travel folded into Library radio (Design canvas "Time Travel into Radio", https://claude.ai/artifact/FxeAUu2yox3QMPWRoxfPbh): the nine mode cards are gone
 - [x] Library **How it plays**: Songs (random scrobbles) or Moments (a stretch of consecutive scrobbles in the order played, then a jump to another moment: an endless Random mode)

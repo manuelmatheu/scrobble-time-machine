@@ -207,6 +207,35 @@ const uriFor = name => "spotify:track:" + name.replace(/ /g, "_");
   assert.equal(played.length, 1);
   run("radioActive = false; radioPaused = false; remoteNow = null; radioContextLastUri = null;");
 
+  // 12b1b. the music just moved to a speaker (or started on one) with only its first song sent: the rest goes at once, from
+  // where the song is, not at its end (so the speaker holds the whole queue even if this window closes or sleeps)
+  reset(); played = []; n = 300; run(existing);
+  run("sdkReady = false; radioActive = true; radioSeaming = false; radioContextLastUri = 'spotify:track:Existing'; remoteSeamAt = 0; remoteFastAt = 0; remoteNow = null;");
+  run("setPlaybackDevice({ id: 'spk', name: 'Kitchen', type: 'Speaker' })");
+  run("remoteNow = { uri: 'spotify:track:Existing', pos: 12000, dur: 180000, playing: true, at: Date.now() };");
+  await run("continueRadio()");
+  let flushPos = null;
+  global.spotifyPlay = async (token, uris, pos, opts) => { played.push(uris); flushPos = pos; playOpts = opts; return true; };
+  run("radioRemoteTick(); radioRemoteTick();");
+  await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 1);                              // once, mid-song
+  assert.equal(played[0][0], "spotify:track:Existing");        // from the song that plays...
+  assert.ok(played[0].length > 1);                             // ...with the rest behind it
+  assert.ok(flushPos >= 12000 && flushPos < 14000);            // where it is, not from the start
+  assert.deepEqual(playOpts, { quick: true });
+  assert.equal(run("radioMovedAt"), 0);                        // only once: later songs join at the seam as usual
+  // a fill still running is waited for (the whole queue goes in one play, not part of it now and the rest later)
+  run("radioContextLastUri = 'spotify:track:Existing'; radioSeaming = false; remoteSeamAt = 0; radioMovedAt = Date.now(); radioRefilling = true;"); played = [];
+  run("radioRemoteTick();"); await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0); assert.ok(run("radioMovedAt") > 0);
+  run("radioRefilling = false;");
+  // a move long ago does not count
+  run("radioContextLastUri = 'spotify:track:Existing'; radioSeaming = false; remoteSeamAt = 0; radioMovedAt = Date.now() - RADIO_MOVE_FLUSH_MS - 1;"); played = [];
+  run("radioRemoteTick();"); await new Promise(r => setImmediate(r));
+  assert.equal(played.length, 0);
+  run("setPlaybackDevice(null); radioActive = false; remoteNow = null; radioContextLastUri = null; radioMovedAt = 0;");
+  global.spotifyPlay = async (token, uris) => { played.push(uris); return true; };
+
   // 12b2. the swap waits for the last track we sent to Spotify, whatever Spotify reports as queued next (its autoplay can add its own)
   reset(); played = []; run(existing);
   run("sdkReady = true; sdkDeviceId = 'dev'; _sdkCurrentUri = 'spotify:track:Elsewhere'; radioContextLastUri = 'spotify:track:Existing'; _sdkDurationMs = 180000; _sdkPositionMs = 179500; radioPendingReissue = true;");
