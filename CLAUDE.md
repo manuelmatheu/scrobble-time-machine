@@ -22,6 +22,8 @@ No build step, no package manager, no linter -- there is nothing to install or c
 - `radio-engine`: the radio engine with the network stubbed (fills, top-ups, seams, stations, `spotifyPlay` request shapes).
 - `contrast`: WCAG contrast of the text tokens on the surface tokens, both themes.
 - `design-system`: colors only as tokens (no hex or `rgba()` outside the token lines of `style.css`), no text under 12px, no `transition:all`.
+- `motion`: no overshoot in `cubic-bezier` easings, `@keyframes` animate only `opacity` and `transform`, and the `prefers-reduced-motion` block turns every animation and transition off.
+- `session-api`: `api/session.js` (store stubbed). `handoff`: `js/handoff.js` (note, roles, driver, follower, takeover, phone top-up).
 - `no-page-numbers`: no page numbers in status or error messages. `no-time-travel`: the Time Travel modes, track list and era panel stay removed.
 
 - **Run locally:** serve the folder with any static file server (`/api/lfm-station` only exists on Vercel or `vercel dev`; without it Discover falls back to the similar-artist source) (e.g. `npx serve`, `python -m http.server`) and open it in a browser. Opening `index.html` directly via `file://` will break Spotify PKCE auth, since `SPOTIFY_REDIRECT_URI` (`js/config.js`) is derived from `window.location.origin + window.location.pathname` and must exactly match a redirect URI registered on the Spotify app.
@@ -34,56 +36,11 @@ No build step, no package manager, no linter -- there is nothing to install or c
 
 ## Architecture
 
-### File Structure
-
-```
-index.html          -- Page shell, script load order
-changelog.html      -- Release notes shown in the in-app overlay (openChangelog() in ui.js)
-manifest.webmanifest, sw.js, icons/ -- PWA: install on a phone or desktop. sw.js is network first (never hides a deploy) and caches only the same-origin shell; add a new js/css file to its SHELL list, or the offline fallback lacks it (a file in the list that 404s fails the install)
-ROADMAP.md          -- Shipped and planned work, newest first
-docs/architecture.md -- Detailed behavior behind the summaries below (auth, SDK, spotifyPlay, radio, seams, views)
-docs/superpowers/   -- Design notes and plans
-DESIGN.md           -- Design reference: tokens, components, screens, breakpoints (code wins over the canvas mockups)
-css/
-  style.css         -- All styles; single file; CSS custom properties for theming
-tests/              -- node test scripts (see Development)
-api/
-  lfm-station.js    -- Vercel serverless proxy for Last.fm's "recommended" station (CORS); the only backend piece
-js/
-  config.js         -- API keys, SPOTIFY_SCOPES, all global state variables
-  spotify.js        -- PKCE auth, Spotify API calls, SDK init, save playlist
-  lastfm.js         -- Last.fm API calls (getLastFmScrobbles / getLastFmScrobbleAt with an optional year range, fetchEarliestYear, getInfo, station)
-  ui.js             -- toasts (showStatus), escHtml, Start radio button state, handleReset(), changelog overlay
-  player.js         -- pollNowPlaying(), onSDKStateChange(), player controls, liked songs,
-                       following a session moved to another device
-  radio.js          -- Radio (Library / Discover / Mix): pure helpers, engine (radioFill/startRadio/
-                       continueRadio), moments, seams, home card options, radio view rendering,
-                       artist bio + play counts
-  app.js            -- DOMContentLoaded init, event listener wiring
-```
-
-### Script Load Order (order matters -- no modules)
-
-```html
-<script src="https://sdk.scdn.co/spotify-player.js"></script>  <!-- must be first -->
-<script src="js/config.js"></script>     <!-- globals defined here -->
-<script src="js/spotify.js"></script>    <!-- uses globals from config -->
-<script src="js/lastfm.js"></script>
-<script src="js/ui.js"></script>         <!-- uses showStatus, $ from config -->
-<script src="js/player.js"></script>     <!-- uses spotify.js + ui.js functions -->
-<script src="js/radio.js"></script>      <!-- uses player.js + spotify.js -->
-<script src="js/app.js"></script>        <!-- wires up all event listeners -->
-```
-
-The SDK script must load first so `window.onSpotifyWebPlaybackSDKReady` can be set by `spotify.js` before the SDK calls it.
-
-### Theme System
-
-- Dark theme is default (no attribute on `<html>`)
-- Light theme: `<html data-theme="light">`
-- All colors use CSS custom properties defined in `:root` (dark) and `[data-theme="light"]` (overrides)
-- Key variables: `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--bg-elevated`, `--border`, `--text-primary`, `--text-secondary`, `--text-tertiary`, `--text-muted`, `--lastfm-red`, `--spotify-green`
-- An inline IIFE in `<head>` sets the theme before CSS renders to prevent flash
+- Scripts load as plain globals in the `index.html` order (no modules; `js/handoff.js` loads after `connect.js`, before `radio.js`). The Spotify SDK script must load first so `spotify.js` can set `window.onSpotifyWebPlaybackSDKReady` before the SDK calls it.
+- `sw.js` is network first (never hides a deploy) and caches only the same-origin shell. Add a new js/css file to its SHELL list, or the offline fallback lacks it (a file that cannot be fetched is skipped, not fatal, so a typo there fails silently); bump `CACHE` to drop an old shell.
+- Two backend pieces, both Vercel functions: `api/lfm-station.js` (proxy for Last.fm's "recommended" station, for CORS) and `api/session.js` (the hand-off note store: Upstash Redis over REST, env vars `KV_REST_API_URL` / `KV_REST_API_TOKEN`; 503 without them).
+- `docs/architecture.md`: detailed behavior behind the summaries below (auth, SDK, spotifyPlay, radio, seams, views). `docs/superpowers/`: design notes and plans. `ROADMAP.md`: shipped and planned work, newest first. `changelog.html`: release notes for the in-app overlay.
+- `DESIGN.md` is the design reference (tokens, components, screens, breakpoints); code wins over the canvas mockups.
 
 ---
 
@@ -97,7 +54,8 @@ Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the
 - **Who is playing:** every SDK-driven decision goes through `sdkPlaying()` (`sdkReady && !playbackDeviceId`), not `sdkReady`. When it is true, `player_state_changed` -> `onSDKStateChange()` drives the UI; otherwise `pollNowPlaying()` reads `/me/player` every `POLL_INTERVAL` (5s) and follows the device the music moved to (`followPlaybackDevice()`).
 - **Two windows (or another app takes the music):** the SDK sends this window a null state; `sdkLostPlayback()` follows the music only if it is this session's own tracks (moved to a speaker). Anything else (another STM window, another app, nothing playing) calls `radioPausedElsewhere()`: `sdkInactive`, a paused look, no seam re-issues, and a warn toast when something else plays. It never mirrors what plays there. Play, Next and Previous then call `radioResumeHere()`, which plays this window's own queue on this browser from where it stopped (the SDK's `togglePlay` does nothing on a device that is not the active one). The window that takes over makes the other one inactive in turn. A phone has no player of its own, so `spotifyPlay()` never plays on another STM window's player (a device named `STM_PLAYER_NAME` that is not ours): it uses the phone's Spotify app (device type Smartphone) or asks the user to open Spotify; and `onSDKStateChange()` treats a song that is not in this window's queue, arriving after one of ours that was not the last we sent, as someone else's music on this player (autoplay after our last song is not that).
 - **`spotifyPlay(token, uris, opts)`:** caps at 100 URIs. With the SDK: transfer, then turn shuffle and repeat off, then play with `device_id`. Otherwise it picks a device (the followed one, then the active one, then any). Shuffle and repeat persist on the user's account and would reorder or loop the queue, so every full play resets them. `{quick:true}` (used at seams) sends a single `play` request.
-- **Connect:** there is no device picker (removed in v2.10); the music plays in this browser. `followPlaybackDevice()` (`player.js`) still follows a session moved to another device from the Spotify app, keeping `playbackDeviceId` in memory only. `/me/player/devices` lists only cloud-registered devices.
+- **Connect:** the "Play on" picker is back (v2.12, `js/connect.js`): the Playing on bar under the player, a device list (dropdown, or bottom sheet below 720px), a Home "Plays on" row and a phone strip. The bar shows the device Spotify reports (while a radio runs, two empty readings show "Checking what's playing…", or with a followed device gone and the SDK ready, the last song paused here). `followPlaybackDevice()` (`player.js`) still follows a session moved to another device from the Spotify app, keeping `playbackDeviceId` in memory only. `/me/player/devices` lists only cloud-registered devices; Sonos is restricted (listed greyed out). Detail: `docs/architecture.md`.
+- **Hand-off** (`js/handoff.js`, `api/session.js`; detail in `docs/architecture.md`): the window that drives a radio writes a session note (songs, moments, state) keyed by Spotify user id; other windows and the phone follow it (`radioFollower()`: shows the radio, never fills or seams, controls are a remote). A driver silent for 3 minutes, or one that released on `pagehide`, is taken over. A phone driver (no browser player) keeps `PHONE_TOPUP` (10) songs queued after the current one. The hand-off turns off for the page, silently, only when the store is absent (a 503, or the page's first call fails); after the store has answered once, a failed call is skipped and retried (off after 3 in a row), and a 401 is skipped.
 - **Search:** `spotifySearch()` tries `track:X artist:Y` first, then a plain query whose hit must pass `spotifyLooseMatch` (otherwise an unrelated song plays). Only final results are cached in `searchCache`; rate-limited or failed lookups are not.
 - **API wrappers:** `spGet` / `spPut` / `spDelete` refresh the token and retry on 401; pass a `null` body for query-string-only endpoints.
 - **Liked songs:** `/me/library/contains|PUT|DELETE ?uris=` (see Quirk 8); `likedSet` holds bare track IDs. **Save playlist:** `POST /me/playlists`, named `"Time Machine: " + label`; only Save this moment (Library in Moments) uses it.
@@ -121,7 +79,7 @@ Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the
 
 3. **Spotify tokens live in `localStorage`, not `sessionStorage`** -- intentional (v2.3+), so a reconnect isn't needed every time a tab closes. Only the PKCE code verifier and a spare copy of the Last.fm username use `sessionStorage`. Don't revert the token storage to `sessionStorage` without checking why it was changed (commit `bd8354c`).
 
-4. **`pollNowPlaying()` only runs when `!sdkPlaying()`** -- first line is `if (sdkPlaying() || _pollBusy) return;`. When the SDK is the player, `player_state_changed` events handle all updates; when the session was moved to another device (`playbackDeviceId` set by `followPlaybackDevice()`), polling does, even though `sdkReady` is true.
+4. **`pollNowPlaying()` only runs when `!sdkPlaying()` or this window is a hand-off follower** -- first line is `if ((sdkPlaying() && !radioFollower()) || _pollBusy) return;`. When the SDK is the player, `player_state_changed` events handle all updates; when the session was moved to another device (`playbackDeviceId` set by `followPlaybackDevice()`), polling does, even though `sdkReady` is true.
 
 5. **`matchedUris` is index-keyed object, not an array** -- iterate with `for (let i = 0; i < allTrackCount; i++)`, not `Object.values()` or array methods. Sparse: some indices may be missing.
 
@@ -140,44 +98,6 @@ Full detail, with the reasons behind each rule: `docs/architecture.md`. Read the
 
 ---
 
-## Current Version: v2.11
+## Current Version: v2.12
 
 Bump the version only for a release (a new feature set or a user-visible change worth a changelog headline), not for every fix; small changes ride in the current version's changelog and `ROADMAP.md` entry. A bump touches three places: the version-history comment at the top of `index.html`, the footer link text in `index.html`, and the changelog opened by `openChangelog()` (`js/ui.js`; content in `changelog.html`). `ROADMAP.md` holds planned work; `docs/superpowers/` holds design notes.
-
----
-
-## Quick Reference
-
-| Function | File | Purpose |
-|---|---|---|
-| `initiateSpotifyAuth()` | spotify.js | Start PKCE OAuth flow (includes `show_dialog:true`) |
-| `disconnectSpotify()` | spotify.js | Clear tokens, disconnect SDK (does not re-initiate auth) |
-| `getSpotifyToken()` | spotify.js | Get valid access token (refresh if needed) |
-| `spGet(path)` | spotify.js | GET with auto-401-retry |
-| `spPut(path, body)` | spotify.js | PUT with auto-401-retry; `null` body = no body sent |
-| `spDelete(path, body)` | spotify.js | DELETE with auto-401-retry; `null` body = no body sent |
-| `initSDKPlayer()` | spotify.js | Create and connect Spotify Web Playback SDK player |
-| `spotifyPlay(token, uris)` | spotify.js | Start playback (prefers SDK device) |
-| `saveAsPlaylist(btn, uris, label)` | spotify.js | Create a Spotify playlist (Save this moment) |
-| `pollNowPlaying()` | player.js | Poll Spotify for now-playing (fallback only) |
-| `onSDKStateChange(state)` | player.js | Handle SDK player_state_changed events |
-| `checkLikedTracks()` | player.js | Batch-check liked status for all matched tracks |
-| `toggleLikeTrack(idx)` | player.js | Like or unlike a track by index |
-| `highlightNowPlaying(index)` | ui.js | Record the playing track's index (`nowPlayingIndex`) |
-| `showStatus(msg, type)` | ui.js | Show an error/warn toast; success dismisses it |
-| `handleReset()` | ui.js | Full reset of state and UI |
-| `registerUri(uri, index)` | player.js | Populate uriToIndices reverse map |
-| `startRadio()` | radio.js | Start the picked station (with the Library options) |
-| `radioFill(want)` | radio.js | Pick, dedupe, match, and append random tracks |
-| `continueRadio()` | radio.js | Top up the queue and re-issue playback |
-| `radioStop()` | radio.js | Stop radio and invalidate in-flight fills |
-| `radioMaybeSeam()` / `radioRemoteTick()` | radio.js | Swap new tracks in at the end of the last queued song (SDK / another Connect device) |
-| `radioSetStation(name)` | radio.js | Pick Library, Discover or Mix on the home card |
-| `discoverCollectBatch(user, sid)` | radio.js | Pop, vet and return Discover candidates (refills the pool) |
-| `mixCollectBatch(user, sid)` | radio.js | Collect both sources and hand out picks in the Mix pattern |
-| `radioSetBalance(name)` | radio.js | Pick how much of a Mix is new |
-| `getLastFmStation(user)` | lastfm.js | Last.fm's recommended station through `/api/lfm-station` |
-| `getLastFmScrobbleAt(user, page, range)` | lastfm.js | One scrobble at a 1-based history position (inside `range` when given) |
-| `radioSetHow(name)` / `radioSetYear(year)` | radio.js | Library options on the home card: Songs or Moments, every year or one |
-| `momentCollectBatch(user)` | radio.js | One moment: the scrobbles around a random point, in the order played |
-| `radioNextMoment()` / `saveMomentPlaylist()` | radio.js | The moment panel's buttons |
