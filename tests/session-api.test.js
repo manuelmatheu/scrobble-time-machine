@@ -80,5 +80,13 @@ async function call(method, body, token, query) {
   assert.equal(c({ driverId: "d9", beatAt: 0, released: true }, n, "takeover", 10), true);
   assert.equal(c({ driverId: "d9", beatAt: 0, released: true }, n, "keep", 10), false);
   assert.equal(c({ driverId: "d9", beatAt: 0 }, n, "takeover", 180000), false);
+
+  // the token -> user id cache stays bounded while a warm function serves many tokens
+  handler._reset();
+  for (let i = 0; i < handler.ID_CACHE_MAX + 50; i++) { meStatus["t" + i] = 200; await call("GET", {}, "t" + i); }
+  assert.ok(handler._size() <= handler.ID_CACHE_MAX);
+  meCalls = 0;
+  await call("GET", {}, "t" + (handler.ID_CACHE_MAX + 49));  // the newest is still cached
+  assert.equal(meCalls, 0);
   console.log("session-api: ok");
 })().catch((e) => { console.error(e); process.exit(1); });

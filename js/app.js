@@ -3,13 +3,18 @@
 // ═════════════════════════════════════════════════════════════════════════════
 document.addEventListener("DOMContentLoaded", () => {
   $("currentUrl").textContent = SPOTIFY_REDIRECT_URI;
-  if (LASTFM_API_KEY !== "YOUR_LASTFM_API_KEY" && SPOTIFY_CLIENT_ID !== "YOUR_SPOTIFY_CLIENT_ID") $("setupBanner").style.display = "none";
-  const code = new URLSearchParams(window.location.search).get("code");
+  if (!stmSetupNeeded(location.hostname)) $("setupBanner").style.display = "none";
+  // Back from Spotify's login: a code is used only when the state matches the one this browser sent; a cancel or error says so
+  const qs = new URLSearchParams(window.location.search);
+  const back = spotifyAuthReturn(qs, qs.has("code") || qs.has("error") ? spotifyTakeAuthState() : null);
+  const code = back && back.code;
+  if (back && back.error) { window.history.replaceState({}, document.title, window.location.pathname); showStatus(back.error, "error"); }
+  const connected = t => { spotifyToken = t; updateSpotifyUI(true); if (window.Spotify && window.Spotify.Player) initSDKPlayer(); spotifyCheckAccess(t); };
   // Returning users (a stored session or the Spotify redirect) go straight to the Home card; everyone else sees the landing first
   let hasSession = !!code; try { hasSession = hasSession || !!localStorage.getItem("spotify_refresh_token"); } catch {}
   showLanding(!hasSession);
-  if (code) exchangeCodeForToken(code).then(t => { spotifyToken = t; updateSpotifyUI(true); if (window.Spotify && window.Spotify.Player) initSDKPlayer(); }).catch(() => { showStatus("Spotify auth failed", "error"); updateSpotifyUI(false); });
-  else getSpotifyToken().then(t => { if (t) { spotifyToken = t; updateSpotifyUI(true); if (window.Spotify && window.Spotify.Player) initSDKPlayer(); } else updateSpotifyUI(false); });
+  if (code) exchangeCodeForToken(code).then(connected).catch(() => { showStatus("Spotify auth failed", "error"); updateSpotifyUI(false); });
+  else getSpotifyToken().then(t => { if (t) connected(t); else updateSpotifyUI(false); });
 
   // Restore saved username from localStorage or sessionStorage
   const savedUser = localStorage.getItem("lastfm_username") || sessionStorage.getItem("lastfm_username");
@@ -55,7 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }
   });
 
-  // Installable app: the service worker needs https (or localhost)
-  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
+  // Installable app: the service worker needs https (or a local address)
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) navigator.serviceWorker.register("sw.js").catch(() => {});
   updateRadioButton();
 });
