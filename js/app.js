@@ -3,6 +3,9 @@
 // ═════════════════════════════════════════════════════════════════════════════
 document.addEventListener("DOMContentLoaded", () => {
   $("currentUrl").textContent = SPOTIFY_REDIRECT_URI;
+  $("landingRedirectUri").textContent = SPOTIFY_REDIRECT_URI;
+  // Signed in through the old built-in app, with no Client ID of your own yet: sign out once and say why
+  if (spotifyNeedsAppMove()) { spotifyClearTokens(); showStatus("Scrobble Time Machine now uses your own Spotify app. Set it up below (about 3 minutes), then connect again.", "warn"); }
   if (!stmSetupNeeded(location.hostname)) $("setupBanner").style.display = "none";
   // Back from Spotify's login: a code is used only when the state matches the one this browser sent; a cancel or error says so
   const qs = new URLSearchParams(window.location.search);
@@ -39,6 +42,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (user) { try { localStorage.setItem("lastfm_username", user); sessionStorage.setItem("lastfm_username", user); } catch {} }
   });
   $("landingUser").addEventListener("keydown", e => { if (e.key === "Enter" && !$("landingConnectBtn").disabled) initiateSpotifyAuth(); });
+  $("landingClientId").addEventListener("input", () => landingClientIdInput(false));
+  $("landingClientId").addEventListener("blur", () => landingClientIdInput(true));
+  // the Spotify menu closes on a click outside it or Escape
+  document.addEventListener("click", e => { if (!$("spotifyMenu").hidden && !$("spotifyBadge").contains(e.target)) spotifyMenuToggle(false); });
 
   // Username: save on change, update button
   $("usernameInput").addEventListener("input", updateRadioButton);
@@ -55,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Global keyboard shortcuts
   document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !$("spotifyMenu").hidden) { spotifyMenuToggle(false); $("spotifyMenuBtn").focus(); return; }
     if (e.key === "Escape" && connectIsOpen()) { connectClose(); return; }  // the Play on list first: it sits on top
     if (e.key === "Escape" && $("changelogOverlay").style.display !== "none") { closeChangelog(); return; }
     if (e.key === "Escape" && currentPhase === "working") { handleReset(); return; }

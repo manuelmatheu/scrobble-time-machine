@@ -1,12 +1,15 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // CONFIG
 // ═════════════════════════════════════════════════════════════════════════════
+// The Last.fm key is shared by everyone: it only names the app, and Last.fm returns whatever user is asked for.
 const LASTFM_API_KEY = "177b9e8ee70fe2325bfff606cfdaee23";
-const SPOTIFY_CLIENT_ID = "73fce01f5762463e86ff6555751a148c";
-// The domains these two keys are registered for (the Spotify app's redirect URIs). Self-hosting: put your own keys above and
-// your own domains here, or leave the list empty to skip the check. On any other domain the page shows "Setup required",
-// so a copy that kept someone else's keys says so instead of sending people to that person's Spotify app.
-const KEYS_HOSTS = ["stm-lastfm.vercel.app", "stm-preview.vercel.app"];
+// Spotify: every visitor brings their own app (Development Mode allows 5 users per app) and pastes its Client ID on the
+// first-run screen; it is kept in their browser (spotifyClientId(), spotify.js). A self-hosted copy may build one in here
+// instead, and the step goes away for its visitors.
+const SPOTIFY_CLIENT_ID = "";
+// With a built-in Client ID: the domains it is registered for (its redirect URIs), or [] to skip the check. On any other
+// domain the page shows "Setup required" instead of sending people to someone else's Spotify app.
+const KEYS_HOSTS = [];
 const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname;
 const SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public streaming user-library-modify user-library-read user-top-read";
 const SEARCH_DELAY = 500; // ms between search calls
@@ -34,9 +37,11 @@ let sessionQueue = new Set();
 let sessionPaused = false;
 
 const $ = id => document.getElementById(id);
-// Placeholder keys, or real keys on a domain they are not registered for (see KEYS_HOSTS)
+// No Last.fm key, or a built-in Client ID on a domain it is not registered for (see KEYS_HOSTS). No built-in ID is fine:
+// each visitor pastes their own.
 function stmSetupNeeded(host, lfmKey = LASTFM_API_KEY, clientId = SPOTIFY_CLIENT_ID) {
-  if (lfmKey === "YOUR_LASTFM_API_KEY" || clientId === "YOUR_SPOTIFY_CLIENT_ID") return true;
+  if (!lfmKey || lfmKey === "YOUR_LASTFM_API_KEY") return true;
+  if (!clientId || clientId === "YOUR_SPOTIFY_CLIENT_ID") return false;
   return KEYS_HOSTS.length > 0 && KEYS_HOSTS.indexOf(host) < 0;
 }
 let sdkReady = false;

@@ -34,9 +34,19 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .btn-ghost:hover:not(:disabled) { border-color:var(--text-tertiary); color:var(--text-primary); }
 .spotify-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; background:var(--spotify-green-subtle); border:1px solid var(--spotify-green-border); border-radius:8px; color:var(--spotify-green); font-size:13px; font-weight:600; white-space:nowrap; }
 /* small inside the badge, but the ::before extends its hit area to 44px */
-.btn-disconnect { position:relative; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; background:none; border:none; border-radius:4px; cursor:pointer; color:var(--spotify-green); opacity:0.7; font-size:12px; line-height:1; }
-.btn-disconnect::before { content:""; position:absolute; inset:-12px; }
-.btn-disconnect:hover { opacity:1; }
+/* the badge opens the Spotify menu: your app, change it, Spotify's dashboard, Disconnect */
+.spotify-menu-wrap { position:relative; }
+button.spotify-badge { min-height:44px; padding:0 12px; font-family:inherit; cursor:pointer; transition:border-color var(--dur-fast); }
+button.spotify-badge:hover { border-color:var(--spotify-green); }
+.spotify-menu { position:absolute; right:0; top:calc(100% + 8px); z-index:50; width:280px; box-sizing:border-box; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-float); display:flex; flex-direction:column; gap:2px; }
+.spotify-menu[hidden] { display:none; }
+.spotify-menu-app { display:flex; flex-direction:column; gap:4px; padding:8px 10px 10px; margin-bottom:4px; border-bottom:1px solid var(--border); }
+.spotify-menu-app[hidden] { display:none; }
+.spotify-menu-label { font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-tertiary); }
+.spotify-menu-item { min-height:44px; display:flex; align-items:center; padding:0 10px; border:none; border-radius:8px; background:none; color:var(--text-primary); font-size:14px; font-weight:600; font-family:inherit; text-align:left; text-decoration:none; cursor:pointer; }
+.spotify-menu-item:hover, .spotify-menu-item:focus-visible { background:var(--bg-tertiary); }
+.spotify-menu-item[hidden] { display:none; }
+.app-id { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-primary); }
 .btn-save-playlist { min-height:44px; padding:0 16px; border:1.5px solid var(--spotify-green); border-radius:8px; background:transparent; color:var(--spotify-green); font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast); white-space:nowrap; }
 .btn-save-playlist:hover { background:var(--spotify-green-subtle); }
 .btn-save-playlist:disabled { opacity:0.4; cursor:not-allowed; }
@@ -48,6 +58,7 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
   .controls { flex-direction:column; }
   .input-username { flex:1 1 100%; }
   .btn { width:100%; text-align:center; }
+  .btn-copy { width:auto; }
   .spotify-badge { width:100%; text-align:center; }
 }
 
@@ -143,6 +154,24 @@ button:focus-visible, a:focus-visible, input[type="range"]:focus-visible, [tabin
 .step-help { font-size:13px; line-height:1.4; color:var(--text-tertiary); }
 .landing-input { flex:none; width:100%; min-height:48px; font-size:16px; }
 .landing .btn-radio { flex:none; width:100%; }
+/* Step 2: your own Spotify app (hidden when this copy has a built-in Client ID) */
+.landing-step[hidden] { display:none; }
+.app-guide { display:flex; flex-direction:column; gap:10px; }
+.app-guide[hidden], .app-done[hidden] { display:none; }
+.app-steps { list-style:none; margin:2px 0 4px; padding:14px 16px; display:flex; flex-direction:column; gap:12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:12px; font-size:14px; line-height:1.45; color:var(--text-primary); }
+.app-steps li { display:flex; gap:10px; }
+.app-steps a { color:var(--lastfm-red-text); text-decoration:underline; text-underline-offset:2px; }
+.app-step-key { flex:0 0 16px; font-weight:700; color:var(--text-tertiary); }
+.app-step-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.redirect-row { display:flex; gap:8px; align-items:stretch; }
+.redirect-uri { flex:1; min-width:0; display:flex; align-items:center; padding:8px 12px; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:13px; overflow-wrap:anywhere; user-select:all; }
+.btn-copy { flex:none; display:inline-flex; align-items:center; gap:6px; padding:0 14px; }
+.step-label { font-size:14px; font-weight:700; color:var(--text-primary); margin-top:4px; }
+.client-id-input { font-family:'JetBrains Mono',monospace; font-size:15px; }
+.client-id-input[aria-invalid="true"] { border-color:var(--lastfm-red); }
+.step-error { font-size:13px; line-height:1.4; color:var(--lastfm-red-text); }
+.step-error[hidden] { display:none; }
+.link-btn { min-height:44px; padding:0 4px; background:none; border:none; color:var(--lastfm-red-text); font-size:13px; font-weight:600; font-family:inherit; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 
 @media (max-width:520px) { .app-brand h1 { font-size:16px; } }
 

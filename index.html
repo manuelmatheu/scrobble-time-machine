@@ -24,6 +24,7 @@
   v2.10 2026-10-16  Smooth track swaps on other devices, toasts, 8 Up next rows, year chip in Library radio
   v2.11 2026-10-19  Time Travel folded into Library radio: Moments, One year, Save this moment
   v2.12 2026-10-28  Play on: pick a speaker from the app; every window shows what Spotify reports; pick the radio up on your phone (session hand-off)
+  v2.13 2026-11-06  Bring your own Spotify app: each visitor pastes their own Client ID, so the app is open to anyone
 -->
 <html lang="en">
 <head>
@@ -83,17 +84,24 @@
   <header class="app-header">
     <div class="app-brand"><i class="ph-fill ph-vinyl-record app-brand-icon" aria-hidden="true"></i><h1>Scrobble Time Machine</h1></div>
     <div class="app-header-right">
-      <span class="spotify-badge" id="spotifyBadge" style="display:none"><span class="status-dot" aria-hidden="true"></span>Spotify <button class="btn-disconnect" onclick="disconnectSpotify()" title="Disconnect Spotify" aria-label="Disconnect Spotify"><i class="ph ph-x"></i></button></span>
+      <div class="spotify-menu-wrap" id="spotifyBadge" style="display:none">
+        <button type="button" class="spotify-badge" id="spotifyMenuBtn" aria-haspopup="true" aria-expanded="false" aria-controls="spotifyMenu" onclick="spotifyMenuToggle()"><span class="status-dot" aria-hidden="true"></span>Spotify<i class="ph ph-caret-down" aria-hidden="true"></i></button>
+        <div class="spotify-menu" id="spotifyMenu" hidden>
+          <div class="spotify-menu-app" id="spotifyMenuApp"><span class="spotify-menu-label">Your Spotify app</span><code class="app-id" id="spotifyMenuId"></code></div>
+          <button type="button" class="spotify-menu-item" id="spotifyMenuChange" onclick="spotifyChangeApp()">Use a different Spotify app</button>
+          <a class="spotify-menu-item" href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Open Spotify's dashboard</a>
+          <button type="button" class="spotify-menu-item" onclick="spotifyMenuToggle(false); disconnectSpotify()">Disconnect</button>
+        </div>
+      </div>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode" aria-label="Toggle theme">
         <span class="theme-icon">&#9728;</span>
       </button>
     </div>
   </header>
   <div class="setup-banner" id="setupBanner"><strong><i class="ph ph-warning" aria-hidden="true"></i> Setup required</strong>
-    This copy has no keys of its own yet. Open <code>js/config.js</code>, put in your own keys and list this site's domain in <code>KEYS_HOSTS</code>:<br>
-    <code>LASTFM_API_KEY</code> &rarr; <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api</a><br>
-    <code>SPOTIFY_CLIENT_ID</code> &rarr; <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Dashboard</a>
-    (set redirect URI to <code id="currentUrl"></code>). See the README's Setup section.</div>
+    Open <code>js/config.js</code>: <code>LASTFM_API_KEY</code> needs a key (<a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api</a>), and a built-in
+    <code>SPOTIFY_CLIENT_ID</code> needs this site's domain in <code>KEYS_HOSTS</code> and <code id="currentUrl"></code> as a redirect URI on its Spotify app
+    (or leave it empty, and each visitor uses their own). See the README's Setup section.</div>
 
   <div id="homeView">
     <section class="radio-card landing" id="landing" aria-label="Get started">
@@ -109,8 +117,32 @@
             <p class="step-help">We only read your public scrobbles. No Last.fm password.</p>
           </div>
         </li>
-        <li class="landing-step locked" id="landingStepSpotify">
+        <li class="landing-step locked" id="landingStepApp">
           <span class="step-badge" aria-hidden="true"><span class="step-num">2</span><i class="ph ph-check step-check"></i></span>
+          <div class="step-body">
+            <span class="step-title">Your Spotify app</span>
+            <div class="app-guide" id="landingAppGuide">
+              <p class="step-help">Spotify lets each developer app serve only 5 people, so you bring your own. It's free, takes about 3 minutes, and needs Spotify Premium.</p>
+              <ol class="app-steps">
+                <li><span class="app-step-key" aria-hidden="true">a</span><span>Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a> and press <strong>Create app</strong>.</span></li>
+                <li><span class="app-step-key" aria-hidden="true">b</span><span>Give it any name. Under <strong>APIs used</strong>, tick <strong>Web API</strong> and <strong>Web Playback SDK</strong>.</span></li>
+                <li><span class="app-step-key" aria-hidden="true">c</span><div class="app-step-body"><span>Paste this as the <strong>Redirect URI</strong>, exactly:</span>
+                  <div class="redirect-row"><code class="redirect-uri" id="landingRedirectUri"></code><button type="button" class="btn btn-ghost btn-copy" onclick="copyRedirectUri(this)" aria-label="Copy Redirect URI"><i class="ph ph-copy" aria-hidden="true"></i><span class="copy-label">Copy</span></button></div></div></li>
+                <li><span class="app-step-key" aria-hidden="true">d</span><span>Save, open the app's <strong>Settings</strong> and copy its <strong>Client ID</strong>.</span></li>
+              </ol>
+              <label class="step-label" for="landingClientId">Client ID</label>
+              <input type="text" class="input-username landing-input client-id-input" id="landingClientId" placeholder="32 letters and numbers" autocomplete="off" spellcheck="false" aria-describedby="landingClientIdError landingClientIdHelp">
+              <p class="step-error" id="landingClientIdError" hidden>That doesn't look like a Client ID. It's 32 letters and numbers, at the top of your app's Settings.</p>
+              <p class="step-help" id="landingClientIdHelp"><i class="ph ph-lock-simple" aria-hidden="true"></i> Stays in this browser. A Client ID is not a password: it only says which app is asking.</p>
+            </div>
+            <div class="app-done" id="landingAppDone" hidden>
+              <p class="step-help">Using your app <code class="app-id" id="landingAppId"></code> <button type="button" class="link-btn" onclick="landingChangeApp()">Change</button></p>
+              <p class="step-help">Friends can use it too: add their Spotify email under User Management in Spotify's dashboard (up to 5 people in all).</p>
+            </div>
+          </div>
+        </li>
+        <li class="landing-step locked" id="landingStepSpotify">
+          <span class="step-badge" aria-hidden="true"><span class="step-num" id="landingConnectNum">3</span><i class="ph ph-check step-check"></i></span>
           <div class="step-body">
             <span class="step-title">Connect Spotify</span>
             <p class="step-help">Plays the music in this browser. Needs Spotify Premium.</p>
@@ -271,7 +303,7 @@
 <div class="footer">
   <div>Powered by <a href="https://www.last.fm/api" target="_blank">Last.fm API</a>
   &amp; <a href="https://developer.spotify.com/" target="_blank">Spotify Web API</a> · Requires Spotify Premium</div>
-  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.12</a></div>
+  <div style="margin-top:6px">Built with ❤ by Manuel Matheu with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic · <a href="#" onclick="openChangelog(); return false;">v2.13</a></div>
 </div>
 
 <div class="overlay" id="changelogOverlay" style="display:none">

@@ -72,11 +72,73 @@ function showLanding(on) {
   landing.style.display = on ? "" : "none";
   card.style.display = on ? "none" : "";
 }
+// The first-run steps: 1 username, 2 your Spotify app (not shown when this copy has a built-in Client ID), then Connect
+function landingState(user, id, builtIn) {
+  const canConnect = !!user && (builtIn || !!id);
+  return { user: user ? "done" : "active", app: builtIn ? "hidden" : id ? "done" : user ? "active" : "locked",
+    connect: canConnect ? "active" : "locked", connectNum: builtIn ? 2 : 3, canConnect };
+}
 function landingSync() {
-  const user = $("landingUser").value.trim();
-  $("landingStepUser").className = "landing-step " + (user ? "done" : "active");
-  $("landingStepSpotify").className = "landing-step " + (user ? "active" : "locked");
-  $("landingConnectBtn").disabled = !user;
+  const id = spotifyStoredClientId();
+  const s = landingState($("landingUser").value.trim(), id, spotifyClientIdValid(SPOTIFY_CLIENT_ID));
+  $("landingStepUser").className = "landing-step " + s.user;
+  const app = $("landingStepApp");
+  app.hidden = s.app === "hidden";
+  app.className = "landing-step " + s.app;
+  $("landingAppGuide").hidden = s.app === "done";
+  $("landingAppDone").hidden = s.app !== "done";
+  $("landingAppId").textContent = id ? spotifyShortId(id) : "";
+  $("landingStepSpotify").className = "landing-step " + s.connect;
+  $("landingConnectNum").textContent = s.connectNum;
+  $("landingConnectBtn").disabled = !s.canConnect;
+}
+// The Client ID field: a valid ID is saved at once (the step closes, Connect takes the focus); a wrong one is pointed out
+// once it is long enough to be meant (or the field is left)
+function landingClientIdInput(final) {
+  const el = $("landingClientId"), err = $("landingClientIdError"), v = el.value.trim();
+  if (spotifyClientIdValid(v)) {
+    spotifySetClientId(v);
+    el.value = ""; el.removeAttribute("aria-invalid"); err.hidden = true;
+    landingSync();
+    if (!$("landingConnectBtn").disabled) $("landingConnectBtn").focus();
+    return;
+  }
+  const bad = !!v && (final || v.length >= 32);
+  err.hidden = !bad;
+  if (bad) el.setAttribute("aria-invalid", "true"); else el.removeAttribute("aria-invalid");
+}
+function landingChangeApp() {
+  spotifyForgetClientId();
+  landingSync();
+  $("landingClientId").focus();
+}
+function copyRedirectUri(btn) {
+  const label = btn && btn.querySelector(".copy-label");
+  const select = () => { const r = document.createRange(); r.selectNodeContents($("landingRedirectUri")); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); };
+  const done = () => { if (!label) return; label.textContent = "Copied"; setTimeout(() => { label.textContent = "Copy"; }, 2000); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(SPOTIFY_REDIRECT_URI).then(done, select);
+  else select();
+}
+// The Spotify badge's menu: which app you use (when it is your own), change it, Spotify's dashboard, Disconnect
+function spotifyMenuToggle(open) {
+  const menu = $("spotifyMenu"), btn = $("spotifyMenuBtn");
+  if (!menu || !btn) return;
+  if (open === undefined) open = menu.hidden;
+  menu.hidden = !open;
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (!open) return;
+  const own = !spotifyClientIdValid(SPOTIFY_CLIENT_ID), id = spotifyClientId();
+  $("spotifyMenuApp").hidden = !own || !id;
+  $("spotifyMenuId").textContent = id ? spotifyShortId(id) : "";
+  $("spotifyMenuChange").hidden = !own;
+}
+// Another app: sign out (its tokens belong to the old one), forget the ID, and open step 2 again
+function spotifyChangeApp() {
+  spotifyMenuToggle(false);
+  disconnectSpotify();
+  spotifyForgetClientId();
+  landingSync();
+  $("landingClientId").focus();
 }
 // Start radio needs a username, Spotify and no radio starting already
 function updateRadioButton() {
