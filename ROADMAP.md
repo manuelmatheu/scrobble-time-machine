@@ -10,6 +10,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Speaker volume (desktop): the slider follows the radio to a speaker and sets its volume (`PUT /me/player/volume`), greyed out with the reason where Spotify refuses (Sonos, `supports_volume` false)
 - [x] Device list refreshes only while open and visible; a failed read keeps the rows; hidden pages do not poll (except a radio playing on another device)
 - [x] Tokens `--spotify-green-text` and `--scrim`
+- [x] Ready to self-host: README setup for Spotify's 2026 Development Mode (5 users, owner Premium, User Management, 127.0.0.1), a Setup required banner when the keys are not registered for the domain (`KEYS_HOSTS`), a plain message for an account the owner has not added, the login `state` check, security headers (`vercel.json`)
 - [x] Session hand-off (design: `docs/superpowers/specs/2026-10-27-play-on-connect-design.md`, Part 2): the window that drives a radio keeps a note on the server (`api/session.js`, Upstash Redis, one note per Spotify user); the phone strip's Open radio shows the whole radio there (Up next, moment panel, dates) while the music keeps playing on the desktop
 - [x] One driver at a time; other windows follow quietly. A radio started on the phone is followed by the desktop with no toast
 - [x] If the driver closes the page, or goes silent for 3 minutes, the phone takes the radio over and keeps 10 songs queued after the current one

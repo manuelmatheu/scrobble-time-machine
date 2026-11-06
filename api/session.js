@@ -8,6 +8,7 @@ const ID_TTL = 300000;       // token -> user id cache, in memory only
 const NOTE_TTL = 43200;      // seconds the store keeps a note
 const MAX_BODY = 65536;      // bytes
 const STALE_DRIVER = 180000; // ms without a heartbeat before a takeover is allowed
+const ID_CACHE_MAX = 1000;  // tokens kept; past this the oldest goes (a warm function can serve many tokens)
 const idCache = new Map();
 
 function canWrite(stored, note, claim, now) {
@@ -26,6 +27,8 @@ async function userIdFor(token) {
   if (r.status !== 200) throw new Error("me " + r.status);
   const me = await r.json();
   if (!me || !me.id) throw new Error("me without id");
+  idCache.delete(token);
+  while (idCache.size >= ID_CACHE_MAX) idCache.delete(idCache.keys().next().value);
   idCache.set(token, { id: me.id, at: Date.now() });
   return me.id;
 }
@@ -96,3 +99,5 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports.canWrite = canWrite;
 module.exports._reset = function () { idCache.clear(); };
+module.exports._size = function () { return idCache.size; };
+module.exports.ID_CACHE_MAX = ID_CACHE_MAX;

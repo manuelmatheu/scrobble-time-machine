@@ -13,7 +13,26 @@ async function initiateSpotifyAuth() {
   sessionStorage.setItem("lastfm_username", user);
   // an installed app (PWA) can come back from Spotify in a new browsing context where sessionStorage is empty: keep a copy for the round trip
   try { localStorage.setItem("spotify_code_verifier", v); localStorage.setItem("lastfm_username", user || localStorage.getItem("lastfm_username") || ""); } catch {}
-  window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch, show_dialog:"true" });
+  // state: the return must carry what this browser sent, so a login another site starts cannot land here
+  const state = rndStr(32);
+  sessionStorage.setItem("spotify_auth_state", state);
+  try { localStorage.setItem("spotify_auth_state", state); } catch {}
+  window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch, state, show_dialog:"true" });
+}
+// The state the last login sent (null if none), removed so it is used once
+function spotifyTakeAuthState() {
+  let s = null;
+  try { s = sessionStorage.getItem("spotify_auth_state") || localStorage.getItem("spotify_auth_state"); } catch {}
+  try { sessionStorage.removeItem("spotify_auth_state"); localStorage.removeItem("spotify_auth_state"); } catch {}
+  return s;
+}
+// What the page URL says about a return from Spotify's login: null (not a return), { code }, or { error: message }
+function spotifyAuthReturn(params, wantState) {
+  const code = params.get("code"), err = params.get("error");
+  if (!code && !err) return null;
+  if (err) return { error: err === "access_denied" ? "Spotify was not connected. Press Connect Spotify to try again." : "Spotify login failed (" + err + "). Try again." };
+  if (!wantState || params.get("state") !== wantState) return { error: "Spotify login could not be checked. Press Connect Spotify to try again." };
+  return { code };
 }
 async function exchangeCodeForToken(code) {
   const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
@@ -109,11 +128,28 @@ async function runSpotifySearch(token, q, retries, limit) {
       lastSearchError = "Rate limited (429)";
       return { rateLimited: true };
     }
+    if (r.status === 403) { lastSearchError = SPOTIFY_NOT_REGISTERED; return { error: true }; }  // search needs no scope: a 403 is the account
     if (!r.ok) { if (!lastSearchError) { try { const e = await r.json(); lastSearchError = r.status+": "+(e.error?e.error.message:r.statusText); } catch(e) { lastSearchError = r.status+": "+r.statusText; } } return { error: true }; }
     const d = await r.json();
     const items = (d.tracks && d.tracks.items) || [];
     return limit > 1 ? { item: items[0] || null, items } : { item: items[0] || null };
   } catch (err) { if (!lastSearchError) lastSearchError = err.message; return { error: true }; }
+}
+
+// A Spotify app in Development Mode only answers the accounts its owner added (at most 5): any other gets a 403
+const SPOTIFY_NOT_REGISTERED = "This Spotify account can't use this copy of the app yet. Its owner needs to add your Spotify email under User Management in the Spotify Developer Dashboard.";
+// Right after connecting: a 403 from /me means the account was not added. Anything else (a hiccup, offline) says nothing.
+async function spotifyCheckAccess(token) {
+  try {
+    const r = await fetch("https://api.spotify.com/v1/me", { headers: { Authorization: "Bearer " + token } });
+    if (r.status === 403) { showStatus(SPOTIFY_NOT_REGISTERED, "error"); return false; }
+  } catch (e) {}
+  return true;
+}
+// Why a radio found nothing to play
+function spotifyNoMatchMessage() {
+  if (lastSearchError === SPOTIFY_NOT_REGISTERED) return SPOTIFY_NOT_REGISTERED;
+  return "No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : "");
 }
 
 // Milliseconds left of the cooldown after a Spotify 429 (0 when searches are allowed)

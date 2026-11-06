@@ -504,7 +504,7 @@ async function startRadio() {
     // Playback starts with the first match; the rest of the queue is fetched while it plays (see the top-up below)
     const added = await radioFill(RADIO_START_TRACKS);
     if (sid !== radioSession) return;
-    if (!added) throw new Error(spotifyBlockedFor() > 0 ? spotifyLimitMessage() : "No tracks matched" + (lastSearchError ? " (" + lastSearchError + ")" : ""));
+    if (!added) throw new Error(spotifyBlockedFor() > 0 ? spotifyLimitMessage() : spotifyNoMatchMessage());
     radioRenderQueue();
     const token = await getSpotifyToken();
     if (!token) throw new Error("Spotify expired. Reconnect.");

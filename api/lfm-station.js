@@ -15,6 +15,6 @@ module.exports = async function handler(req, res) {
     res.setHeader("Content-Type", upstream.headers.get("content-type") || "application/json");
     res.status(upstream.status).send(body);
   } catch (e) {
-    res.status(502).json({ error: "could not reach Last.fm", detail: String(e && e.message || e) });
+    res.status(502).json({ error: "could not reach Last.fm" });
   }
 };

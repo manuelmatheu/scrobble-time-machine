@@ -17,6 +17,8 @@ streaming user-library-modify user-library-read user-top-read
 ### PKCE Auth
 
 - `initiateSpotifyAuth()` -- generates code verifier + challenge, redirects to Spotify authorize; the verifier and the Last.fm username are stashed in `sessionStorage` for the round trip, and also in `localStorage` (an installed PWA can return from Spotify in a fresh browsing context where `sessionStorage` is empty; `exchangeCodeForToken()` reads either and deletes the verifier afterwards)
+- The login also sends a random `state`, kept in both storages like the verifier. On the return, `spotifyAuthReturn()` (`app.js` calls it with `spotifyTakeAuthState()`, read only when the URL has `code` or `error`) uses the code only if the state matches; `error=access_denied` (Cancel on Spotify's page) and other errors show a toast and clear the URL.
+- After connecting, `spotifyCheckAccess()` reads `/me` once: a 403 means the account is not on the Spotify app's User Management list (Development Mode), and the toast `SPOTIFY_NOT_REGISTERED` says so. A 403 on a search sets the same message, which `spotifyNoMatchMessage()` shows instead of "No tracks matched (403: ...)".
 - `exchangeCodeForToken(code)` -- exchanges auth code for tokens, stores `spotify_access_token` / `spotify_refresh_token` / `spotify_token_expires` in **localStorage**
 - `refreshSpotifyToken()` -- refreshes using the stored refresh token, updates the same `localStorage` keys
 - `getSpotifyToken()` -- returns cached token or refreshes if within 60s of expiry
