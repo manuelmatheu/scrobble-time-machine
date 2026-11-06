@@ -9,6 +9,7 @@ A living document tracking planned features, improvements, and ideas for future 
 - [x] Sessions from the old built-in app are signed out once, with a note to set up your own app
 - [x] A self-hosted copy can still build a Client ID in (`SPOTIFY_CLIENT_ID` + `KEYS_HOSTS`), and the step goes away; README rewritten around Getting started, with self-hosting optional
 - [x] The Last.fm key stays shared (the recommended station needs no key, only the username)
+- [x] Fix: the changelog opens again (v2.12's headers blocked all framing, the app's own changelog frame too; now only other sites are blocked)
 
 ---
 
