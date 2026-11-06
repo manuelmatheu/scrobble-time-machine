@@ -2,7 +2,18 @@
 
 A living document tracking planned features, improvements, and ideas for future development.
 
-## v2.12 (current) ✅
+## v2.13 (current) ✅
+
+- [x] Bring your own Spotify app (Design canvas "Bring your own Spotify app", option A, https://claude.ai/artifact/Cu5x3R7Lt7oM3xkwW6yZJA): the first-run screen's step 2 asks for the Client ID of the visitor's own Spotify app (checklist, Redirect URI with Copy, format check); stored in the browser, used for every login and refresh. No built-in Client ID on the public copy, so anyone can use it, each within their own app's 5-user limit
+- [x] The Spotify badge is a menu: your app (shortened Client ID), Use a different Spotify app, Spotify's dashboard, Disconnect
+- [x] Sessions from the old built-in app are signed out once, with a note to set up your own app
+- [x] A self-hosted copy can still build a Client ID in (`SPOTIFY_CLIENT_ID` + `KEYS_HOSTS`), and the step goes away; README rewritten around Getting started, with self-hosting optional
+- [x] The Last.fm key stays shared (the recommended station needs no key, only the username)
+- [x] Fix: the changelog opens again (v2.12's headers blocked all framing, the app's own changelog frame too; now only other sites are blocked)
+
+---
+
+## v2.12 ✅
 
 - [x] Play on: pick a speaker from the app, before starting or mid-session (a running radio moves with its queue); the list shows this browser first, other devices after, Sonos greyed out
 - [x] Playing on bar under the player; every window shows the device Spotify reports, and follows when the music moves (Spotify app, another window) within a few seconds

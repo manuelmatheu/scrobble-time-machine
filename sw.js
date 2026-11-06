@@ -1,7 +1,7 @@
 // Service worker: makes the app installable and keeps the app shell for a flaky connection.
 // Network first, so a deploy is never hidden behind a stale cache; the cache is only the fallback.
 // Spotify, Last.fm, the font and icon CDNs and /api/ are never cached (they are cross-origin or live data).
-const CACHE = "stm-shell-v3";
+const CACHE = "stm-shell-v4";
 const SHELL = ["./", "index.html", "css/style.css", "favicon.ico", "changelog.html",
   "js/config.js", "js/spotify.js", "js/lastfm.js", "js/ui.js", "js/player.js", "js/connect.js", "js/handoff.js", "js/radio.js", "js/app.js",
   "icons/icon-192.png", "icons/icon-512.png"];
@@ -16,8 +16,9 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
-  // every page load (including the one that returns from Spotify with ?code=) is stored as the one shell page
-  const key = req.mode === "navigate" ? "index.html" : req;
+  // every page load (including the one that returns from Spotify with ?code=) is stored as the one shell page;
+  // a page opened in a frame (the changelog overlay) is a navigation too, but it is stored as itself
+  const key = req.mode === "navigate" && req.destination !== "iframe" ? "index.html" : req;
   e.respondWith(
     fetch(req).then(res => {
       if (res.ok && !url.search.includes("code=")) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(key, copy)); }

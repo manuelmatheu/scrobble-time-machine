@@ -83,7 +83,7 @@ The dark theme adds a faint noise overlay (`body::before`, 3% opacity); it is re
 - **Radii:** cards and panels 16px; list panels (Up next), station options, the Library options box, segmented control, the year list, floating lists 12px; buttons, inputs, small controls 8px; album art in the player 12px, in rows 6px (both row families); chips and the play button 999px.
 - **Spacing:** 4px base. Common gaps 6, 8, 10, 12, 14, 16, 20, 28. Card padding 28px (20px on phones). Page container 680px, 20px side padding.
 - **Elevation:** flat. Depth comes from the surface ladder (`primary` < `secondary` < `tertiary`) and 1px borders. Shadows only on floating things (`--shadow-float`): the toasts.
-- **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px). A control that must look smaller (the disconnect x in the Spotify badge) keeps a 44px hit area with an invisible `::before`.
+- **Tap targets:** minimum 44px (`.btn-radio` 56px, play button 56px).
 
 ### Icons
 
@@ -168,14 +168,14 @@ On the connected home card: a device icon, "Plays on **This browser**" (or the p
 On Home while something plays on another device (a speaker, the phone's own Spotify app). Phones show it for any music; a desktop only for an STM radio it can open (Open radio), since it has its own player. A speaker icon, "Playing on **Device**" with the track under it, and Pause/Play and Next buttons that act on what the strip shows.
 
 ### Spotify badge
-Green-tinted pill (`--spotify-green-subtle` / `--spotify-green-border`) "Spotify connected" with a small dot and an x to disconnect (20px visible, 44px hit area), in the header.
+Green-tinted pill button (`--spotify-green-subtle` / `--spotify-green-border`, 44px tall) with a small dot, "Spotify" and a caret, in the header. It opens the Spotify menu (`--bg-elevated`, `--shadow-float`, 280px, right-aligned): "Your Spotify app" with the shortened Client ID (JetBrains Mono), then Use a different Spotify app, Open Spotify's dashboard, Disconnect (44px rows). The app rows hide when the copy has a built-in Client ID. Escape or a click outside closes it.
 
 ---
 
 ## 4. Screens
 
 ### Home (`#homeView`)
-- **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and two numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Connect Spotify** (disabled until there is a username; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
+- **Not connected (first run):** a landing card (max 560px): eyebrow, headline "Your listening history, played back as a radio.", a line of copy and three numbered steps. 1: **Your Last.fm username** (field, "public scrobbles only"). 2: **Your Spotify app** (v2.13): a line on why (5 people per app, free, about 3 minutes, Premium), an a-d checklist in a `--bg-tertiary` box (Create app, tick Web API and Web Playback SDK, the Redirect URI in a mono field with a Copy button, copy the Client ID), the Client ID field (mono) with an error line under it for a value that is not 32 letters and numbers, and a lock line ("Stays in this browser"). Once saved it shrinks to "Using your app 3f9a1c…f2e4c · Change" and a line on adding friends under User Management. Hidden, and Connect becomes step 2, when the copy has a built-in Client ID. 3: **Connect Spotify** (disabled until there is a username and a Client ID; says Premium is needed and that the options come next). Step badges: red = current, green check = done, outline = locked. No station picker or options yet.
 - **Connected, idle:** headline, `username · N scrobbles`, station tabs and panel (Library options when Library, Mix balance when Mix), username field, **Start <Station> radio**.
 - **Radio running (minimized):** same card, plus the "Playing now" strip; the button pair becomes **Back to radio** / **Start a new radio**.
 - **Plays on row:** under the options, "Plays on <device>" with Change. A strip inside the card (phones; a desktop only for an STM radio), above the username field and buttons (`.controls`), shows what plays on another device (Pause/Next).

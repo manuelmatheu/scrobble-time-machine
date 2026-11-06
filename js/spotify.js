@@ -6,7 +6,40 @@ function rndStr(n) { const c="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx
 async function sha256(s) { return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); }
 function b64url(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
 
+// Each visitor's own Spotify app: its Client ID is kept in this browser (a self-hosted copy may build one in: SPOTIFY_CLIENT_ID).
+// Tokens belong to the app that issued them, so a different ID signs out.
+const SPOTIFY_CLIENT_ID_KEY = "stm_spotify_client_id";
+function spotifyClientIdValid(s) { return /^[0-9a-f]{32}$/i.test(String(s == null ? "" : s).trim()); }
+function spotifyShortId(id) { id = String(id || ""); return id.slice(0, 6) + "…" + id.slice(-5); }
+function spotifyStoredClientId() {
+  let s = "";
+  try { s = localStorage.getItem(SPOTIFY_CLIENT_ID_KEY) || ""; } catch {}
+  return spotifyClientIdValid(s) ? s.trim() : "";
+}
+// The Client ID logins use: the built-in one if this copy has one, else the visitor's; "" when there is none yet
+function spotifyClientId(builtIn = SPOTIFY_CLIENT_ID) { return spotifyClientIdValid(builtIn) ? builtIn.trim() : spotifyStoredClientId(); }
+function spotifySetClientId(id) {
+  id = String(id == null ? "" : id).trim();
+  if (!spotifyClientIdValid(id)) return false;
+  if (id !== spotifyStoredClientId()) spotifyClearTokens();
+  try { localStorage.setItem(SPOTIFY_CLIENT_ID_KEY, id); } catch {}
+  return true;
+}
+function spotifyForgetClientId() { try { localStorage.removeItem(SPOTIFY_CLIENT_ID_KEY); } catch {} }
+function spotifyClearTokens() {
+  try { ["spotify_access_token", "spotify_refresh_token", "spotify_token_expires"].forEach(k => localStorage.removeItem(k)); } catch {}
+}
+// A session made with the old built-in app (before each visitor brought their own): its tokens cannot be refreshed
+// without that app, so it is signed out once and the visitor sets up their own
+function spotifyNeedsAppMove() {
+  let rt = null;
+  try { rt = localStorage.getItem("spotify_refresh_token"); } catch {}
+  return !!rt && !spotifyClientId();
+}
+
 async function initiateSpotifyAuth() {
+  const clientId = spotifyClientId();
+  if (!clientId) return;  // Connect stays locked until there is one; nothing to send Spotify
   const v = rndStr(128), ch = b64url(await sha256(v));
   const user = $("usernameInput").value.trim();
   sessionStorage.setItem("spotify_code_verifier", v);
@@ -17,7 +50,7 @@ async function initiateSpotifyAuth() {
   const state = rndStr(32);
   sessionStorage.setItem("spotify_auth_state", state);
   try { localStorage.setItem("spotify_auth_state", state); } catch {}
-  window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch, state, show_dialog:"true" });
+  window.location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({ client_id:clientId, response_type:"code", redirect_uri:SPOTIFY_REDIRECT_URI, scope:SPOTIFY_SCOPES, code_challenge_method:"S256", code_challenge:ch, state, show_dialog:"true" });
 }
 // The state the last login sent (null if none), removed so it is used once
 function spotifyTakeAuthState() {
@@ -36,7 +69,7 @@ function spotifyAuthReturn(params, wantState) {
 }
 async function exchangeCodeForToken(code) {
   const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
-    body: new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, grant_type:"authorization_code", code, redirect_uri:SPOTIFY_REDIRECT_URI, code_verifier:sessionStorage.getItem("spotify_code_verifier") || localStorage.getItem("spotify_code_verifier") }) });
+    body: new URLSearchParams({ client_id:spotifyClientId(), grant_type:"authorization_code", code, redirect_uri:SPOTIFY_REDIRECT_URI, code_verifier:sessionStorage.getItem("spotify_code_verifier") || localStorage.getItem("spotify_code_verifier") }) });
   try { localStorage.removeItem("spotify_code_verifier"); } catch {}  // single use
   if (!r.ok) throw new Error("Token exchange failed");
   const d = await r.json();
@@ -50,7 +83,7 @@ async function exchangeCodeForToken(code) {
 async function refreshSpotifyToken() {
   const rt = localStorage.getItem("spotify_refresh_token"); if (!rt) return null;
   const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
-    body: new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, grant_type:"refresh_token", refresh_token:rt }) });
+    body: new URLSearchParams({ client_id:spotifyClientId(), grant_type:"refresh_token", refresh_token:rt }) });
   if (!r.ok) return null; const d = await r.json();
   localStorage.setItem("spotify_access_token", d.access_token);
   if (d.refresh_token) localStorage.setItem("spotify_refresh_token", d.refresh_token);
@@ -59,9 +92,7 @@ async function refreshSpotifyToken() {
 }
 async function getSpotifyToken() { const e = parseInt(localStorage.getItem("spotify_token_expires")||"0"); if (Date.now() < e - 60000) return localStorage.getItem("spotify_access_token"); return refreshSpotifyToken(); }
 function disconnectSpotify() {
-  localStorage.removeItem("spotify_access_token");
-  localStorage.removeItem("spotify_refresh_token");
-  localStorage.removeItem("spotify_token_expires");
+  spotifyClearTokens();
   spotifyToken = null;
   if (window._stmPlayer) { window._stmPlayer.disconnect(); window._stmPlayer = null; }
   sdkReady = false; sdkDeviceId = null;
@@ -137,7 +168,7 @@ async function runSpotifySearch(token, q, retries, limit) {
 }
 
 // A Spotify app in Development Mode only answers the accounts its owner added (at most 5): any other gets a 403
-const SPOTIFY_NOT_REGISTERED = "This Spotify account can't use this copy of the app yet. Its owner needs to add your Spotify email under User Management in the Spotify Developer Dashboard.";
+const SPOTIFY_NOT_REGISTERED = "This Spotify account isn't on that Spotify app's user list yet. If the app is a friend's, ask them to add your Spotify email under User Management in Spotify's dashboard. If it's yours, sign in with the Spotify account that created it.";
 // Right after connecting: a 403 from /me means the account was not added. Anything else (a hiccup, offline) says nothing.
 async function spotifyCheckAccess(token) {
   try {
